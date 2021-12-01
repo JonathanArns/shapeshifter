@@ -7,12 +7,14 @@ pub fn iterative_deepening_search(b: &Board, g: &mut Game) -> (Move, Score, u8) 
     let mut depth = 1;
 
     while time::Instant::now().duration_since(start_time).lt(&g.move_time.div_f32(b.snakes.len() as f32 * 10_f32)) {
-        let new_best = minimax(b, depth);
+        let new_best = minimax(b, depth, Score::MIN, Score::MAX);
         best_move = new_best;
         if best_move.1 == Score::MAX || best_move.1 == Score::MIN {
             break
         }
         depth += 1;
+
+        // debug
         if depth > 100 {
             println!("====================================");
             println!("STACKOVERFLOW");
@@ -26,12 +28,12 @@ pub fn iterative_deepening_search(b: &Board, g: &mut Game) -> (Move, Score, u8) 
             panic!();
         }
     }
-    println!("Move: {:?}, Depth: {}, Time: {}", best_move, depth, time::Instant::now().duration_since(start_time).as_millis());
-    println!("{:?}", b);
+    println!("Move: {:?}, Depth: {}, Time: {}", best_move.0, depth, time::Instant::now().duration_since(start_time).as_millis());
     best_move
 }
 
-fn minimax(b: &Board, d: u8) -> (Move, Score, u8) {
+fn minimax(b: &Board, d: u8, mut alpha: Score, mut beta: Score) -> (Move, Score, u8) {
+    let beta_init = beta;
     if d == 0 || b.is_terminal() {
         return (Move::Up, b.eval(), d)
     }
@@ -39,17 +41,30 @@ fn minimax(b: &Board, d: u8) -> (Move, Score, u8) {
     let my_moves = b.children();
     for maybe_mv in my_moves {
         if let Some((mv, positions)) = maybe_mv {
+            beta = beta_init; // because the inner loop is essentially the minimizing call
             let mut min = Score::MAX;
             let mut min_depth = d;
             for position in positions {
-                let (_, score, depth) = minimax(&position, d-1);
+                let (_, score, depth) = minimax(&position, d-1, alpha, beta);
                 if score < min {
                     min = score;
                     min_depth = depth;
                 }
+                if min < beta {
+                    beta = min;
+                    if beta < alpha {
+                        break
+                    }
+                }
             }
             if min > max.1 || (min == max.1 && min_depth < max.2) {
                 max = (mv, min, min_depth);
+                if max.1 > alpha {
+                    alpha = max.1;
+                    if beta < alpha {
+                        break
+                    }
+                }
             }
         }
     }

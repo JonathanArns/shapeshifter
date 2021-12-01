@@ -63,10 +63,13 @@ fn convert_board(state: GameState) -> types::Board {
         *ret.get(coord_idx(&snake.body[snake.length-1], &b.width)) |= types::TAIL;
         let mut bod = Vec::new();
         for (i, body) in snake.body.iter().enumerate() {
+            let x = coord_idx(body, &b.width);
             if i > 0 && i < snake.length - 1 {
-                *ret.get(coord_idx(body, &b.width)) |= types::BODY;
+                *ret.get(x) |= types::BODY;
             }
-            bod.push(coord_idx(body, &b.width));
+            if !bod.contains(&x) {
+                bod.push(x);
+            }
         }
         ret.snakes.push(types::Snake{
             length: snake.length.try_into().unwrap(),

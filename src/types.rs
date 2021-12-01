@@ -9,7 +9,7 @@ pub const HEAD: Square = 4;
 pub const BODY: Square = 8;
 pub const TAIL: Square = 16;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Move {
     Up = 0,
     Down = 1,
