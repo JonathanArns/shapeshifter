@@ -88,10 +88,10 @@ fn convert_board(state: GameState) -> types::Board {
 pub fn handle_index() -> JsonValue {
     json!({
         "apiversion": "1",
-        "author": "",
-        "color": "#888888",
-        "head": "default",
-        "tail": "default",
+        "author": "JonathanArns",
+        "color": "#000000",
+        "head": "evil",
+        "tail": "hook",
     })
 }
 
