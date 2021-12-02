@@ -19,19 +19,32 @@ pub fn standard(b: &Board, moves: &Vec<(usize, Move)>) -> Board {
 
     }
 
-    for (i, field) in new.board.iter_mut().enumerate() {
-
-        // feed snakes
-        if *field & (FOOD | HEAD) == (FOOD | HEAD) {
-            for snake in &mut new.snakes {
-                if snake.body[0] == i {
-                    snake.health = 100;
-                    snake.length += 1;
-                }
-            }
-            *field ^= FOOD;
+    // feed snakes
+    let mut eaten = vec![];
+    for snake in &mut new.snakes {
+        if new.board[snake.body[0]] & FOOD != 0 {
+            snake.health = 100;
+            snake.length += 1;
+            eaten.push(snake.body[0]);
         }
     }
+    for i in eaten {
+        new.board[i] &= u8::MAX ^ FOOD;
+    }
+
+//     for (i, field) in new.board.iter_mut().enumerate() {
+// 
+//         // feed snakes
+//         if *field & (FOOD | HEAD) == (FOOD | HEAD) {
+//             for snake in &mut new.snakes {
+//                 if snake.body[0] == i {
+//                     snake.health = 100;
+//                     snake.length += 1;
+//                 }
+//             }
+//             *field ^= FOOD;
+//         }
+//     }
 
     // eliminate snakes
     // starving first
