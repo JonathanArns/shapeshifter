@@ -4,60 +4,62 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use crate::types;
+use crate::mailbox;
 use crate::minimax;
+use crate::bitboard;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Game {
-    id: String,
-    ruleset: HashMap<String, Value>,
-    timeout: u32,
+    pub id: String,
+    pub ruleset: HashMap<String, Value>,
+    pub timeout: u32,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Board {
-    height: usize,
-    width: usize,
-    food: Vec<Coord>,
-    snakes: Vec<Battlesnake>,
-    hazards: Vec<Coord>,
+    pub height: usize,
+    pub width: usize,
+    pub food: Vec<Coord>,
+    pub snakes: Vec<Battlesnake>,
+    pub hazards: Vec<Coord>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Battlesnake {
-    id: String,
-    name: String,
-    health: u8,
-    body: Vec<Coord>,
-    head: Coord,
-    length: usize,
-    latency: String,
+    pub id: String,
+    pub name: String,
+    pub health: u8,
+    pub body: Vec<Coord>,
+    pub head: Coord,
+    pub length: usize,
+    pub latency: String,
 
     // Used in non-standard game modes
-    shout: Option<String>,
-    squad: Option<String>,
+    pub shout: Option<String>,
+    pub squad: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Coord {
-    x: usize,
-    y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct GameState {
-    game: Game,
-    turn: u32,
-    board: Board,
-    you: Battlesnake,
+    pub game: Game,
+    pub turn: u32,
+    pub board: Board,
+    pub you: Battlesnake,
 }
 
 fn coord_idx(c: &Coord, w: &usize) -> usize {
     c.x + c.y * w
 }
 
-fn convert_board(state: GameState) -> types::Board {
+fn create_mailbox_board(state: GameState) -> mailbox::MailBoxBoard {
     let b = state.board;
-    let mut ret = types::Board::new(&b.width, &b.height);
+    let mut ret = mailbox::MailBoxBoard::new(&b.width, &b.height);
     for snake in b.snakes {
         *ret.get(coord_idx(&snake.head, &b.width)) |= types::HEAD;
         *ret.get(coord_idx(&snake.body[snake.length-1], &b.width)) |= types::TAIL;
@@ -71,7 +73,7 @@ fn convert_board(state: GameState) -> types::Board {
                 bod.push(x);
             }
         }
-        ret.snakes.push(types::Snake{
+        ret.snakes.push(mailbox::Snake{
             length: snake.length.try_into().unwrap(),
             health: snake.health,
             body: bod,
@@ -107,17 +109,23 @@ pub fn handle_start(_req: Json<GameState>) -> Status {
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
     let mut game = types::Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
-    let board = convert_board(state);
-    let (mv, _, _) = minimax::iterative_deepening_search(&board, &mut game);
-    match mv {
-        types::Move::Up => json!({ "move": "up" }),
-        types::Move::Down => json!({ "move": "down" }),
-        types::Move::Left => json!({ "move": "left" }),
-        types::Move::Right => json!({ "move": "right" }),
+    // let board = create_mailbox_board(state);
+    // let (mv, _, _) = minimax::iterative_deepening_search(board, &mut game);
+    // mv.to_json()
+    match state.board.snakes.len() {
+        1 => bitboard::Bitboard::<1>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        2 => bitboard::Bitboard::<2>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        3 => bitboard::Bitboard::<3>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        4 => bitboard::Bitboard::<4>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        5 => bitboard::Bitboard::<5>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        6 => bitboard::Bitboard::<6>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        7 => bitboard::Bitboard::<7>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        8 => bitboard::Bitboard::<8>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        _ => panic!("Snake count not supported"),
     }
 }
 
-#[post("/end", format = "json", data = "<req>")]
-pub fn handle_end(req: Json<GameState>) -> Status {
+#[post("/end", format = "json", data = "<_req>")]
+pub fn handle_end(_req: Json<GameState>) -> Status {
     Status::Ok
 }
