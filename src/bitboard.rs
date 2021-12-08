@@ -2,7 +2,9 @@ use crate::types::*;
 use crate::api::GameState;
 use std::time;
 
-#[derive(Clone, Copy, Debug)]
+const BORDER_MASK: u128 = 0b_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110;
+
+#[derive(Clone, Copy, Debug, Hash)]
 struct Snake {
     head: u8,
     tail: u8,
@@ -152,7 +154,12 @@ impl<const N: usize> Bitboard<N> {
             return Score::MAX
         }
         score += self.snakes[0].length as Score * n as Score;
-        score / n
+        score /= n;
+
+        let (my_control, enemy_control) = self.area_control();
+        score += (my_control as i8 - enemy_control as i8) / 10;
+
+        score
     }
 
     fn possible_enemy_moves(&self) -> Vec<[Move; N]> {
@@ -335,6 +342,39 @@ impl<const N: usize> Bitboard<N> {
             }
         }
     }
+
+    fn area_control(&self) -> (u8, u8) {
+        let b = !self.bodies[0];
+        let mut x = (1_u128<<self.snakes[0].head, 0_u128);
+        for snake in &self.snakes[1..] {
+            if snake.is_alive() {
+                x.1 |= 1<<snake.head;
+            }
+        }
+        let mut y = x;
+        loop {
+            let me = b & (x.0 | (BORDER_MASK & x.0)<<1 | (BORDER_MASK & x.0)>>1 | x.0<<11 | x.0>>11);
+            let enemies = b & (x.1 | (BORDER_MASK & x.1)<<1 | (BORDER_MASK & x.1)>>1 | x.1<<11 | x.1>>11);
+            x = (me & !enemies, enemies & !me);
+            if x == y {
+                break
+            } else {
+                y = x;
+            }
+        }
+        (x.0.count_ones() as u8, x.1.count_ones() as u8)
+    }
+}
+
+fn print_area_control(me: u128, enemies: u128, w: u8) {
+    let mut debug = "".to_string();
+    for i in 0..11 {
+        for j in 0..11 {
+            debug.push_str(if 1<<((w*(w-1-i))+j) & me != 0 { "x " } else if enemies & 1<<((w*(w-1-i))+j) != 0 { "o " } else { ". " });
+        }
+        debug.push_str("\n");
+    }
+    println!("{}", debug);
 }
 
 impl<const N: usize> std::fmt::Debug for Bitboard<N> {
@@ -355,9 +395,5 @@ impl<const N: usize> std::fmt::Debug for Bitboard<N> {
 }
 
 fn floodfill(bodies: u128, start: u8, width: u8, height: u8) -> u128 {
-    todo!()
-}
-
-fn voronoi<const N: usize>(bodies: u128, snake_heads: [u8; N]) -> [u128; N] {
     todo!()
 }
