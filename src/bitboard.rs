@@ -157,7 +157,7 @@ impl<const N: usize> Bitboard<N> {
         score /= n;
 
         let (my_control, enemy_control) = self.area_control();
-        score += (my_control as i8 - enemy_control as i8) / 10;
+        score += (my_control as i8 - enemy_control as i8) / if n > 0 { 10 } else { 30 };
 
         score
     }
