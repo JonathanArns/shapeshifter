@@ -94,9 +94,9 @@ pub fn handle_index() -> JsonValue {
     json!({
         "apiversion": "1",
         "author": "JonathanArns",
-        "color": "#000000",
-        "head": "evil",
-        "tail": "hook",
+        "color": "#B7410E",
+        "head": "dead",
+        "tail": "mystic-moon",
     })
 }
 
