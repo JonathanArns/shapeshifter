@@ -79,7 +79,6 @@ impl<const N: usize> Bitboard<N> {
         board
     }
 
-    // TODO: guarantee a return after 400ms
     pub fn iterative_deepening_search(&self, g: &mut Game) -> (Move, Score) {
         let mut best_move = Move::Up;
         let mut best_score = Score::MIN;
@@ -117,9 +116,10 @@ impl<const N: usize> Bitboard<N> {
             }
         });
 
+        // receive results
         while time::Instant::now().duration_since(start_time).lt(&(min(g.move_time / 5, time::Duration::from_millis(50)))) {
             if let Ok(msg) = result_receiver.recv_timeout(
-                min(g.move_time / 4, time::Duration::from_millis(51))
+                min(g.move_time / 4, time::Duration::from_millis(53))
                 - time::Instant::now().duration_since(start_time)
             ) {
                 best_move = msg.0;
@@ -128,15 +128,17 @@ impl<const N: usize> Bitboard<N> {
             }
         }
         stop_sender.send(1).ok(); // Channel might be broken, if search returned early. We don't care.
+        // wait for eventual results from still running search
         if let Ok(msg) = result_receiver.recv_timeout(
             g.move_time
-            - time::Duration::from_millis(min(101, 1 + g.move_time.as_millis() as u64 / 4))
+            - time::Duration::from_millis(min(103, 3 + g.move_time.as_millis() as u64 / 4))
             - time::Instant::now().duration_since(start_time)
         ) {
             best_move = msg.0;
             best_score = msg.1;
             best_depth = msg.2
         }
+        // if the last result came early, wait a until deadline to give cpu some extra idle time
         thread::sleep(g.move_time - time::Duration::from_millis(min(100, g.move_time.as_millis() as u64 / 4)) - time::Instant::now().duration_since(start_time));
 
         println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
