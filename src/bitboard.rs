@@ -131,7 +131,7 @@ impl<const N: usize> Bitboard<N> {
         // wait for eventual results from still running search
         if let Ok(msg) = result_receiver.recv_timeout(
             g.move_time
-            - time::Duration::from_millis(min(103, 3 + g.move_time.as_millis() as u64 / 4))
+            - time::Duration::from_millis(min(203, 3 + g.move_time.as_millis() as u64 / 2))
             - time::Instant::now().duration_since(start_time)
         ) {
             best_move = msg.0;
@@ -139,7 +139,7 @@ impl<const N: usize> Bitboard<N> {
             best_depth = msg.2
         }
         // if the last result came early, wait a until deadline to give cpu some extra idle time
-        thread::sleep(g.move_time - time::Duration::from_millis(min(100, g.move_time.as_millis() as u64 / 4)) - time::Instant::now().duration_since(start_time));
+        thread::sleep(g.move_time - time::Duration::from_millis(min(200, g.move_time.as_millis() as u64 / 2)) - time::Instant::now().duration_since(start_time));
 
         println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
         (best_move, best_score)
