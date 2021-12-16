@@ -2,7 +2,6 @@ use crate::types::*;
 use crate::api::GameState;
 use std::time;
 use std::thread;
-use std::cmp::min;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 
 const BORDER_MASK: u128 = 0b_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110;
@@ -84,6 +83,8 @@ impl<const N: usize> Bitboard<N> {
         let mut best_score = Score::MIN;
         let mut best_depth = 1;
         let start_time = time::Instant::now();
+        let soft_deadline = start_time + g.move_time / 10;
+        let hard_deadline = start_time + g.move_time / 2;
 
         let (stop_sender, stop_receiver) = unbounded();
         let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
@@ -117,29 +118,23 @@ impl<const N: usize> Bitboard<N> {
         });
 
         // receive results
-        while time::Instant::now().duration_since(start_time).lt(&(min(g.move_time / 5, time::Duration::from_millis(50)))) {
-            if let Ok(msg) = result_receiver.recv_timeout(
-                min(g.move_time / 4, time::Duration::from_millis(53))
-                - time::Instant::now().duration_since(start_time)
-            ) {
+        while time::Instant::now() < soft_deadline {
+            if let Ok(msg) = result_receiver.try_recv() {
                 best_move = msg.0;
                 best_score = msg.1;
                 best_depth = msg.2
+            } else {
+                thread::sleep(time::Duration::from_millis(1));
             }
         }
         stop_sender.send(1).ok(); // Channel might be broken, if search returned early. We don't care.
+
         // wait for eventual results from still running search
-        if let Ok(msg) = result_receiver.recv_timeout(
-            g.move_time
-            - time::Duration::from_millis(min(203, 3 + g.move_time.as_millis() as u64 / 2))
-            - time::Instant::now().duration_since(start_time)
-        ) {
+        if let Ok(msg) = result_receiver.recv_timeout(hard_deadline - time::Instant::now()) {
             best_move = msg.0;
             best_score = msg.1;
             best_depth = msg.2
         }
-        // if the last result came early, wait a until deadline to give cpu some extra idle time
-        thread::sleep(g.move_time - time::Duration::from_millis(min(200, g.move_time.as_millis() as u64 / 2)) - time::Instant::now().duration_since(start_time));
 
         println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
         (best_move, best_score)
@@ -408,6 +403,7 @@ impl<const N: usize> Bitboard<N> {
     }
 }
 
+#[allow(unused)]
 fn print_area_control(me: u128, enemies: u128, w: u8) {
     let mut debug = "".to_string();
     for i in 0..11 {
@@ -434,8 +430,4 @@ impl<const N: usize> std::fmt::Debug for Bitboard<N> {
         }
         Ok(())
     }
-}
-
-fn floodfill(bodies: u128, start: u8, width: u8, height: u8) -> u128 {
-    todo!()
 }
