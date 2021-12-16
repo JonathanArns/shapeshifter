@@ -1,6 +1,9 @@
 use crate::types::*;
 use crate::api::GameState;
 use std::time;
+use std::thread;
+use std::cmp::min;
+use crossbeam_channel::{unbounded, Sender, Receiver};
 
 const BORDER_MASK: u128 = 0b_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110;
 
@@ -76,30 +79,67 @@ impl<const N: usize> Bitboard<N> {
         board
     }
 
+    // TODO: guarantee a return after 400ms
     pub fn iterative_deepening_search(&self, g: &mut Game) -> (Move, Score) {
         let mut best_move = Move::Up;
         let mut best_score = Score::MIN;
+        let mut best_depth = 1;
         let start_time = time::Instant::now();
-        let mut depth = 1;
 
-        let mut enemy_moves = self.possible_enemy_moves();
-        let my_moves = self.allowed_moves(self.snakes[0].head);
-        while time::Instant::now().duration_since(start_time).lt(&g.move_time.div_f32(N as f32 * 10_f32)) {
-            let mut best = Score::MIN+1;
-            for mv in &my_moves {
-                let score = self.alphabeta(*mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
-                if score > best {
-                    best = score;
-                    best_score = score;
-                    best_move = *mv;
+        let (stop_sender, stop_receiver) = unbounded();
+        let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
+
+        let board = self.clone();
+        thread::spawn(move || {
+            let mut best_move = Move::Up;
+            let mut best_score = Score::MIN;
+            let mut depth = 1;
+            let mut enemy_moves = board.possible_enemy_moves();
+            let my_moves = board.allowed_moves(board.snakes[0].head);
+            loop {
+                let mut best = Score::MIN+1;
+                for mv in &my_moves {
+                    let score = board.alphabeta(*mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+                    if score > best {
+                        best = score;
+                        best_move = *mv;
+                        best_score = best;
+                    }
                 }
+                result_sender.try_send((best_move, best_score, depth)).ok();
+                if best == Score::MAX || best == Score::MIN+1 {
+                    break
+                }
+                if let Ok(_) = stop_receiver.try_recv() {
+                    break // stop thread because time is out and response has been sent
+                }
+                depth += 1;
             }
-            if best == Score::MAX || best == Score::MIN+1 {
-                break
+        });
+
+        while time::Instant::now().duration_since(start_time).lt(&(min(g.move_time / 5, time::Duration::from_millis(50)))) {
+            if let Ok(msg) = result_receiver.recv_timeout(
+                min(g.move_time / 4, time::Duration::from_millis(51))
+                - time::Instant::now().duration_since(start_time)
+            ) {
+                best_move = msg.0;
+                best_score = msg.1;
+                best_depth = msg.2
             }
-            depth += 1;
         }
-        println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, depth, time::Instant::now().duration_since(start_time).as_millis());
+        stop_sender.send(1).ok(); // Channel might be broken, if search returned early. We don't care.
+        if let Ok(msg) = result_receiver.recv_timeout(
+            g.move_time
+            - time::Duration::from_millis(min(101, 1 + g.move_time.as_millis() as u64 / 4))
+            - time::Instant::now().duration_since(start_time)
+        ) {
+            best_move = msg.0;
+            best_score = msg.1;
+            best_depth = msg.2
+        }
+        thread::sleep(g.move_time - time::Duration::from_millis(min(100, g.move_time.as_millis() as u64 / 4)) - time::Instant::now().duration_since(start_time));
+
+        println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
         (best_move, best_score)
     }
 
