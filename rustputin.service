@@ -1,0 +1,10 @@
+[Unit]
+Description=Rustputin battlesnake
+
+[Service]
+User=jonathan
+Restart=always
+ExecStart=/home/jonathan/rustputin/target/release/rustputin
+
+[Install]
+WantedBy=multi-user.target
