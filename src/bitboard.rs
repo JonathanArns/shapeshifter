@@ -106,8 +106,7 @@ impl<const N: usize> Bitboard<N> {
         thread::spawn(move || {
             let mut best_move = Move::Up;
             let mut best_score = Score::MIN+1;
-            // let mut depth = 1;
-            let depth = 2; // debug
+            let mut depth = 1;
             let mut enemy_moves = board.possible_enemy_moves();
             let my_moves = board.allowed_moves(board.snakes[0].head);
             loop {
@@ -127,8 +126,7 @@ impl<const N: usize> Bitboard<N> {
                 if let Ok(_) = stop_receiver.try_recv() {
                     break // stop thread because time is out and response has been sent
                 }
-                // depth += 1; // debug
-                break // debug
+                depth += 1;
             }
         });
 
