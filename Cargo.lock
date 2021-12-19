@@ -621,6 +621,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "env_logger",
+ "lazy_static",
  "log 0.4.14",
  "rocket",
  "rocket_contrib",

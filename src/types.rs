@@ -1,6 +1,6 @@
 use rocket_contrib::json::JsonValue;
 
-pub type Score = i8;
+pub type Score = i16;
 pub type Square = u8;
 
 pub const FOOD: Square = 1;

@@ -2,9 +2,22 @@ use crate::types::*;
 use crate::api::GameState;
 use std::time;
 use std::thread;
+use std::env;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 
 const BORDER_MASK: u128 = 0b_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110;
+const BODY_COLLISION: i8 = -1;
+const OUT_OF_HEALTH: i8 = -2;
+const HEAD_COLLISION: i8 = -3;
+
+lazy_static! {
+    /// Weights for eval function can be loaded from environment.
+    static ref WEIGHTS: [Score; 5] = if let Ok(var) = env::var("RUSPUTIN_WEIGHTS") {
+        serde_json::from_str(&var).unwrap()
+    } else {
+        [-5, 1, 3, 1, 3]
+    };
+}
 
 #[derive(Clone, Copy, Debug, Hash)]
 struct Snake {
@@ -80,7 +93,7 @@ impl<const N: usize> Bitboard<N> {
 
     pub fn iterative_deepening_search(&self, g: &mut Game) -> (Move, Score) {
         let mut best_move = Move::Up;
-        let mut best_score = Score::MIN;
+        let mut best_score = Score::MIN+1;
         let mut best_depth = 1;
         let start_time = time::Instant::now();
         let soft_deadline = start_time + g.move_time / 10;
@@ -92,8 +105,9 @@ impl<const N: usize> Bitboard<N> {
         let board = self.clone();
         thread::spawn(move || {
             let mut best_move = Move::Up;
-            let mut best_score = Score::MIN;
-            let mut depth = 1;
+            let mut best_score = Score::MIN+1;
+            // let mut depth = 1;
+            let depth = 2; // debug
             let mut enemy_moves = board.possible_enemy_moves();
             let my_moves = board.allowed_moves(board.snakes[0].head);
             loop {
@@ -107,13 +121,14 @@ impl<const N: usize> Bitboard<N> {
                     }
                 }
                 result_sender.try_send((best_move, best_score, depth)).ok();
-                if best == Score::MAX || best == Score::MIN+1 {
+                if best == Score::MAX || best < Score::MIN+4 {
                     break
                 }
                 if let Ok(_) = stop_receiver.try_recv() {
                     break // stop thread because time is out and response has been sent
                 }
-                depth += 1;
+                // depth += 1; // debug
+                break // debug
             }
         });
 
@@ -141,7 +156,10 @@ impl<const N: usize> Bitboard<N> {
     }
 
     pub fn alphabeta(&self, mv: Move, enemy_moves: &mut Vec<[Move; N]>, depth: u8, alpha: Score, mut beta: Score) -> Score { // min call
-        if depth <= 0 || self.is_terminal() {
+        if self.is_terminal() {
+            return self.eval_terminal()
+        }
+        if depth <= 0 {
             return self.eval()
         }
 
@@ -176,27 +194,44 @@ impl<const N: usize> Bitboard<N> {
     }
 
     fn eval(&self) -> Score {
-        if !self.snakes[0].is_alive() {
-            return Score::MIN+1
-        }
-        let mut score: Score = 0;
-        let mut n = 0;
+        let mut enemies_alive = 0;
+        let mut lowest_enemy_health = 100;
+        let mut largest_enemy_length = 0;
         for i in 1..N {
             if self.snakes[i].is_alive() {
-                score -= self.snakes[i].length as i8;
-                n += 1;
+                enemies_alive += 1;
+                let len = self.snakes[i].length;
+                if len > largest_enemy_length {
+                    largest_enemy_length = len;
+                }
+                if self.snakes[i].health < lowest_enemy_health {
+                    lowest_enemy_health = self.snakes[i].health;
+                }
             }
         }
-        if n == 0 {
-            return Score::MAX
-        }
-        score += self.snakes[0].length as Score * n as Score;
-        score /= n;
+        let (my_area, enemy_area) = self.area_control();
 
-        let (my_control, enemy_control) = self.area_control();
-        score += (my_control as i8 - enemy_control as i8) / if n > 0 { 10 } else { 30 };
+        let mut score: Score = 0;
+        // number of enemies alive
+        score += WEIGHTS[0] * enemies_alive as Score;
+        // difference in health to lowest enemy
+        score += WEIGHTS[1] * self.snakes[0].health as Score - lowest_enemy_health as Score;
+        // difference in length to longest enemy
+        score += WEIGHTS[2] * self.snakes[0].length as Score - largest_enemy_length as Score;
+        // difference in controlled non-hazard area
+        score += WEIGHTS[3] * (my_area & !self.hazards).count_ones() as Score - (enemy_area & !self.hazards).count_ones() as Score;
+        // difference in controlled food
+        score += WEIGHTS[4] * (my_area & self.food).count_ones() as Score - (enemy_area & self.food).count_ones() as Score;
 
         score
+    }
+
+    fn eval_terminal(&self) -> Score {
+        if !self.snakes[0].is_alive() {
+            return Score::MIN - self.snakes[0].health as i16
+        } else {
+            return Score::MAX
+        }
     }
 
     fn possible_enemy_moves(&self) -> Vec<[Move; N]> {
@@ -327,6 +362,7 @@ impl<const N: usize> Bitboard<N> {
 
             // starvation
             if !snake.is_alive() {
+                snake.health = OUT_OF_HEALTH;
                 new.remove_snake_body(i);
             }
         }
@@ -347,7 +383,7 @@ impl<const N: usize> Bitboard<N> {
                 && new.snakes[j].is_alive()
                 && new.snakes[i].head == new.snakes[j].head
                 && new.snakes[i].length <= new.snakes[j].length {
-                    new.snakes[i].curled_bodyparts = 100; // marked for removal
+                    new.snakes[i].curled_bodyparts = 101; // marked for removal
                 }
             }
         }
@@ -356,7 +392,12 @@ impl<const N: usize> Bitboard<N> {
         for i in 0..N {
             if new.snakes[i].curled_bodyparts == 100 {
                 new.snakes[i].curled_bodyparts = 0;
-                new.snakes[i].health = -1;
+                new.snakes[i].health = BODY_COLLISION;
+                new.remove_snake_body(i);
+            }
+            if new.snakes[i].curled_bodyparts == 101 {
+                new.snakes[i].curled_bodyparts = 0;
+                new.snakes[i].health = HEAD_COLLISION;
                 new.remove_snake_body(i);
             }
         }
@@ -386,7 +427,7 @@ impl<const N: usize> Bitboard<N> {
         }
     }
 
-    fn area_control(&self) -> (u8, u8) {
+    fn area_control(&self) -> (u128, u128) {
         let b = !self.bodies[0];
         let mut x = (1_u128<<self.snakes[0].head, 0_u128);
         for snake in &self.snakes[1..] {
@@ -405,7 +446,7 @@ impl<const N: usize> Bitboard<N> {
                 y = x;
             }
         }
-        (x.0.count_ones() as u8, x.1.count_ones() as u8)
+        (x.0, x.1)
     }
 }
 
