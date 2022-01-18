@@ -236,8 +236,13 @@ impl<const N: usize> Bitboard<N> {
         // get moves for each enemy
         let enemy_moves: Vec<Vec<Move>> = self.snakes[1..]
             .iter()
-            .filter(|snake| { snake.is_alive() }) // filter out dead snakes
-            .map(|snake| { self.allowed_moves(snake.head) })
+            .map(|snake| { 
+                if snake.is_alive() {
+                    self.allowed_moves(snake.head)
+                } else {
+                    vec![Move::Up]
+                }
+            })
             .collect();
 
         // generate kartesian product of the possible moves
@@ -284,7 +289,7 @@ impl<const N: usize> Bitboard<N> {
                 moves.push(Move::Down);
             }
         }
-        if pos < 109 {
+        if pos < 110 {
             some_legal_move = Move::Up;
             if self.bodies[0] & mask << 11 == 0 || tails.contains(&(pos + 11)) {
                 moves.push(Move::Up);
@@ -410,7 +415,7 @@ impl<const N: usize> Bitboard<N> {
         let snake = &self.snakes[snake_index];
         let head_mask = 1<<snake.head;
         let mut tail_mask = 1<<snake.tail;
-        while  head_mask != tail_mask {
+        while head_mask != tail_mask {
             let first_bit = self.bodies[1] & tail_mask != 0;
             let vertical = self.bodies[2] & tail_mask == 0;
             self.bodies[0] &= !tail_mask;
