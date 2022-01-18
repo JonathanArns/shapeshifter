@@ -3,6 +3,7 @@ use crate::api::GameState;
 use std::time;
 use std::thread;
 use std::env;
+use fxhash::FxHashMap;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 
 const BORDER_MASK: u128 = 0b_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110;
@@ -12,10 +13,10 @@ const HEAD_COLLISION: i8 = -3;
 
 lazy_static! {
     /// Weights for eval function can be loaded from environment.
-    static ref WEIGHTS: [Score; 5] = if let Ok(var) = env::var("RUSPUTIN_WEIGHTS") {
-        serde_json::from_str(&var).unwrap()
+    static ref WEIGHTS: [Score; 10] = if let Ok(var) = env::var("RUSTPUTIN_WEIGHTS") {
+        serde_json::from_str::<[Score; 10]>(&var).unwrap()
     } else {
-        [-5, 1, 3, 1, 3]
+        [-5, 1, 3, 1, 3, 20, 1, 3, 1, 3]
     };
 }
 
@@ -104,6 +105,9 @@ impl<const N: usize> Bitboard<N> {
 
         let board = self.clone();
         thread::spawn(move || {
+            let mut node_counter = 0;
+            let mut my_killer_moves: FxHashMap<([i8; N], u128), Move> = Default::default();
+            let mut enemy_killer_moves: FxHashMap<([i8; N], u128, Move), [Move; N]> = Default::default();
             let mut best_move = Move::Up;
             let mut best_score = Score::MIN+1;
             let mut depth = 1;
@@ -112,7 +116,7 @@ impl<const N: usize> Bitboard<N> {
             loop {
                 let mut best = Score::MIN+1;
                 for mv in &my_moves {
-                    let score = board.alphabeta(*mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+                    let score = board.alphabeta(&mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX, &mut my_killer_moves, &mut enemy_killer_moves);
                     if score > best {
                         best = score;
                         best_move = *mv;
@@ -128,6 +132,7 @@ impl<const N: usize> Bitboard<N> {
                 }
                 depth += 1;
             }
+            println!("nodes counted: {}", node_counter);
         });
 
         // receive results
@@ -153,7 +158,17 @@ impl<const N: usize> Bitboard<N> {
         (best_move, best_score)
     }
 
-    pub fn alphabeta(&self, mv: Move, enemy_moves: &mut Vec<[Move; N]>, depth: u8, alpha: Score, mut beta: Score) -> Score { // min call
+    pub fn alphabeta(
+        &self,
+        nc: &mut u64,
+        mv: Move,
+        enemy_moves: &mut Vec<[Move; N]>,
+        depth: u8, alpha: Score,
+        mut beta: Score,
+        my_killer_moves: &mut FxHashMap<([i8; N], u128), Move>,
+        enemy_killer_moves: &mut FxHashMap<([i8; N], u128, Move), [Move; N]>
+    ) -> Score { // min call
+        *nc += 1;
         if self.is_terminal() {
             return self.eval_terminal()
         }
@@ -161,17 +176,49 @@ impl<const N: usize> Bitboard<N> {
             return self.eval()
         }
 
+        // get killer_move for position
+        let mut km_key = ([-1; N], self.bodies[0], mv);
+        for i in 0..N {
+            if self.snakes[i].is_alive() {
+                km_key.0[i] = self.snakes[i].head as i8;
+            }
+        }
+        let km = **enemy_killer_moves.get(&km_key).get_or_insert(&enemy_moves[0]);
+
         // search
-        for mvs in enemy_moves { // TODO: apply move ordering
+        for (i, mvs) in [km].iter_mut().chain(enemy_moves.iter_mut()).enumerate() { // TODO: apply move ordering
+            if *mvs == km && i != 0 {
+                continue
+            }
             let score = { // max call
                 let mut ialpha = alpha;
                 let ibeta = beta;
+
+                // TODO: use mut iterator instead of copying mvs
                 mvs[0] = mv;
-                let child = self.apply_moves(mvs);
+                let child = self.apply_moves(&mvs);
+
                 let mut next_enemy_moves = child.possible_enemy_moves();
-                for mv in child.allowed_moves(child.snakes[0].head) { // TODO: apply move ordering
-                    let iscore = child.alphabeta(mv, &mut next_enemy_moves, depth-1, alpha, beta);
+                let my_moves = child.allowed_moves(child.snakes[0].head);
+
+                // get killer_move for position
+                let mut ikm_key = ([-1; N], self.bodies[0]);
+                for i in 0..N {
+                    if child.snakes[i].is_alive() {
+                        ikm_key.0[i] = child.snakes[i].head as i8;
+                    }
+                }
+                let ikm = **my_killer_moves.get(&ikm_key).get_or_insert(&my_moves[0]);
+
+                for (j, mv) in [ikm].iter().chain(my_moves.iter()).enumerate() { // TODO: apply move ordering
+                    if *mv == ikm && j != 0 {
+                        continue
+                    }
+                    let iscore = child.alphabeta(nc, *mv, &mut next_enemy_moves, depth-1, alpha, beta, my_killer_moves, enemy_killer_moves);
                     if iscore > ibeta {
+                        if j > 0 {
+                            my_killer_moves.insert(ikm_key, *mv);
+                        }
                         ialpha = ibeta;
                         break // same as return beta
                     }
@@ -182,6 +229,9 @@ impl<const N: usize> Bitboard<N> {
                 ialpha
             };
             if score < alpha {
+                if i > 0 {
+                    enemy_killer_moves.insert(km_key, *mvs);
+                }
                 return alpha
             }
             if score < beta {
@@ -207,19 +257,33 @@ impl<const N: usize> Bitboard<N> {
                 }
             }
         }
+        let is_lategame = enemies_alive < 2;
         let (my_area, enemy_area) = self.area_control();
 
         let mut score: Score = 0;
-        // number of enemies alive
-        score += WEIGHTS[0] * enemies_alive as Score;
-        // difference in health to lowest enemy
-        score += WEIGHTS[1] * self.snakes[0].health as Score - lowest_enemy_health as Score;
-        // difference in length to longest enemy
-        score += WEIGHTS[2] * self.snakes[0].length as Score - largest_enemy_length as Score;
-        // difference in controlled non-hazard area
-        score += WEIGHTS[3] * (my_area & !self.hazards).count_ones() as Score - (enemy_area & !self.hazards).count_ones() as Score;
-        // difference in controlled food
-        score += WEIGHTS[4] * (my_area & self.food).count_ones() as Score - (enemy_area & self.food).count_ones() as Score;
+        if !is_lategame {
+            // number of enemies alive
+            score += WEIGHTS[0] * enemies_alive as Score;
+            // difference in health to lowest enemy
+            score += WEIGHTS[1] * self.snakes[0].health as Score - lowest_enemy_health as Score;
+            // difference in length to longest enemy
+            score += WEIGHTS[2] * self.snakes[0].length as Score - largest_enemy_length as Score;
+            // difference in controlled non-hazard area
+            score += WEIGHTS[3] * (my_area & !self.hazards).count_ones() as Score - (enemy_area & !self.hazards).count_ones() as Score;
+            // difference in controlled food
+            score += WEIGHTS[4] * (my_area & self.food).count_ones() as Score - (enemy_area & self.food).count_ones() as Score;
+        } else {
+            // number of enemies alive - always 1
+            score += WEIGHTS[5] * WEIGHTS[5];
+            // difference in health to lowest enemy
+            score += WEIGHTS[6] * self.snakes[0].health as Score - lowest_enemy_health as Score;
+            // difference in length to longest enemy
+            score += WEIGHTS[7] * self.snakes[0].length as Score - largest_enemy_length as Score;
+            // difference in controlled non-hazard area
+            score += WEIGHTS[8] * (my_area & !self.hazards).count_ones() as Score - (enemy_area & !self.hazards).count_ones() as Score;
+            // difference in controlled food
+            score += WEIGHTS[9] * (my_area & self.food).count_ones() as Score - (enemy_area & self.food).count_ones() as Score;
+        }
 
         score
     }
@@ -489,7 +553,7 @@ mod tests {
     #[test]
     fn test_weird_head_collision_deaths() {
         let state = GameState{
-            game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new() },
+            game: api::Game{ id: "".to_string(), timeout: 200, ruleset: std::collections::HashMap::new() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),

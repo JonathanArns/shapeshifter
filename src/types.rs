@@ -10,7 +10,7 @@ pub const BODY: Square = 8;
 pub const TAIL: Square = 16;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Move {
     Up = 0,
     Down = 1,
