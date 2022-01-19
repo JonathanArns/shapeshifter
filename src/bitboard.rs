@@ -235,30 +235,34 @@ impl<const N: usize> Bitboard<N> {
 
     fn possible_enemy_moves(&self) -> Vec<[Move; N]> {
         // get moves for each enemy
-        let enemy_moves: Vec<ArrayVec<Move, 4>> = self.snakes[1..]
-            .iter()
-            .map(|snake| {
-                if snake.is_alive() {
-                    self.allowed_moves(snake.head)
-                } else {
-                    let mut mvs = ArrayVec::<_, 4>::new();
-                    mvs.push(Move::Up);
-                    mvs
-                }
-            })
-            .collect();
+        let mut enemy_moves = ArrayVec::<ArrayVec<Move, 4>, N>::new();
+        for snake in self.snakes[1..].iter() {
+            if snake.is_alive() {
+                enemy_moves.push(self.allowed_moves(snake.head));
+            } else {
+                let mut none_moves = ArrayVec::<_, 4>::new();
+                none_moves.insert(0, Move::Up);
+                enemy_moves.push(none_moves);
+            }
+        }
 
         // generate kartesian product of the possible moves
-        let mut moves: Vec<[Move; N]> = vec![[Move::Up; N]];
+        let mut moves: Vec<[Move; N]> = Vec::with_capacity(1 + N.pow(N as u32));
+        moves.push([Move::Up; N]);
+        let mut moves_start;
+        let mut moves_end = 0;
         for (i, snake_moves) in enemy_moves.iter().enumerate() {
-            moves = snake_moves.iter().flat_map(move |mv| {
-                let mut tmp = moves.clone();
-                for ref mut mvs in &mut tmp {
-                    mvs[i+1] = *mv
+            moves_start = moves_end;
+            moves_end = moves.len();
+            for mv in snake_moves.iter() {
+                for j in moves_start..moves_end {
+                    let mut tmp = moves[j];
+                    tmp[i+1] = *mv;
+                    moves.push(tmp);
                 }
-                tmp
-            }).collect()
+            }
         }
+        moves.drain(0..moves_end);
         moves
     }
 
