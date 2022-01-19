@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro, test)]
 
 #[macro_use]
 extern crate rocket;
@@ -6,6 +6,7 @@ extern crate rocket;
 extern crate rocket_contrib;
 #[macro_use]
 extern crate lazy_static;
+extern crate test;
 
 mod types;
 mod mailbox;

@@ -4,6 +4,7 @@ use std::time;
 use std::thread;
 use std::env;
 use crossbeam_channel::{unbounded, Sender, Receiver};
+use arrayvec::ArrayVec;
 
 const BORDER_MASK: u128 = 0b_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110_01111111110;
 const BODY_COLLISION: i8 = -1;
@@ -234,13 +235,15 @@ impl<const N: usize> Bitboard<N> {
 
     fn possible_enemy_moves(&self) -> Vec<[Move; N]> {
         // get moves for each enemy
-        let enemy_moves: Vec<Vec<Move>> = self.snakes[1..]
+        let enemy_moves: Vec<ArrayVec<Move, 4>> = self.snakes[1..]
             .iter()
-            .map(|snake| { 
+            .map(|snake| {
                 if snake.is_alive() {
                     self.allowed_moves(snake.head)
                 } else {
-                    vec![Move::Up]
+                    let mut mvs = ArrayVec::<_, 4>::new();
+                    mvs.push(Move::Up);
+                    mvs
                 }
             })
             .collect();
@@ -273,8 +276,8 @@ impl<const N: usize> Bitboard<N> {
 
     /// Can never return a move that moves out of bounds on the board,
     /// because that would cause a panic elsewhere.
-    fn allowed_moves(&self, pos: u8) -> Vec<Move> {
-        let mut moves = Vec::with_capacity(4);
+    fn allowed_moves(&self, pos: u8) -> ArrayVec<Move, 4> {
+        let mut moves = ArrayVec::<Move, 4>::new();
         let mut some_legal_move = Move::Up;
         let mut tails = [u8::MAX; N];
         for i in 0..N {
@@ -486,9 +489,85 @@ impl<const N: usize> std::fmt::Debug for Bitboard<N> {
 mod tests {
     use super::*;
     use crate::api;
+    use test::Bencher;
 
     fn c(x: usize, y: usize) -> api::Coord {
         api::Coord{x, y}
+    }
+
+    #[bench]
+    fn bench_enemy_move_generation(b: &mut Bencher) {
+        let state = GameState{
+            game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new() },
+            turn: 157,
+            you: api::Battlesnake{
+                id: "a".to_string(),
+                name: "a".to_string(),
+                latency: "".to_string(),
+                shout: None,
+                squad: None,
+                health: 100,
+                length: 11,
+                head: c(5,2),
+                body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+            },
+            board: api::Board{
+                height: 11,
+                width: 11,
+                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
+                hazards: vec![],
+                snakes: vec![
+                    api::Battlesnake{
+                        id: "a".to_string(),
+                        name: "a".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 100,
+                        length: 11,
+                        head: c(5,2),
+                        body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "b".to_string(),
+                        name: "b".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 12,
+                        head: c(3,4),
+                        body: vec![c(3,4), c(2,4), c(2,5), c(3, 5), c(3,6), c(3,7), c(3,8), c(4,8), c(4,7), c(4,6), c(4,5), c(4,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "c".to_string(),
+                        name: "c".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 3,
+                        head: c(6,7),
+                        body: vec![c(6,7), c(7,7), c(8,7)],
+                    },  
+                    api::Battlesnake{
+                        id: "d".to_string(),
+                        name: "d".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 3,
+                        head: c(9,9),
+                        body: vec![c(9,9), c(9,8), c(8,8)],
+                    },  
+                ],
+            },
+        };
+        let board = Bitboard::<4>::from_gamestate(state);
+        b.iter(|| {
+            board.possible_enemy_moves()
+        });
     }
     
     #[test]
