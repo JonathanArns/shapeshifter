@@ -13,10 +13,15 @@ const HEAD_COLLISION: i8 = -3;
 
 lazy_static! {
     /// Weights for eval function can be loaded from environment.
-    static ref WEIGHTS: [Score; 5] = if let Ok(var) = env::var("RUSPUTIN_WEIGHTS") {
+    static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-        [-5, 1, 3, 1, 3]
+       [-5, 1, 3, 1, 3, 10, 0]
+    };
+    static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
+        var.parse().unwrap()
+    } else {
+        -1
     };
 }
 
@@ -92,6 +97,34 @@ impl<const N: usize> Bitboard<N> {
         board
     }
 
+    pub fn search(&self, g: &mut Game) -> (Move, Score) {
+        if *FIXED_DEPTH > 0 {
+            self.fixed_depth_search(g, *FIXED_DEPTH as u8)
+        } else {
+            self.iterative_deepening_search(g)
+        }
+    }
+
+    pub fn fixed_depth_search(&self, _g: &mut Game, depth: u8) -> (Move, Score) {
+        let mut node_counter = 0;
+        let start_time = time::Instant::now(); // only used to calculate nodes / second
+        let mut best_move = Move::Up;
+        let mut best_score = Score::MIN+1;
+        let mut enemy_moves = self.generate_enemy_moves();
+        let my_moves = self.allowed_moves(self.snakes[0].head);
+        let mut best = Score::MIN+1;
+        for mv in &my_moves {
+            let score = self.alphabeta(&mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+            if score > best {
+                best = score;
+                best_move = *mv;
+                best_score = best;
+            }
+        }
+        println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
+        (best_move, best_score)
+    }
+
     pub fn iterative_deepening_search(&self, g: &mut Game) -> (Move, Score) {
         let mut best_move = Move::Up;
         let mut best_score = Score::MIN+1;
@@ -105,6 +138,8 @@ impl<const N: usize> Bitboard<N> {
 
         let board = self.clone();
         thread::spawn(move || {
+            let mut node_counter = 0;
+            let start_time = time::Instant::now(); // only used to calculate nodes / second
             let mut best_move = Move::Up;
             let mut best_score = Score::MIN+1;
             let mut depth = 1;
@@ -113,7 +148,7 @@ impl<const N: usize> Bitboard<N> {
             loop {
                 let mut best = Score::MIN+1;
                 for mv in &my_moves {
-                    let score = board.alphabeta(*mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+                    let score = board.alphabeta(&mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
                     if score > best {
                         best = score;
                         best_move = *mv;
@@ -129,6 +164,7 @@ impl<const N: usize> Bitboard<N> {
                 }
                 depth += 1;
             }
+            println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
         });
 
         // receive results
@@ -154,7 +190,8 @@ impl<const N: usize> Bitboard<N> {
         (best_move, best_score)
     }
 
-    pub fn alphabeta(&self, mv: Move, enemy_moves: &mut Vec<[Move; N]>, depth: u8, alpha: Score, mut beta: Score) -> Score { // min call
+    pub fn alphabeta(&self, node_counter: &mut u64, mv: Move, enemy_moves: &mut Vec<[Move; N]>, depth: u8, alpha: Score, mut beta: Score) -> Score { // min call
+        *node_counter += 1;
         if self.is_terminal() {
             return self.eval_terminal()
         }
@@ -171,7 +208,7 @@ impl<const N: usize> Bitboard<N> {
                 let child = self.apply_moves(mvs);
                 let mut next_enemy_moves = child.possible_enemy_moves();
                 for mv in child.allowed_moves(child.snakes[0].head) { // TODO: apply move ordering
-                    let iscore = child.alphabeta(mv, &mut next_enemy_moves, depth-1, alpha, beta);
+                    let iscore = child.alphabeta(node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
                     if iscore > ibeta {
                         ialpha = ibeta;
                         break // same as return beta

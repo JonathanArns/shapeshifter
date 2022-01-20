@@ -5,7 +5,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use crate::types;
 use crate::mailbox;
-use crate::minimax;
 use crate::bitboard;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -113,14 +112,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
     // let (mv, _, _) = minimax::iterative_deepening_search(board, &mut game);
     // mv.to_json()
     match state.board.snakes.len() {
-        1 => bitboard::Bitboard::<1>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        2 => bitboard::Bitboard::<2>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        3 => bitboard::Bitboard::<3>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        4 => bitboard::Bitboard::<4>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        5 => bitboard::Bitboard::<5>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        6 => bitboard::Bitboard::<6>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        7 => bitboard::Bitboard::<7>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
-        8 => bitboard::Bitboard::<8>::from_gamestate(state).iterative_deepening_search(&mut game).0.to_json(),
+        1 => bitboard::Bitboard::<1>::from_gamestate(state).search(&mut game).0.to_json(),
+        2 => bitboard::Bitboard::<2>::from_gamestate(state).search(&mut game).0.to_json(),
+        3 => bitboard::Bitboard::<3>::from_gamestate(state).search(&mut game).0.to_json(),
+        4 => bitboard::Bitboard::<4>::from_gamestate(state).search(&mut game).0.to_json(),
+        5 => bitboard::Bitboard::<5>::from_gamestate(state).search(&mut game).0.to_json(),
+        6 => bitboard::Bitboard::<6>::from_gamestate(state).search(&mut game).0.to_json(),
+        7 => bitboard::Bitboard::<7>::from_gamestate(state).search(&mut game).0.to_json(),
+        8 => bitboard::Bitboard::<8>::from_gamestate(state).search(&mut game).0.to_json(),
         _ => panic!("Snake count not supported"),
     }
 }
