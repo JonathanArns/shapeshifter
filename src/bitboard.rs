@@ -16,7 +16,7 @@ lazy_static! {
     static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-       [-5, 1, 3, 1, 3, 10, 0]
+       [-10, 1, 3, 1, 3, 0, 0]
     };
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
         var.parse().unwrap()
@@ -47,6 +47,19 @@ pub struct Bitboard<const N: usize> {
     snakes: [Snake; N],
     food: u128,
     hazards: u128,
+}
+
+fn distance(x: u8, y: u8) -> u8 {
+    ((x/11).max(y/11) - (x/11).min(y/11)) + ((x%11).max(y%11) - (x%11).min(y%11))
+}
+
+fn is_in_direction(from: u8, to: u8, mv: Move) -> bool {
+    match mv {
+        Move::Left => from % 11 > to % 11,
+        Move::Right => from % 11 < to % 11,
+        Move::Down => from / 11 > to / 11,
+        Move::Up => from / 11 < to / 11,
+    }
 }
 
 impl<const N: usize> Bitboard<N> {
@@ -143,7 +156,7 @@ impl<const N: usize> Bitboard<N> {
             let mut best_move = Move::Up;
             let mut best_score = Score::MIN+1;
             let mut depth = 1;
-            let mut enemy_moves = board.possible_enemy_moves();
+            let mut enemy_moves = board.generate_enemy_moves();
             let my_moves = board.allowed_moves(board.snakes[0].head);
             loop {
                 let mut best = Score::MIN+1;
@@ -198,6 +211,23 @@ impl<const N: usize> Bitboard<N> {
         if depth <= 0 {
             return self.eval()
         }
+        // // ProbCut heuristic
+        // if depth == 4 {
+        //     let a = 1.0;
+        //     let b = 0.1;
+        //     let percentile = 1.5;
+        //     let sigma = 0.5;
+        //     let mut bound = ((percentile * sigma + beta as f32 - b) / a).round() as Score;
+        //     if self.alphabeta(mv, enemy_moves, 3, bound-1, bound) >= bound {
+        //         print!("c");
+        //         return beta 
+        //     }
+        //     bound = ((-percentile * sigma + alpha as f32 - b) / a).round() as Score;
+        //     if self.alphabeta(mv, enemy_moves, 3, bound, bound+1) <= bound {
+        //         print!("c");
+        //         return alpha
+        //     }
+        // }
 
         // search
         for mvs in enemy_moves { // TODO: apply move ordering
@@ -206,7 +236,7 @@ impl<const N: usize> Bitboard<N> {
                 let ibeta = beta;
                 mvs[0] = mv;
                 let child = self.apply_moves(mvs);
-                let mut next_enemy_moves = child.possible_enemy_moves();
+                let mut next_enemy_moves = child.generate_enemy_moves();
                 for mv in child.allowed_moves(child.snakes[0].head) { // TODO: apply move ordering
                     let iscore = child.alphabeta(node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
                     if iscore > ibeta {
@@ -233,9 +263,20 @@ impl<const N: usize> Bitboard<N> {
         let mut enemies_alive = 0;
         let mut lowest_enemy_health = 100;
         let mut largest_enemy_length = 0;
+        let mut tails_mask = 1_u128<<self.snakes[0].tail;
+
+        let mut x = 1_u128<<self.snakes[0].head;
+        x = x | (BORDER_MASK & x)<<1 | (BORDER_MASK & x)>>1 | x<<11 | x>>11;
+        let distance_1_mask = x;
+        x = x | (BORDER_MASK & x)<<1 | (BORDER_MASK & x)>>1 | x<<11 | x>>11;
+        let distance_2_mask = x;
+        x = x | (BORDER_MASK & x)<<1 | (BORDER_MASK & x)>>1 | x<<11 | x>>11;
+        let distance_3_mask = x;
+
         for i in 1..N {
             if self.snakes[i].is_alive() {
                 enemies_alive += 1;
+                tails_mask |= 1<<self.snakes[i].tail;
                 let len = self.snakes[i].length;
                 if len > largest_enemy_length {
                     largest_enemy_length = len;
@@ -256,8 +297,12 @@ impl<const N: usize> Bitboard<N> {
         score += WEIGHTS[2] * self.snakes[0].length as Score - largest_enemy_length as Score;
         // difference in controlled non-hazard area
         score += WEIGHTS[3] * (my_area & !self.hazards).count_ones() as Score - (enemy_area & !self.hazards).count_ones() as Score;
+        //close controlled area
+        score += WEIGHTS[4] * (my_area & distance_3_mask).count_ones() as Score;
         // difference in controlled food
-        score += WEIGHTS[4] * (my_area & self.food).count_ones() as Score - (enemy_area & self.food).count_ones() as Score;
+        score += WEIGHTS[5] * (my_area & self.food).count_ones() as Score - (enemy_area & self.food).count_ones() as Score;
+        // number of close tails
+        score += WEIGHTS[6] * (distance_2_mask & tails_mask).count_ones() as Score;
 
         score
     }
@@ -270,7 +315,7 @@ impl<const N: usize> Bitboard<N> {
         }
     }
 
-    fn possible_enemy_moves(&self) -> Vec<[Move; N]> {
+    fn generate_enemy_moves(&self) -> Vec<[Move; N]> {
         // get moves for each enemy
         let mut enemy_moves = ArrayVec::<ArrayVec<Move, 4>, N>::new();
         for snake in self.snakes[1..].iter() {
@@ -283,24 +328,59 @@ impl<const N: usize> Bitboard<N> {
             }
         }
 
-        // generate kartesian product of the possible moves
+        // only generate enough move combinations so that every enemy move appears at least once
         let mut moves: Vec<[Move; N]> = Vec::with_capacity(1 + N.pow(N as u32));
         moves.push([Move::Up; N]);
-        let mut moves_start;
-        let mut moves_end = 0;
         for (i, snake_moves) in enemy_moves.iter().enumerate() {
-            moves_start = moves_end;
-            moves_end = moves.len();
-            for mv in snake_moves.iter() {
-                for j in moves_start..moves_end {
-                    let mut tmp = moves[j];
-                    tmp[i+1] = *mv;
-                    moves.push(tmp);
+            for j in 0..snake_moves.len().max(moves.len()) {
+                if moves.len() <= j {
+                    moves.push(moves[0]);
                 }
+                moves[j][i+1] = snake_moves[j.min(snake_moves.len()-1)];
             }
         }
-        moves.drain(0..moves_end);
+
+        // // generate kartesian product of the possible moves
+        // let mut moves: Vec<[Move; N]> = Vec::with_capacity(1 + N.pow(N as u32));
+        // moves.push([Move::Up; N]);
+        // let mut moves_start;
+        // let mut moves_end = 0;
+        // for (i, snake_moves) in enemy_moves.iter().enumerate() {
+        //     moves_start = moves_end;
+        //     moves_end = moves.len();
+        //     for mv in snake_moves.iter() {
+        //         for j in moves_start..moves_end {
+        //             let mut tmp = moves[j];
+        //             tmp[i+1] = *mv;
+        //             moves.push(tmp);
+        //         }
+        //     }
+        // }
+        // moves.drain(0..moves_end);
+        // self.order_enemy_moves(&mut moves);
         moves
+    }
+
+    fn order_enemy_moves(&self, moves: &mut Vec<[Move; N]>) {
+        let mut unique_moves_seen = Vec::<(Move, u8)>::with_capacity(N*N);
+        moves.sort_by_cached_key(|x| {
+            let me = self.snakes[0];
+            let mut key = 0;
+            for (i, snake) in self.snakes[1..].iter().enumerate() {
+                if !snake.is_alive() {
+                    continue
+                }
+                let mv = x[i+1];
+                // make sure to quickly cover all possible moves once
+                if !unique_moves_seen.contains(&(mv, i as u8)) {
+                    unique_moves_seen.push((mv, i as u8));
+                    key += 100;
+                }
+                // if snake is longer, walk towards me, otherwise walk away from me
+                key += (snake.length > me.length && is_in_direction(snake.head, me.head, mv)) as u8;
+            }
+            key
+        });
     }
 
     fn is_terminal(&self) -> bool {
@@ -474,14 +554,31 @@ impl<const N: usize> Bitboard<N> {
         }
     }
 
-    fn area_control(&self) -> (u128, u128) {
+    fn flood_fill(&self) -> u128 {
         let b = !self.bodies[0];
+        let mut x = 1_u128<<self.snakes[0].head;
+        let mut y = x;
+        loop {
+            x = b & (x | (BORDER_MASK & x)<<1 | (BORDER_MASK & x)>>1 | x<<11 | x>>11);
+            if x == y {
+                break
+            } else {
+                y = x;
+            }
+        }
+        x
+    }
+
+    fn area_control(&self) -> (u128, u128) {
         let mut x = (1_u128<<self.snakes[0].head, 0_u128);
+        let mut tails_mask = 1_u128<<self.snakes[0].tail;
         for snake in &self.snakes[1..] {
             if snake.is_alive() {
                 x.1 |= 1<<snake.head;
+                tails_mask |= 1<<snake.tail;
             }
         }
+        let b = !self.bodies[0] & !tails_mask;
         let mut y = x;
         loop {
             let me = b & (x.0 | (BORDER_MASK & x.0)<<1 | (BORDER_MASK & x.0)>>1 | x.0<<11 | x.0>>11);
@@ -607,7 +704,7 @@ mod tests {
         };
         let board = Bitboard::<4>::from_gamestate(state);
         b.iter(|| {
-            board.possible_enemy_moves()
+            board.generate_enemy_moves()
         });
     }
     
@@ -661,5 +758,216 @@ mod tests {
         let mut game = Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
         let (mv, _) = Bitboard::<2>::from_gamestate(state).iterative_deepening_search(&mut game);
         assert!(mv != Move::Up)
+    }
+    
+    #[test]
+    fn test_weird_head_collision_deaths2() {
+        let state = GameState{
+            game: api::Game{ id: "".to_string(), timeout: 70, ruleset: std::collections::HashMap::new() },
+            turn: 56,
+            you: api::Battlesnake{
+                id: "a".to_string(),
+                name: "a".to_string(),
+                latency: "".to_string(),
+                shout: None,
+                squad: None,
+                health: 100,
+                length: 5,
+                head: c(2,6),
+                body: vec![c(2,6), c(3,6), c(3, 7), c(4,7), c(5,7)],
+            },
+            board: api::Board{
+                height: 11,
+                width: 11,
+                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
+                hazards: vec![],
+                snakes: vec![
+                    api::Battlesnake{
+                        id: "a".to_string(),
+                        name: "a".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 100,
+                        length: 5,
+                        head: c(2,6),
+                        body: vec![c(2,6), c(3,6), c(3, 7), c(4,7), c(5,7)],
+                    },
+                    api::Battlesnake{
+                        id: "b".to_string(),
+                        name: "b".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 4,
+                        head: c(8,6),
+                        body: vec![c(8,6), c(8,7), c(8,8), c(7, 8)],
+                    },  
+                    api::Battlesnake{
+                        id: "c".to_string(),
+                        name: "c".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 8,
+                        head: c(1,5),
+                        body: vec![c(1,5), c(0,5), c(0,4), c(0, 3), c(0,2), c(1,2), c(1,3), c(1,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "d".to_string(),
+                        name: "d".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 7,
+                        head: c(4,4),
+                        body: vec![c(4,4), c(5,4), c(6,4), c(7,4), c(7,3), c(7,2), c(7,1)],
+                    },  
+                ],
+            },
+        };
+        let mut game = Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
+        let (mv, _) = Bitboard::<4>::from_gamestate(state).search(&mut game);
+        assert!(mv == Move::Up)
+    }
+
+    #[test]
+    fn test_try_to_live_between_two_enemies() {
+        let state = GameState{
+            game: api::Game{ id: "".to_string(), timeout: 70, ruleset: std::collections::HashMap::new() },
+            turn: 56,
+            you: api::Battlesnake{
+                id: "a".to_string(),
+                name: "a".to_string(),
+                latency: "".to_string(),
+                shout: None,
+                squad: None,
+                health: 100,
+                length: 3,
+                head: c(6,0),
+                body: vec![c(6,0), c(6,1), c(6, 2)],
+            },
+            board: api::Board{
+                height: 11,
+                width: 11,
+                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
+                hazards: vec![],
+                snakes: vec![
+                    api::Battlesnake{
+                        id: "a".to_string(),
+                        name: "a".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 100,
+                        length: 3,
+                        head: c(6,0),
+                        body: vec![c(6,0), c(6,1), c(6, 2)],
+                    },
+                    api::Battlesnake{
+                        id: "b".to_string(),
+                        name: "b".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 5,
+                        head: c(8,2),
+                        body: vec![c(8,2), c(8,3), c(8,4), c(9,4), c(9,3)],
+                    },  
+                    api::Battlesnake{
+                        id: "c".to_string(),
+                        name: "c".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 6,
+                        head: c(5,1),
+                        body: vec![c(5,1), c(5,2), c(4,2), c(3,2), c(3,1), c(3,0)],
+                    },  
+                ],
+            },
+        };
+        let mut game = Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
+        let (mv, _) = Bitboard::<3>::from_gamestate(state).search(&mut game);
+        assert!(mv == Move::Right)
+    }
+
+    #[test]
+    fn test_avoid_trap_between_enemies() {
+        let state = GameState{
+            game: api::Game{ id: "".to_string(), timeout: 1000, ruleset: std::collections::HashMap::new() },
+            turn: 56,
+            you: api::Battlesnake{
+                id: "a".to_string(),
+                name: "a".to_string(),
+                latency: "".to_string(),
+                shout: None,
+                squad: None,
+                health: 100,
+                length: 3,
+                head: c(6,2),
+                body: vec![c(6,2), c(7,2), c(7, 1)],
+            },
+            board: api::Board{
+                height: 11,
+                width: 11,
+                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
+                hazards: vec![],
+                snakes: vec![
+                    api::Battlesnake{
+                        id: "a".to_string(),
+                        name: "a".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 100,
+                        length: 3,
+                        head: c(6,2),
+                        body: vec![c(6,2), c(7,2), c(7, 1)],
+                    },
+                    api::Battlesnake{
+                        id: "b".to_string(),
+                        name: "b".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 4,
+                        head: c(4,6),
+                        body: vec![c(4,6), c(4,5), c(5,5), c(6,5)],
+                    },  
+                    api::Battlesnake{
+                        id: "c".to_string(),
+                        name: "c".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 5,
+                        head: c(8,4),
+                        body: vec![c(8,4), c(9,4), c(9,3), c(9,2), c(8,2)],
+                    },
+                    api::Battlesnake{
+                        id: "d".to_string(),
+                        name: "d".to_string(),
+                        latency: "".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 5,
+                        head: c(4,2),
+                        body: vec![c(4,2), c(3,2), c(3,1), c(3,0), c(4,0)],
+                    },  
+                ],
+            },
+        };
+        let mut game = Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
+        let (mv, _) = Bitboard::<4>::from_gamestate(state).search(&mut game);
+        assert!(mv == Move::Up)
     }
 }
