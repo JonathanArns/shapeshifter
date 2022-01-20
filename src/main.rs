@@ -13,6 +13,9 @@ mod mailbox;
 mod bitboard;
 mod minimax;
 mod api;
+mod move_gen;
+mod mcts;
+mod eval;
 
 use log::info;
 use rocket::config::{Config, Environment};
