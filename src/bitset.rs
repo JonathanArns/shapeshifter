@@ -22,14 +22,28 @@ where [(); N/128]: Sized {
 
     /// Returns a new Bitset with only the specifies bit set to true
     pub fn with_bit_set(idx: usize) -> Self {
-        todo!()
+        let mut ret = Self::new();
+        ret.set_bit(idx);
+        ret
+    }
+
+    /// Sets the bit at index position to true
+    pub fn set_bit(&mut self, position: usize) {
+        let i = position >> 7;
+        let offset = position % 128;
+        self.state[i] |= 1_u128<<offset;
+    }
+    
+    /// Sets the bit at index position to false
+    pub fn unset_bit(&mut self, position: usize) {
+        let i = position >> 7;
+        let offset = position % 128;
+        self.state[i] &= !(1_u128<<offset);
     }
     
     /// Get the bit at index position
+    /// Panics if position is out of range
     pub fn get_bit(&self, position: usize) -> bool {
-        if position >= N {
-            return false
-        }
         let i = position >> 7;
         let offset = position % 128;
         (self.state[i]>>offset) & 1 == 1
@@ -327,7 +341,19 @@ mod tests {
     }
 
     #[bench]
-    fn bench_shl_or_bitset(b: &mut Bencher) {
+    fn bench_shl_or_bitset_1024(b: &mut Bencher) {
+        let x = Bitset::<1024>{state: [1, 0, 0, 0, 0, 0, 0, 0]};
+        let mut y = Bitset::<1024>{state: [0, 0, 0, 0, 0, 0, 0, 0]};
+        b.iter(|| {
+            for i in 0..128 {
+                y |= x << i;
+            }
+            y
+        })
+    }
+
+    #[bench]
+    fn bench_shl_or_bitset_128(b: &mut Bencher) {
         let x = Bitset::<128>{state: [1]};
         let mut y = Bitset::<128>{state: [0]};
         b.iter(|| {
