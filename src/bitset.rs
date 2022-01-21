@@ -7,16 +7,14 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, N
 ///
 /// A lot of the implementation is based on the rust-dense-bitset crate.
 #[derive(Clone, Copy)]
-pub struct Bitset<const N: usize> 
-where [(); N/128]: Sized {
-    state: [u128; N/128],
+pub struct Bitset<const N: usize> {
+    state: [u128; N],
 }
 
-impl<const N: usize> Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> Bitset<N> {
     pub fn new() -> Self {
         Bitset{
-            state: [0; N/128]
+            state: [0; N]
         }
     }
 
@@ -83,8 +81,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> std::fmt::Debug for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> std::fmt::Debug for Bitset<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut result = String::new();
         for i in 0..self.state.len() {
@@ -101,8 +98,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> Not for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> Not for Bitset<N> {
     type Output = Self;
     fn not(self) -> Self {
         let mut ret = Self::new();
@@ -113,8 +109,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> BitAnd for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> BitAnd for Bitset<N> {
     type Output = Self;
     fn bitand(self, rhs: Self) -> Self {
         let mut ret = Self::new();
@@ -125,8 +120,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> BitAndAssign for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> BitAndAssign for Bitset<N> {
     fn bitand_assign(&mut self, rhs: Self) {
         for i in 0..self.state.len() {
             self.state[i] &= rhs.state[i];
@@ -134,8 +128,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> BitOr for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> BitOr for Bitset<N> {
     type Output = Self;
     fn bitor(self, rhs: Self) -> Self {
         let mut ret = Self::new();
@@ -146,8 +139,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> BitOrAssign for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> BitOrAssign for Bitset<N> {
     fn bitor_assign(&mut self, rhs: Self) {
         for i in 0..self.state.len() {
             self.state[i] |= rhs.state[i];
@@ -155,8 +147,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> BitXor for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> BitXor for Bitset<N> {
     type Output = Self;
     fn bitxor(self, rhs: Self) -> Self {
         let mut ret = Self::new();
@@ -167,8 +158,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> BitXorAssign for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> BitXorAssign for Bitset<N> {
     fn bitxor_assign(&mut self, rhs: Self) {
         for i in 0..self.state.len() {
             self.state[i] ^= rhs.state[i];
@@ -176,8 +166,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> Shl<usize> for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> Shl<usize> for Bitset<N> {
     type Output = Self;
     fn shl(self, rhs: usize) -> Self {
         let mut ret = Self::new();
@@ -201,8 +190,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> ShlAssign<usize> for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> ShlAssign<usize> for Bitset<N> {
     fn shl_assign(&mut self, rhs: usize) {
         let trailing_zeros = rhs >> 7;
         let actual_shift = rhs % 128;
@@ -223,8 +211,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> Shr<usize> for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> Shr<usize> for Bitset<N> {
     type Output = Self;
     fn shr(self, rhs: usize) -> Self {
         let mut ret = Self::new();
@@ -247,8 +234,7 @@ where [(); N/128]: Sized {
     }
 }
 
-impl<const N: usize> ShrAssign<usize> for Bitset<N>
-where [(); N/128]: Sized {
+impl<const N: usize> ShrAssign<usize> for Bitset<N> {
     fn shr_assign(&mut self, rhs: usize) {
         let leading_zeros = rhs >> 7;
         let actual_shift = rhs % 128;
@@ -278,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_shl() {
-        let x = Bitset::<256>{state: [1, 0]};
+        let x = Bitset::<2>{state: [1, 0]};
         println!("{:?}", x<<129);
         assert!((x<<129).state[0] == 0);
         assert!((x<<129).state[1] == 2);
@@ -286,8 +272,8 @@ mod tests {
 
     #[test]
     fn test_shl_or() {
-        let x = Bitset::<256>{state: [1, 0]};
-        let mut y = Bitset::<256>{state: [0, 0]};
+        let x = Bitset::<2>{state: [1, 0]};
+        let mut y = Bitset::<2>{state: [0, 0]};
         for i in 0..256 {
             y |= x << i;
         }
@@ -298,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_shl_assign() {
-        let mut x = Bitset::<256>{state: [1, 0]};
+        let mut x = Bitset::<2>{state: [1, 0]};
         x <<= 129;
         println!("{:?}", x);
         assert!(x.state[0] == 0);
@@ -307,8 +293,8 @@ mod tests {
 
     #[test]
     fn test_shl_assign_or() {
-        let mut x = Bitset::<256>{state: [1, 0]};
-        let mut y = Bitset::<256>{state: [1, 0]};
+        let mut x = Bitset::<2>{state: [1, 0]};
+        let mut y = Bitset::<2>{state: [1, 0]};
         for _ in 0..256 {
             x <<= 1;
             y |= x;
@@ -320,8 +306,8 @@ mod tests {
 
     #[test]
     fn test_shr_or() {
-        let x = Bitset::<256>{state: [0, 1]};
-        let mut y = Bitset::<256>{state: [0, 0]};
+        let x = Bitset::<2>{state: [0, 1]};
+        let mut y = Bitset::<2>{state: [0, 0]};
         for i in 0..256 {
             y |= x >> i;
         }
@@ -332,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_shl_assign_shr_assign() {
-        let mut x = Bitset::<256>{state: [1, 0]};
+        let mut x = Bitset::<2>{state: [1, 0]};
         x <<= 130;
         x >>= 129;
         println!("{:?}", x);
@@ -341,9 +327,9 @@ mod tests {
     }
 
     #[bench]
-    fn bench_shl_or_bitset_1024(b: &mut Bencher) {
-        let x = Bitset::<1024>{state: [1, 0, 0, 0, 0, 0, 0, 0]};
-        let mut y = Bitset::<1024>{state: [0, 0, 0, 0, 0, 0, 0, 0]};
+    fn bench_shl_or_bitset_8(b: &mut Bencher) {
+        let x = Bitset::<8>{state: [1, 0, 0, 0, 0, 0, 0, 0]};
+        let mut y = Bitset::<8>{state: [0, 0, 0, 0, 0, 0, 0, 0]};
         b.iter(|| {
             for i in 0..128 {
                 y |= x << i;
@@ -353,9 +339,9 @@ mod tests {
     }
 
     #[bench]
-    fn bench_shl_or_bitset_128(b: &mut Bencher) {
-        let x = Bitset::<128>{state: [1]};
-        let mut y = Bitset::<128>{state: [0]};
+    fn bench_shl_or_bitset_1(b: &mut Bencher) {
+        let x = Bitset::<1>{state: [1]};
+        let mut y = Bitset::<1>{state: [0]};
         b.iter(|| {
             for i in 0..128 {
                 y |= x << i;
