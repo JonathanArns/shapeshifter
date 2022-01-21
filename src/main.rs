@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, test)]
+#![feature(proc_macro_hygiene, decl_macro, test, generic_const_exprs, portable_simd)]
 
 #[macro_use]
 extern crate rocket;
@@ -16,6 +16,10 @@ mod api;
 mod move_gen;
 mod mcts;
 mod eval;
+
+// experimental
+mod vbitboard;
+mod bitset;
 
 use log::info;
 use rocket::config::{Config, Environment};
