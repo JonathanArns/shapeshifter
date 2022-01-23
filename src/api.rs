@@ -57,7 +57,7 @@ pub fn handle_index() -> JsonValue {
     json!({
         "apiversion": "1",
         "author": "JonathanArns",
-        "color": "#00293b",
+        "color": "#def0ff",
         "head": "smart-caterpillar",
         "tail": "present",
     })
