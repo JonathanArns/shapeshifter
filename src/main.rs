@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, test)]
+#![feature(proc_macro_hygiene, decl_macro, test, generic_const_exprs)]
 
 #[macro_use]
 extern crate rocket;
@@ -13,13 +13,18 @@ mod mailbox;
 mod bitboard;
 mod minimax;
 mod api;
+mod move_gen;
+mod mcts;
+mod eval;
+mod util;
+mod bitset;
 
 use log::info;
 use rocket::config::{Config, Environment};
 use std::env;
 
 fn main() {
-    println!("{:?}", std::mem::size_of::<bitboard::Bitboard<4>>());
+    println!("{:?}", std::mem::size_of::<bitboard::Bitboard<4, 11, 11>>());
     let address = "0.0.0.0";
     let env_port = env::var("PORT").ok();
     let env_port = env_port

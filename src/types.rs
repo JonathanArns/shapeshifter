@@ -23,7 +23,7 @@ impl Move {
         *self as u8
     }
 
-    pub fn to_index(&self, board_width: u8) -> i8 {
+    pub fn to_index(&self, board_width: usize) -> i16 {
         Self::int_to_index(self.to_int(), board_width)
     }
 
@@ -41,8 +41,8 @@ impl Move {
         unsafe { std::mem::transmute(x) }
     }
     
-    pub fn int_to_index(x: u8, board_width: u8) -> i8 {
-        [11, -11, 1, -1][x as usize]
+    pub fn int_to_index(x: u8, width: usize) -> i16 {
+        [width as i16, -(width as i16), 1, -1][x as usize]
     }
 }
 
