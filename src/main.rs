@@ -9,7 +9,6 @@ extern crate lazy_static;
 extern crate test;
 
 mod types;
-mod mailbox;
 mod bitboard;
 mod minimax;
 mod api;

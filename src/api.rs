@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use crate::types;
-use crate::mailbox;
 use crate::bitboard;
 use crate::minimax;
 
@@ -51,42 +50,6 @@ pub struct GameState {
     pub turn: u32,
     pub board: Board,
     pub you: Battlesnake,
-}
-
-fn coord_idx(c: &Coord, w: &usize) -> usize {
-    c.x + c.y * w
-}
-
-fn create_mailbox_board(state: GameState) -> mailbox::MailBoxBoard {
-    let b = state.board;
-    let mut ret = mailbox::MailBoxBoard::new(&b.width, &b.height);
-    for snake in b.snakes {
-        *ret.get(coord_idx(&snake.head, &b.width)) |= types::HEAD;
-        *ret.get(coord_idx(&snake.body[snake.length-1], &b.width)) |= types::TAIL;
-        let mut bod = Vec::new();
-        for (i, body) in snake.body.iter().enumerate() {
-            let x = coord_idx(body, &b.width);
-            if i > 0 && i < snake.length - 1 {
-                *ret.get(x) |= types::BODY;
-            }
-            if !bod.contains(&x) {
-                bod.push(x);
-            }
-        }
-        ret.snakes.push(mailbox::Snake{
-            length: snake.length.try_into().unwrap(),
-            health: snake.health,
-            body: bod,
-            is_enemy: snake.id != state.you.id,
-        })
-    }
-    for hazard in b.hazards {
-        *ret.get(coord_idx(&hazard, &b.width)) |= types::HAZARD;
-    }
-    for food in b.food {
-        *ret.get(coord_idx(&food, &b.width)) |= types::FOOD;
-    }
-    ret
 }
 
 #[get("/")]
