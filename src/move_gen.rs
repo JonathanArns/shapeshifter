@@ -5,37 +5,37 @@ use arrayvec::ArrayVec;
 
 /// Can never return a move that moves out of bounds on the board,
 /// because that would cause a panic elsewhere.
-pub fn allowed_moves<const N:usize>(board: &Bitboard<N>, pos: u8) -> ArrayVec<Move, 4> {
+pub fn allowed_moves<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, pos: u16) -> ArrayVec<Move, 4>
+where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
-    let mut tails = [u8::MAX; N];
-    for i in 0..N {
+    let mut tails = [u16::MAX; S];
+    for i in 0..S {
         if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
             tails[i] = board.snakes[i].tail;
         }
     }
-    let mask = 1<<pos;
-    if pos > 10 {
+    if pos >= W as u16 {
         some_legal_move = Move::Down;
-        if board.bodies[0] & mask >> 11 == 0 || tails.contains(&(pos - 11)) {
+        if !board.bodies[0].get_bit(pos as usize - W) || tails.contains(&(pos - W as u16)) {
             moves.push(Move::Down);
         }
     }
-    if pos < 110 {
+    if pos < (W * (H-1)) as u16 {
         some_legal_move = Move::Up;
-        if board.bodies[0] & mask << 11 == 0 || tails.contains(&(pos + 11)) {
+        if !board.bodies[0].get_bit(pos as usize + W) || tails.contains(&(pos + W as u16)) {
             moves.push(Move::Up);
         }
     }
-    if pos % 11 > 0 {
+    if pos % (W as u16) > 0 {
         some_legal_move = Move::Left;
-        if board.bodies[0] & mask >> 1 == 0 || tails.contains(&(pos - 1)) {
+        if !board.bodies[0].get_bit(pos as usize - 1) || tails.contains(&(pos - 1)) {
             moves.push(Move::Left);
         }
     }
-    if pos % 11 < 10 {
+    if pos % (W as u16) < (W as u16 - 1) {
         some_legal_move = Move::Right;
-        if board.bodies[0] & mask << 1 == 0 || tails.contains(&(pos + 1)) {
+        if !board.bodies[0].get_bit(pos as usize + 1) || tails.contains(&(pos + 1)) {
             moves.push(Move::Right);
         }
     }
@@ -45,11 +45,43 @@ pub fn allowed_moves<const N:usize>(board: &Bitboard<N>, pos: u8) -> ArrayVec<Mo
     moves
 }
 
+/// Generates up to 4 move combinations from a position, such that every move for every snake has
+/// been covered at least once.
+/// Can skip the first n snakes, their moves will always be Up in the result.
+pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, skip: usize) -> Vec<[Move; S]>
+where [(); (W*H+127)/128]: Sized {
+    // get moves for each enemy
+    let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
+    for snake in board.snakes[0+skip..].iter() {
+        if snake.is_alive() {
+            moves_per_snake.push(allowed_moves(board, snake.head));
+        } else {
+            let mut none_move = ArrayVec::<_, 4>::new();
+            none_move.insert(0, Move::Up);
+            moves_per_snake.push(none_move);
+        }
+    }
+
+    // only generate enough move combinations so that every enemy move appears at least once
+    let mut moves: Vec<[Move; S]> = Vec::with_capacity(4);
+    moves.push([Move::Up; S]);
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        for j in 0..snake_moves.len().max(moves.len()) {
+            if moves.len() <= j {
+                moves.push(moves[0]);
+            }
+            moves[j][i+1] = snake_moves[j.min(snake_moves.len()-1)];
+        }
+    }
+    moves
+}
+
 /// Generates all possible move combinations from a position.
 /// Can skip the first n snakes, their moves will always be Up in the result.
-pub fn move_combinations<const N: usize>(board: &Bitboard<N>, skip: usize) -> Vec<[Move; N]> {
+pub fn move_combinations<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, skip: usize) -> Vec<[Move; S]>
+where [(); (W*H+127)/128]: Sized {
     // get moves for each enemy
-    let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, N>::new();
+    let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     for snake in board.snakes[0+skip..].iter() {
         if snake.is_alive() {
             moves_per_snake.push(allowed_moves(board, snake.head));
@@ -61,8 +93,8 @@ pub fn move_combinations<const N: usize>(board: &Bitboard<N>, skip: usize) -> Ve
     }
 
     // kartesian product of the possible moves to get the possible combinations
-    let mut moves: Vec<[Move; N]> = Vec::with_capacity(1 + N.pow(N as u32));
-    moves.push([Move::Up; N]);
+    let mut moves: Vec<[Move; S]> = Vec::with_capacity(1 + S.pow(S as u32));
+    moves.push([Move::Up; S]);
     let mut moves_start;
     let mut moves_end = 0;
     for (i, snake_moves) in moves_per_snake.iter().enumerate() {
@@ -159,9 +191,9 @@ mod tests {
                 ],
             },
         };
-        let board = Bitboard::<4>::from_gamestate(state);
+        let board = Bitboard::<4, 11, 11>::from_gamestate(state);
         b.iter(|| {
-            move_combinations(&board, 0)
+            move_combinations(&board, 1)
         });
     }
 }

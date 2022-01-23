@@ -2,6 +2,7 @@ use crate::types::*;
 use crate::bitboard::*;
 use crate::move_gen::*;
 use crate::eval::*;
+use crate::util::*;
 
 use std::env;
 use std::time;
@@ -16,7 +17,8 @@ lazy_static! {
     };
 }
 
-pub fn search<const N: usize>(board: &Bitboard<N>, g: &mut Game) -> (Move, Score) {
+pub fn search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score)
+where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, g, *FIXED_DEPTH as u8)
     } else {
@@ -24,12 +26,13 @@ pub fn search<const N: usize>(board: &Bitboard<N>, g: &mut Game) -> (Move, Score
     }
 }
 
-pub fn fixed_depth_search<const N: usize>(board: &Bitboard<N>, _g: &mut Game, depth: u8) -> (Move, Score) {
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, _g: &mut Game, depth: u8) -> (Move, Score)
+where [(); (W*H+127)/128]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now(); // only used to calculate nodes / second
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
-    let mut enemy_moves = move_combinations(board, 1);
+    let mut enemy_moves = limited_move_combinations(board, 1);
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
@@ -44,7 +47,8 @@ pub fn fixed_depth_search<const N: usize>(board: &Bitboard<N>, _g: &mut Game, de
     (best_move, best_score)
 }
 
-pub fn iterative_deepening_search<const N: usize>(board: &Bitboard<N>, g: &mut Game) -> (Move, Score) {
+pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score)
+where [(); (W*H+127)/128]: Sized {
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
     let mut best_depth = 1;
@@ -62,7 +66,7 @@ pub fn iterative_deepening_search<const N: usize>(board: &Bitboard<N>, g: &mut G
         let mut best_move = Move::Up;
         let mut best_score = Score::MIN+1;
         let mut depth = 1;
-        let mut enemy_moves = move_combinations(&board, 1);
+        let mut enemy_moves = limited_move_combinations(&board, 1);
         let my_moves = allowed_moves(&board, board.snakes[0].head);
         loop {
             let mut best = Score::MIN+1;
@@ -109,7 +113,8 @@ pub fn iterative_deepening_search<const N: usize>(board: &Bitboard<N>, g: &mut G
     (best_move, best_score)
 }
 
-pub fn alphabeta<const N: usize>(board: &Bitboard<N>, node_counter: &mut u64, mv: Move, enemy_moves: &mut Vec<[Move; N]>, depth: u8, alpha: Score, mut beta: Score) -> Score { // min call
+pub fn alphabeta<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, node_counter: &mut u64, mv: Move, enemy_moves: &mut Vec<[Move; S]>, depth: u8, alpha: Score, mut beta: Score) -> Score
+where [(); (W*H+127)/128]: Sized {  // min call
     *node_counter += 1;
     if board.is_terminal() {
         return eval_terminal(board)
@@ -142,7 +147,7 @@ pub fn alphabeta<const N: usize>(board: &Bitboard<N>, node_counter: &mut u64, mv
             let ibeta = beta;
             mvs[0] = mv;
             let child = board.apply_moves(mvs);
-            let mut next_enemy_moves = move_combinations(&child, 1);
+            let mut next_enemy_moves = limited_move_combinations(&child, 1);
             for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
                 let iscore = alphabeta(&child, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
                 if iscore > ibeta {
@@ -165,8 +170,9 @@ pub fn alphabeta<const N: usize>(board: &Bitboard<N>, node_counter: &mut u64, mv
     beta
 }
 
-fn order_enemy_moves<const N: usize>(board: &Bitboard<N>, moves: &mut Vec<[Move; N]>) {
-    let mut unique_moves_seen = Vec::<(Move, u8)>::with_capacity(N*N);
+fn order_enemy_moves<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, moves: &mut Vec<[Move; S]>)
+where [(); (W*H+127)/128]: Sized {
+    let mut unique_moves_seen = Vec::<(Move, u8)>::with_capacity(S*S);
     moves.sort_by_cached_key(|x| {
         let me = board.snakes[0];
         let mut key = 0;
@@ -181,7 +187,7 @@ fn order_enemy_moves<const N: usize>(board: &Bitboard<N>, moves: &mut Vec<[Move;
                 key += 100;
             }
             // if snake is longer, walk towards me, otherwise walk away from me
-            key += (snake.length > me.length && is_in_direction(snake.head, me.head, mv)) as u8;
+            key += (snake.length > me.length && is_in_direction(snake.head, me.head, mv, W as u16)) as u8;
         }
         key
     });

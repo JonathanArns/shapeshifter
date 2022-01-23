@@ -1,5 +1,8 @@
 use crate::types::*;
 use crate::api::GameState;
+use crate::bitset::Bitset;
+
+use arrayvec::ArrayVec;
 
 const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
@@ -7,8 +10,8 @@ const HEAD_COLLISION: i8 = -3;
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub struct Snake {
-    pub head: u8,
-    pub tail: u8,
+    pub head: u16,
+    pub tail: u16,
     pub length: u8,
     pub health: i8,
     pub curled_bodyparts: u8,
@@ -20,45 +23,36 @@ impl Snake {
     }
 }
 
-/// 104 Bytes for an 11x11 Board with 4 Snakes!
+/// 112 Bytes for an 11x11 Board with 4 Snakes!
 #[derive(Clone)]
-pub struct Bitboard<const N: usize> {
-    pub bodies: [u128; 3],
-    pub snakes: [Snake; N],
-    pub food: u128,
-    pub hazards: u128,
+pub struct Bitboard<const S: usize, const W: usize, const H: usize> 
+where [(); (W*H+127)/128]: Sized {
+    pub bodies: [Bitset<{W*H}>; 3],
+    pub snakes: [Snake; S],
+    pub food: Bitset<{W*H}>,
+    pub hazards: Bitset<{W*H}>,
 }
 
-pub fn distance(x: u8, y: u8) -> u8 {
-    ((x/11).max(y/11) - (x/11).min(y/11)) + ((x%11).max(y%11) - (x%11).min(y%11))
-}
-
-pub fn is_in_direction(from: u8, to: u8, mv: Move) -> bool {
-    match mv {
-        Move::Left => from % 11 > to % 11,
-        Move::Right => from % 11 < to % 11,
-        Move::Down => from / 11 > to / 11,
-        Move::Up => from / 11 < to / 11,
-    }
-}
-
-impl<const N: usize> Bitboard<N> {
+impl<const S: usize, const W: usize, const H: usize> Bitboard<S, W, H>
+where [(); (W*H+127)/128]: Sized {
     pub fn new() -> Self {
         Bitboard{
-            bodies: [0; 3],
-            snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; N],
-            food: 0,
-            hazards: 0,
+            bodies: [Bitset::new(); 3],
+            snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; S],
+            food: Bitset::new(),
+            hazards: Bitset::new(),
         }
     }
+
+
 
     pub fn from_gamestate(state: GameState) -> Self {
         let mut board = Self::new();
         for food in state.board.food {
-            board.food |= 1<<(11*food.y + food.x)
+            board.food.set_bit(W*food.y + food.x);
         }
         for hazard in state.board.hazards {
-            board.hazards |= 1<<(11*hazard.y + hazard.x)
+            board.hazards.set_bit(W*hazard.y + hazard.x);
         }
         let mut m = 0;
         let mut n;
@@ -71,20 +65,24 @@ impl<const N: usize> Bitboard<N> {
             }
             board.snakes[n].health = snake.health as i8;
             board.snakes[n].length = snake.length as u8;
-            board.snakes[n].head = 11*snake.head.y as u8 + snake.head.x as u8;
-            board.snakes[n].tail = 11*snake.body[snake.body.len()-1].y as u8 + snake.body[snake.body.len()-1].x as u8;
-            let mut prev_mask = 1<<board.snakes[n].head;
-            let mut mask;
+            board.snakes[n].head = (W*snake.head.y) as u16 + snake.head.x as u16;
+            board.snakes[n].tail = (W*snake.body[snake.body.len()-1].y) as u16 + snake.body[snake.body.len()-1].x as u16;
+            let mut prev_pos = board.snakes[n].head;
+            let mut pos;
             for bod in snake.body[1..].iter() {
-                mask = 1<<(11*bod.y + bod.x);
-                if mask == prev_mask {
+                pos = (W*bod.y + bod.x) as u16;
+                if pos == prev_pos {
                     board.snakes[n].curled_bodyparts += 1;
                     continue
                 }    
-                board.bodies[0] |= mask;
-                board.bodies[1] |= mask * ((prev_mask < mask) as u128);
-                board.bodies[2] |= mask * ((prev_mask & (mask | mask<<1 | mask>>1) != 0) as u128);
-                prev_mask = mask;
+                board.bodies[0].set_bit(pos as usize);
+                if prev_pos < pos {
+                    board.bodies[1].set_bit(pos as usize);
+                }
+                if  prev_pos == pos+1 || (pos > 0 && prev_pos == pos-1) {
+                    board.bodies[2].set_bit(pos as usize);
+                }
+                prev_pos = pos;
             }
         }
         board
@@ -94,7 +92,7 @@ impl<const N: usize> Bitboard<N> {
         if !self.snakes[0].is_alive() {
             return true
         }
-        for i in 1..N {
+        for i in 1..S {
             if self.snakes[i].is_alive() {
                 return false
             }
@@ -102,10 +100,11 @@ impl<const N: usize> Bitboard<N> {
         true
     }
 
-    pub fn apply_moves(&self, moves: &[Move; N]) -> Bitboard<N> {
+    // TODO: pub fn apply_moves<const RULES: Ruleset>(&self, moves: &[Move; S]) -> Self {
+    pub fn apply_moves(&self, moves: &[Move; S]) -> Self {
         let mut new = self.clone();
-        let mut eaten = 0;
-        for i in 0..N {
+        let mut eaten = ArrayVec::<u16, S>::new();
+        for i in 0..S {
             let snake = &mut new.snakes[i];
             if !snake.is_alive() {
                 continue
@@ -113,44 +112,44 @@ impl<const N: usize> Bitboard<N> {
 
             // move snake
             let mv = moves[i];
-            let old_head_mask = 1<<snake.head;
             let mv_int = mv.to_int();
             // set new body part
-            new.bodies[0] |= old_head_mask;
-            new.bodies[1] |= ((mv_int&1) as u128)<<snake.head;
-            new.bodies[2] |= ((mv_int>>1) as u128)<<snake.head;
+            new.bodies[0].set_bit(snake.head as usize);
+            new.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
+            new.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
-            snake.head = (snake.head as i8 + mv.to_index(11)) as u8; // TODO: support other board sizes
+            snake.head = (snake.head as i16 + mv.to_index(W)) as u16;
             // move old tail if necessary
             if snake.curled_bodyparts == 0 {
-                let tail_mask = 1<<snake.tail;
+                let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
                 snake.tail = (
-                    snake.tail as i8 
+                    snake.tail as i16 
                     + Move::int_to_index(
-                        (new.bodies[1] & tail_mask != 0) as u8 
-                            | (((new.bodies[2] & tail_mask != 0) as u8) << 1),
-                        11
+                        (new.bodies[1] & tail_mask).any() as u8 
+                            | (((new.bodies[2] & tail_mask).any() as u8) << 1),
+                        W
                     )
-                ) as u8;
-                new.bodies[0] &= !tail_mask;
-                new.bodies[1] &= !tail_mask;
-                new.bodies[2] &= !tail_mask;
+                ) as u16;
+                tail_mask = !tail_mask;
+                new.bodies[0] &= tail_mask;
+                new.bodies[1] &= tail_mask;
+                new.bodies[2] &= tail_mask;
             } else {
                 snake.curled_bodyparts -= 1;
             }
 
             // reduce health
-            let new_head = 1<<snake.head;
-            let is_on_hazard = ((new.hazards & new_head) != 0) as i8;
+            let is_on_hazard = new.hazards.get_bit(snake.head as usize) as i8;
             snake.health -= 1 + 15 * is_on_hazard;
 
             // feed snake
-            let head_and_food = new.food & new_head;
-            let is_on_food = ((new.food & new_head) != 0) as i8;
-            snake.health += (100 - snake.health) * is_on_food;
+            let is_on_food = new.food.get_bit(snake.head as usize);
+            snake.health += (100 - snake.health) * is_on_food as i8;
             snake.curled_bodyparts += is_on_food as u8;
             snake.length += is_on_food as u8;
-            eaten |= head_and_food; // remember which food has been eaten
+            if is_on_food {
+                eaten.push(snake.head); // remember which food has been eaten
+            }
 
             // starvation
             if !snake.is_alive() {
@@ -160,17 +159,17 @@ impl<const N: usize> Bitboard<N> {
         }
 
         // a 2nd iteration is needed to deal with collisions, since starved snakes cannot collide
-        for i in 0..N {
+        for i in 0..S {
             if !new.snakes[i].is_alive() {
                 continue
             }
             // body collisions
-            if new.bodies[0] & 1<<new.snakes[i].head != 0 {
+            if new.bodies[0].get_bit(new.snakes[i].head as usize) {
                 new.snakes[i].curled_bodyparts = 100; // marked for removal
                 continue
             }
             // head to head collisions
-            for j in 0..N {
+            for j in 0..S {
                 if i != j
                 && new.snakes[j].is_alive()
                 && new.snakes[i].head == new.snakes[j].head
@@ -181,7 +180,7 @@ impl<const N: usize> Bitboard<N> {
         }
 
         // remove collided snakes
-        for i in 0..N {
+        for i in 0..S {
             if new.snakes[i].curled_bodyparts == 100 {
                 new.snakes[i].curled_bodyparts = 0;
                 new.snakes[i].health = BODY_COLLISION;
@@ -195,56 +194,46 @@ impl<const N: usize> Bitboard<N> {
         }
 
         // remove eaten food
-        new.food &= !eaten;
+        for food in eaten {
+            new.food.unset_bit(food as usize);
+        }
 
         new
     }
 
     pub fn remove_snake_body(&mut self, snake_index: usize) {
         let snake = &self.snakes[snake_index];
-        let head_mask = 1<<snake.head;
-        let mut tail_mask = 1<<snake.tail;
-        while head_mask != tail_mask {
-            let first_bit = self.bodies[1] & tail_mask != 0;
-            let vertical = self.bodies[2] & tail_mask == 0;
-            self.bodies[0] &= !tail_mask;
-            self.bodies[1] &= !tail_mask;
-            self.bodies[2] &= !tail_mask;
-            let shift_distance = 1 + (11-1) * vertical as u8;
+        let mut tail_pos = snake.tail;
+        while snake.head != tail_pos {
+            let first_bit = self.bodies[1].get_bit(tail_pos as usize);
+            let vertical = !self.bodies[2].get_bit(tail_pos as usize);
+            self.bodies[0].unset_bit(tail_pos as usize);
+            self.bodies[1].unset_bit(tail_pos as usize);
+            self.bodies[2].unset_bit(tail_pos as usize);
+            let shift_distance = 1 + (W-1) as u16 * vertical as u16;
             if first_bit {
-                tail_mask >>= shift_distance;
+                tail_pos -= shift_distance;
             } else {
-                tail_mask <<= shift_distance;
+                tail_pos += shift_distance;
             }
         }
     }
 
 }
 
-#[allow(unused)]
-fn print_area_control(me: u128, enemies: u128, w: u8) {
-    let mut debug = "".to_string();
-    for i in 0..11 {
-        for j in 0..11 {
-            debug.push_str(if 1<<((w*(w-1-i))+j) & me != 0 { "x " } else if enemies & 1<<((w*(w-1-i))+j) != 0 { "o " } else { ". " });
-        }
-        debug.push_str("\n");
-    }
-    println!("{}", debug);
-}
-
-impl<const N: usize> std::fmt::Debug for Bitboard<N> {
+impl<const S: usize, const W: usize, const H: usize> std::fmt::Debug for Bitboard<S, W, H>
+where [(); (W*H+127)/128]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for i in 0..11 {
-            for j in 0..11 {
-                f.write_str(if 1<<((11*(10-i))+j) & self.bodies[0] != 0 { "x" } else if self.snakes[0].head == (11*(10-i))+j { "@" } else { "." })?;
-                f.write_str(if 1<<((11*(10-i))+j) & self.bodies[2] != 0 { "x" } else if self.snakes[0].head == (11*(10-i))+j { "@" } else { "." })?;
-                f.write_str(if 1<<((11*(10-i))+j) & self.bodies[1] != 0 { "x " } else if self.snakes[0].head == (11*(10-i))+j { "@ " } else { ". " })?;
+        for i in 0..H {
+            for j in 0..W {
+                f.write_str(if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if self.snakes[0].head as usize == (W*(H-1-i))+j { "@" } else { "." })?;
+                f.write_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if self.snakes[0].head as usize == (W*(H-1-i))+j { "@" } else { "." })?;
+                f.write_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x " } else if self.snakes[0].head as usize == (W*(H-1-i))+j { "@ " } else { ". " })?;
             }
             f.write_str("\n")?;
         }
         for snake in self.snakes {
-            f.write_str(&("head: ".to_string() + &snake.head.to_string() + " tail: " + &snake.tail.to_string() + " length: " + &snake.length.to_string() + " health: " + &snake.health.to_string() + "\n"))?;
+            f.write_str(&("head: ".to_string() + &snake.head.to_string() + " tail: " + &snake.tail.to_string() + " length: " + &snake.length.to_string() + " health: " + &snake.health.to_string() + " curled: " + &snake.curled_bodyparts.to_string() + "\n"))?;
         }
         Ok(())
     }
