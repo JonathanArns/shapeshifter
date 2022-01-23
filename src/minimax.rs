@@ -17,7 +17,7 @@ lazy_static! {
     };
 }
 
-pub fn search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score)
+pub fn search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, g, *FIXED_DEPTH as u8)
@@ -26,7 +26,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, _g: &mut Game, depth: u8) -> (Move, Score)
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, _g: &mut Game, depth: u8) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now(); // only used to calculate nodes / second
@@ -44,10 +44,10 @@ where [(); (W*H+127)/128]: Sized {
         }
     }
     println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
-    (best_move, best_score)
+    (best_move, best_score, depth)
 }
 
-pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score)
+pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
@@ -110,7 +110,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
-    (best_move, best_score)
+    (best_move, best_score, best_depth)
 }
 
 pub fn alphabeta<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, node_counter: &mut u64, mv: Move, enemy_moves: &mut Vec<[Move; S]>, depth: u8, alpha: Score, mut beta: Score) -> Score

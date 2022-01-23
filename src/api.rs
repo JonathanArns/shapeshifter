@@ -58,8 +58,8 @@ pub fn handle_index() -> JsonValue {
         "apiversion": "1",
         "author": "JonathanArns",
         "color": "#B7410E",
-        "head": "villain",
-        "tail": "mystic-moon",
+        "head": "smart-caterpillar",
+        "tail": "present",
     })
 }
 
@@ -71,49 +71,61 @@ pub fn handle_start(_req: Json<GameState>) -> Status {
 #[post("/move", format = "json", data = "<req>")]
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
+    let turn = state.turn;
     let mut game = types::Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
-    match (state.board.snakes.len(), state.board.width, state.board.height) {
-        (1, 7, 7) => minimax::search(&bitboard::Bitboard::<1, 7, 7>::from_gamestate(state), &mut game).0.to_json(),
-        (2, 7, 7) => minimax::search(&bitboard::Bitboard::<2, 7, 7>::from_gamestate(state), &mut game).0.to_json(),
-        (3, 7, 7) => minimax::search(&bitboard::Bitboard::<3, 7, 7>::from_gamestate(state), &mut game).0.to_json(),
-        (4, 7, 7) => minimax::search(&bitboard::Bitboard::<4, 7, 7>::from_gamestate(state), &mut game).0.to_json(),
+    let (mv, score, depth) = match (state.board.snakes.len(), state.board.width, state.board.height) {
+        (1, 7, 7) => minimax::search(&bitboard::Bitboard::<1, 7, 7>::from_gamestate(state), &mut game),
+        (2, 7, 7) => minimax::search(&bitboard::Bitboard::<2, 7, 7>::from_gamestate(state), &mut game),
+        (3, 7, 7) => minimax::search(&bitboard::Bitboard::<3, 7, 7>::from_gamestate(state), &mut game),
+        (4, 7, 7) => minimax::search(&bitboard::Bitboard::<4, 7, 7>::from_gamestate(state), &mut game),
 
-        (1, 11, 11) => minimax::search(&bitboard::Bitboard::<1, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (2, 11, 11) => minimax::search(&bitboard::Bitboard::<2, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (3, 11, 11) => minimax::search(&bitboard::Bitboard::<3, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (4, 11, 11) => minimax::search(&bitboard::Bitboard::<4, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (5, 11, 11) => minimax::search(&bitboard::Bitboard::<5, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (6, 11, 11) => minimax::search(&bitboard::Bitboard::<6, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (7, 11, 11) => minimax::search(&bitboard::Bitboard::<7, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
-        (8, 11, 11) => minimax::search(&bitboard::Bitboard::<8, 11, 11>::from_gamestate(state), &mut game).0.to_json(),
+        (1, 11, 11) => minimax::search(&bitboard::Bitboard::<1, 11, 11>::from_gamestate(state), &mut game),
+        (2, 11, 11) => minimax::search(&bitboard::Bitboard::<2, 11, 11>::from_gamestate(state), &mut game),
+        (3, 11, 11) => minimax::search(&bitboard::Bitboard::<3, 11, 11>::from_gamestate(state), &mut game),
+        (4, 11, 11) => minimax::search(&bitboard::Bitboard::<4, 11, 11>::from_gamestate(state), &mut game),
+        (5, 11, 11) => minimax::search(&bitboard::Bitboard::<5, 11, 11>::from_gamestate(state), &mut game),
+        (6, 11, 11) => minimax::search(&bitboard::Bitboard::<6, 11, 11>::from_gamestate(state), &mut game),
+        (7, 11, 11) => minimax::search(&bitboard::Bitboard::<7, 11, 11>::from_gamestate(state), &mut game),
+        (8, 11, 11) => minimax::search(&bitboard::Bitboard::<8, 11, 11>::from_gamestate(state), &mut game),
 
-        (1, 19, 19) => minimax::search(&bitboard::Bitboard::<1, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (2, 19, 19) => minimax::search(&bitboard::Bitboard::<2, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (3, 19, 19) => minimax::search(&bitboard::Bitboard::<3, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (4, 19, 19) => minimax::search(&bitboard::Bitboard::<4, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (5, 19, 19) => minimax::search(&bitboard::Bitboard::<5, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (6, 19, 19) => minimax::search(&bitboard::Bitboard::<6, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (7, 19, 19) => minimax::search(&bitboard::Bitboard::<7, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
-        (8, 19, 19) => minimax::search(&bitboard::Bitboard::<8, 19, 19>::from_gamestate(state), &mut game).0.to_json(),
+        (1, 19, 19) => minimax::search(&bitboard::Bitboard::<1, 19, 19>::from_gamestate(state), &mut game),
+        (2, 19, 19) => minimax::search(&bitboard::Bitboard::<2, 19, 19>::from_gamestate(state), &mut game),
+        (3, 19, 19) => minimax::search(&bitboard::Bitboard::<3, 19, 19>::from_gamestate(state), &mut game),
+        (4, 19, 19) => minimax::search(&bitboard::Bitboard::<4, 19, 19>::from_gamestate(state), &mut game),
+        (5, 19, 19) => minimax::search(&bitboard::Bitboard::<5, 19, 19>::from_gamestate(state), &mut game),
+        (6, 19, 19) => minimax::search(&bitboard::Bitboard::<6, 19, 19>::from_gamestate(state), &mut game),
+        (7, 19, 19) => minimax::search(&bitboard::Bitboard::<7, 19, 19>::from_gamestate(state), &mut game),
+        (8, 19, 19) => minimax::search(&bitboard::Bitboard::<8, 19, 19>::from_gamestate(state), &mut game),
 
-        (1, 25, 25) => minimax::search(&bitboard::Bitboard::<1, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (2, 25, 25) => minimax::search(&bitboard::Bitboard::<2, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (3, 25, 25) => minimax::search(&bitboard::Bitboard::<3, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (4, 25, 25) => minimax::search(&bitboard::Bitboard::<4, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (5, 25, 25) => minimax::search(&bitboard::Bitboard::<5, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (6, 25, 25) => minimax::search(&bitboard::Bitboard::<6, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (7, 25, 25) => minimax::search(&bitboard::Bitboard::<7, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (8, 25, 25) => minimax::search(&bitboard::Bitboard::<8, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (9, 25, 25) => minimax::search(&bitboard::Bitboard::<9, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (10, 25, 25) => minimax::search(&bitboard::Bitboard::<10, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (11, 25, 25) => minimax::search(&bitboard::Bitboard::<11, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (12, 25, 25) => minimax::search(&bitboard::Bitboard::<12, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (13, 25, 25) => minimax::search(&bitboard::Bitboard::<13, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (14, 25, 25) => minimax::search(&bitboard::Bitboard::<14, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (15, 25, 25) => minimax::search(&bitboard::Bitboard::<15, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
-        (16, 25, 25) => minimax::search(&bitboard::Bitboard::<16, 25, 25>::from_gamestate(state), &mut game).0.to_json(),
+        (1, 25, 25) => minimax::search(&bitboard::Bitboard::<1, 25, 25>::from_gamestate(state), &mut game),
+        (2, 25, 25) => minimax::search(&bitboard::Bitboard::<2, 25, 25>::from_gamestate(state), &mut game),
+        (3, 25, 25) => minimax::search(&bitboard::Bitboard::<3, 25, 25>::from_gamestate(state), &mut game),
+        (4, 25, 25) => minimax::search(&bitboard::Bitboard::<4, 25, 25>::from_gamestate(state), &mut game),
+        (5, 25, 25) => minimax::search(&bitboard::Bitboard::<5, 25, 25>::from_gamestate(state), &mut game),
+        (6, 25, 25) => minimax::search(&bitboard::Bitboard::<6, 25, 25>::from_gamestate(state), &mut game),
+        (7, 25, 25) => minimax::search(&bitboard::Bitboard::<7, 25, 25>::from_gamestate(state), &mut game),
+        (8, 25, 25) => minimax::search(&bitboard::Bitboard::<8, 25, 25>::from_gamestate(state), &mut game),
+        (9, 25, 25) => minimax::search(&bitboard::Bitboard::<9, 25, 25>::from_gamestate(state), &mut game),
+        (10, 25, 25) => minimax::search(&bitboard::Bitboard::<10, 25, 25>::from_gamestate(state), &mut game),
+        (11, 25, 25) => minimax::search(&bitboard::Bitboard::<11, 25, 25>::from_gamestate(state), &mut game),
+        (12, 25, 25) => minimax::search(&bitboard::Bitboard::<12, 25, 25>::from_gamestate(state), &mut game),
+        (13, 25, 25) => minimax::search(&bitboard::Bitboard::<13, 25, 25>::from_gamestate(state), &mut game),
+        (14, 25, 25) => minimax::search(&bitboard::Bitboard::<14, 25, 25>::from_gamestate(state), &mut game),
+        (15, 25, 25) => minimax::search(&bitboard::Bitboard::<15, 25, 25>::from_gamestate(state), &mut game),
+        (16, 25, 25) => minimax::search(&bitboard::Bitboard::<16, 25, 25>::from_gamestate(state), &mut game),
         _ => panic!("Snake count or board size not supported"),
+    };
+    let mut response = mv.to_json();
+    if score < types::Score::MIN + 4 && depth == 1 {
+        response.as_object_mut().unwrap().insert("shout".to_string(), serde_json::Value::String("...and then - I died.".to_string()));
     }
+    if turn % 28 == 4 {
+        response.as_object_mut().unwrap().insert("shout".to_string(), serde_json::Value::String("AHHHHHHHHHHH!".to_string()));
+    }
+    if turn % 57 == 20 {
+        response.as_object_mut().unwrap().insert("shout".to_string(), serde_json::Value::String("I do have feelings, you know...".to_string()));
+    }
+    response
 }
 
 #[post("/end", format = "json", data = "<_req>")]
