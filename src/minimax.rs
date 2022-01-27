@@ -84,7 +84,7 @@ where [(); (W*H+127)/128]: Sized {
                 }
             }
             result_sender.try_send((best_move, best_score, depth)).ok();
-            if best == Score::MAX || best < Score::MIN+4 {
+            if best == Score::MAX || best < Score::MIN + 5 {
                 break
             }
             if let Ok(_) = stop_receiver.try_recv() {
@@ -160,7 +160,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             // search stops
             if child.is_terminal() {
                 ialpha = eval_terminal(&child);
-            } else if depth == 0 && is_stable(&child) {
+            } else if depth == 1 && is_stable(&child) {
                 ialpha = eval(&child);
             } else if let Some(entry) = ttable::get(&child) {
                 if entry.get_depth() >= depth {
@@ -232,7 +232,7 @@ where [(); (W*H+127)/128]: Sized {
             // search stops
             if child.is_terminal() {
                 ialpha = eval_terminal(&child);
-            } else if depth == 0 || is_stable(&child) {
+            } else if depth == 1 || is_stable(&child) {
                 ialpha = eval(&child);
             // search
             } else {

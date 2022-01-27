@@ -7,6 +7,7 @@ use arrayvec::ArrayVec;
 const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
 const HEAD_COLLISION: i8 = -3;
+const EVEN_HEAD_COLLISION: i8 = -4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Snake {
@@ -185,24 +186,28 @@ where [(); (W*H+127)/128]: Sized {
             for j in 0..S {
                 if i != j
                 && self.snakes[j].is_alive()
-                && self.snakes[i].head == self.snakes[j].head
-                && self.snakes[i].length <= self.snakes[j].length {
-                    self.snakes[i].curled_bodyparts = 101; // marked for removal
+                && self.snakes[i].head == self.snakes[j].head {
+                    if self.snakes[i].length < self.snakes[j].length {
+                        self.snakes[i].curled_bodyparts = 101; // marked for removal
+                    } else if self.snakes[i].length == self.snakes[j].length {
+                        self.snakes[i].curled_bodyparts = 102; // marked for removal
+                    }
                 }
             }
         }
 
         // remove collided snakes
         for i in 0..S {
-            if self.snakes[i].curled_bodyparts == 100 {
+            if self.snakes[i].curled_bodyparts >= 100 {
                 self.snakes[i].curled_bodyparts = 0;
-                self.snakes[i].health = BODY_COLLISION;
                 self.remove_snake_body(i);
-            }
-            if self.snakes[i].curled_bodyparts == 101 {
-                self.snakes[i].curled_bodyparts = 0;
-                self.snakes[i].health = HEAD_COLLISION;
-                self.remove_snake_body(i);
+                if self.snakes[i].curled_bodyparts == 100 {
+                    self.snakes[i].health = BODY_COLLISION;
+                } else if self.snakes[i].curled_bodyparts == 101 {
+                    self.snakes[i].health = HEAD_COLLISION;
+                } else if self.snakes[i].curled_bodyparts == 102 {
+                    self.snakes[i].health = EVEN_HEAD_COLLISION;
+                }
             }
         }
 
