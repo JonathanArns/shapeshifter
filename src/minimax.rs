@@ -3,11 +3,13 @@ use crate::bitboard::*;
 use crate::move_gen::*;
 use crate::eval::*;
 use crate::util::*;
+use crate::ttable;
 
 use std::env;
 use std::time;
 use std::thread;
 use crossbeam_channel::{unbounded, Sender, Receiver};
+use arrayvec::ArrayVec;
 
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
@@ -16,6 +18,8 @@ lazy_static! {
         -1
     };
 }
+
+const QUIESCENCE_DEPTH: u8 = 3;
 
 pub fn search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
@@ -26,7 +30,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, _g: &mut Game, depth: u8) -> (Move, Score, u8)
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game, depth: u8) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now(); // only used to calculate nodes / second
@@ -36,7 +40,7 @@ where [(); (W*H+127)/128]: Sized {
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let score = alphabeta(board, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+        let score = alphabeta(board, g.ruleset, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
         if score > best {
             best = score;
             best_move = *mv;
@@ -59,6 +63,7 @@ where [(); (W*H+127)/128]: Sized {
     let (stop_sender, stop_receiver) = unbounded();
     let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
 
+    let ruleset = g.ruleset;
     let board = board.clone();
     thread::spawn(move || {
         let mut node_counter = 0;
@@ -71,7 +76,7 @@ where [(); (W*H+127)/128]: Sized {
         loop {
             let mut best = Score::MIN+1;
             for mv in &my_moves {
-                let score = alphabeta(&board, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+                let score = alphabeta(&board, ruleset, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
                 if score > best {
                     best = score;
                     best_move = *mv;
@@ -113,15 +118,17 @@ where [(); (W*H+127)/128]: Sized {
     (best_move, best_score, best_depth)
 }
 
-pub fn alphabeta<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, node_counter: &mut u64, mv: Move, enemy_moves: &mut Vec<[Move; S]>, depth: u8, alpha: Score, mut beta: Score) -> Score
+pub fn alphabeta<const S: usize, const W: usize, const H: usize>(
+    board: &Bitboard<S, W, H>,
+    ruleset: Ruleset,
+    node_counter: &mut u64,
+    mv: Move,
+    enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    depth: u8,
+    alpha: Score,
+    mut beta: Score
+) -> Score
 where [(); (W*H+127)/128]: Sized {  // min call
-    *node_counter += 1;
-    if board.is_terminal() {
-        return eval_terminal(board)
-    }
-    if depth <= 0 {
-        return eval(board)
-    }
     // // ProbCut heuristic
     // if depth == 4 {
     //     let a = 1.0;
@@ -146,18 +153,102 @@ where [(); (W*H+127)/128]: Sized {  // min call
             let mut ialpha = alpha;
             let ibeta = beta;
             mvs[0] = mv;
-            let child = board.apply_moves(mvs);
-            let mut next_enemy_moves = limited_move_combinations(&child, 1);
-            for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                let iscore = alphabeta(&child, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
-                if iscore > ibeta {
-                    ialpha = ibeta;
-                    break // same as return beta
-                }
-                if iscore > ialpha {
-                    ialpha = iscore;
+            let mut child = board.clone();
+            child.apply_moves(&mvs, ruleset);
+            *node_counter += 1;
+
+            // search stops
+            if child.is_terminal() {
+                ialpha = eval_terminal(&child);
+            } else if depth == 0 && is_stable(&child) {
+                ialpha = eval(&child);
+            } else if let Some(entry) = ttable::get(&child) {
+                if entry.get_depth() >= depth {
+                    ialpha = entry.get_score();
                 }
             }
+            // search
+            if ialpha == alpha { // condition is met, if none of the search stops hit
+                let mut next_enemy_moves = limited_move_combinations(&child, 1);
+                for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
+                    let iscore = if depth == 0 {
+                        quiescence_search(&child, ruleset, node_counter, mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, alpha, beta)
+                    } else {
+                        alphabeta(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta)
+                    };
+                    if iscore > ibeta {
+                        ialpha = ibeta;
+                        break // same as return beta
+                    }
+                    if iscore > ialpha {
+                        ialpha = iscore;
+                    }
+                }
+            }
+            ialpha
+        };
+        if score < alpha {
+            return alpha
+        }
+        if score < beta {
+            beta = score;
+        }
+    }
+    beta
+}
+
+/// Used for quiescence search, to determine, if the position is stable and can be evaluated, or if
+/// search must continue.
+fn is_stable<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> bool
+where [(); (W*H+127)/128]: Sized {
+    // TODO: add check if head to head is possible
+    allowed_moves(board, board.snakes[0].head).len() < 2
+    || (S == 2 && allowed_moves(board, board.snakes[1].head).len() < 2)
+}
+
+fn quiescence_search<const S: usize, const W: usize, const H: usize>(
+    board: &Bitboard<S, W, H>,
+    ruleset: Ruleset,
+    node_counter: &mut u64,
+    mv: Move,
+    enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    depth: u8,
+    alpha: Score,
+    mut beta: Score
+) -> Score
+where [(); (W*H+127)/128]: Sized {
+    *node_counter += 1;
+
+    // search
+    for mvs in enemy_moves { // TODO: apply move ordering
+        let score = { // max call
+            let mut ialpha = alpha;
+            let ibeta = beta;
+            mvs[0] = mv;
+            let mut child = board.clone();
+            child.apply_moves(&mvs, ruleset);
+            *node_counter += 1;
+
+            // search stops
+            if child.is_terminal() {
+                ialpha = eval_terminal(&child);
+            } else if depth == 0 || is_stable(&child) {
+                ialpha = eval(&child);
+            // search
+            } else {
+                let mut next_enemy_moves = limited_move_combinations(&child, 1);
+                for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
+                    let iscore = quiescence_search(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
+                    if iscore > ibeta {
+                        ialpha = ibeta;
+                        break // same as return beta
+                    }
+                    if iscore > ialpha {
+                        ialpha = iscore;
+                    }
+                }
+            }
+            ttable::insert(&child, ialpha, QUIESCENCE_DEPTH - depth);
             ialpha
         };
         if score < alpha {

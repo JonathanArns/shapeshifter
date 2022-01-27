@@ -65,6 +65,9 @@ pub fn handle_index() -> JsonValue {
 
 #[post("/start", format = "json", data = "<_req>")]
 pub fn handle_start(_req: Json<GameState>) -> Status {
+    // unsafe {
+    //     crate::eval::WEIGHTS = serde_json::from_str(&std::fs::read_to_string("weights.json").unwrap()).unwrap();
+    // }
     Status::Ok
 }
 
@@ -72,7 +75,14 @@ pub fn handle_start(_req: Json<GameState>) -> Status {
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
     let turn = state.turn;
-    let mut game = types::Game{move_time: std::time::Duration::from_millis(state.game.timeout.into())};
+    let mut game = types::Game{
+        move_time: std::time::Duration::from_millis(state.game.timeout.into()),
+        ruleset: match state.game.ruleset["name"].to_string().as_str() {
+            "royale" => types::Ruleset::Royale,
+            "constrictor" => types::Ruleset::Constrictor,
+            _ => types::Ruleset::Standard,
+        }
+    };
     let (mv, score, depth) = match (state.board.snakes.len(), state.board.width, state.board.height) {
         (1, 7, 7) => minimax::search(&bitboard::Bitboard::<1, 7, 7>::from_gamestate(state), &mut game),
         (2, 7, 7) => minimax::search(&bitboard::Bitboard::<2, 7, 7>::from_gamestate(state), &mut game),

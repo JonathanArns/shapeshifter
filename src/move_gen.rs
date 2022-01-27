@@ -48,7 +48,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Generates up to 4 move combinations from a position, such that every move for every snake has
 /// been covered at least once.
 /// Can skip the first n snakes, their moves will always be Up in the result.
-pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, skip: usize) -> Vec<[Move; S]>
+pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
@@ -63,7 +63,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     // only generate enough move combinations so that every enemy move appears at least once
-    let mut moves: Vec<[Move; S]> = Vec::with_capacity(4);
+    let mut moves = ArrayVec::<[Move; S], 4>::new();
     moves.push([Move::Up; S]);
     for (i, snake_moves) in moves_per_snake.iter().enumerate() {
         for j in 0..snake_moves.len().max(moves.len()) {
@@ -193,7 +193,7 @@ mod tests {
         };
         let board = Bitboard::<4, 11, 11>::from_gamestate(state);
         b.iter(|| {
-            move_combinations(&board, 1)
+            limited_move_combinations(&board, 1)
         });
     }
 }

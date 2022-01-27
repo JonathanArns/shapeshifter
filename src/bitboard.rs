@@ -8,7 +8,7 @@ const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
 const HEAD_COLLISION: i8 = -3;
 
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Snake {
     pub head: u16,
     pub tail: u16,
@@ -24,7 +24,7 @@ impl Snake {
 }
 
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Bitboard<const S: usize, const W: usize, const H: usize> 
 where [(); (W*H+127)/128]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
@@ -43,8 +43,6 @@ where [(); (W*H+127)/128]: Sized {
             hazards: Bitset::new(),
         }
     }
-
-
 
     pub fn from_gamestate(state: GameState) -> Self {
         let mut board = Self::new();
@@ -100,12 +98,27 @@ where [(); (W*H+127)/128]: Sized {
         true
     }
 
-    // TODO: pub fn apply_moves<const RULES: Ruleset>(&self, moves: &[Move; S]) -> Self {
-    pub fn apply_moves(&self, moves: &[Move; S]) -> Self {
-        let mut new = self.clone();
+    /// Returns the last move that was made by a snake.
+    /// None is returned if the snake has not made a move yet.
+    pub fn get_last_move(&self, snake_index: usize) -> Option<Move> {
+        let head = self.snakes[snake_index].head as usize;
+        if head == self.snakes[snake_index].tail as usize {
+            None
+        } else if head % W > 0 && !self.bodies[1].get_bit(head-1) && self.bodies[2].get_bit(head-1) {
+            Some(Move::Right)
+        } else if head % W < W-1 && self.bodies[1].get_bit(head+1) && self.bodies[2].get_bit(head+1) {
+            Some(Move::Left)
+        } else if head >= W && !self.bodies[1].get_bit(head-W) && !self.bodies[2].get_bit(head-W) {
+            Some(Move::Up)
+        } else {
+            Some(Move::Down)
+        }
+    }
+
+    pub fn apply_moves(&mut self, moves: &[Move; S], ruleset: Ruleset) {
         let mut eaten = ArrayVec::<u16, S>::new();
         for i in 0..S {
-            let snake = &mut new.snakes[i];
+            let snake = &mut self.snakes[i];
             if !snake.is_alive() {
                 continue
             }
@@ -114,9 +127,9 @@ where [(); (W*H+127)/128]: Sized {
             let mv = moves[i];
             let mv_int = mv.to_int();
             // set new body part
-            new.bodies[0].set_bit(snake.head as usize);
-            new.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
-            new.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
+            self.bodies[0].set_bit(snake.head as usize);
+            self.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
+            self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
             snake.head = (snake.head as i16 + mv.to_index(W)) as u16;
             // move old tail if necessary
@@ -125,25 +138,25 @@ where [(); (W*H+127)/128]: Sized {
                 snake.tail = (
                     snake.tail as i16 
                     + Move::int_to_index(
-                        (new.bodies[1] & tail_mask).any() as u8 
-                            | (((new.bodies[2] & tail_mask).any() as u8) << 1),
+                        (self.bodies[1] & tail_mask).any() as u8 
+                            | (((self.bodies[2] & tail_mask).any() as u8) << 1),
                         W
                     )
                 ) as u16;
                 tail_mask = !tail_mask;
-                new.bodies[0] &= tail_mask;
-                new.bodies[1] &= tail_mask;
-                new.bodies[2] &= tail_mask;
+                self.bodies[0] &= tail_mask;
+                self.bodies[1] &= tail_mask;
+                self.bodies[2] &= tail_mask;
             } else {
                 snake.curled_bodyparts -= 1;
             }
 
             // reduce health
-            let is_on_hazard = new.hazards.get_bit(snake.head as usize) as i8;
+            let is_on_hazard = self.hazards.get_bit(snake.head as usize) as i8;
             snake.health -= 1 + 15 * is_on_hazard;
 
             // feed snake
-            let is_on_food = new.food.get_bit(snake.head as usize);
+            let is_on_food = self.food.get_bit(snake.head as usize);
             snake.health += (100 - snake.health) * is_on_food as i8;
             snake.curled_bodyparts += is_on_food as u8;
             snake.length += is_on_food as u8;
@@ -154,54 +167,55 @@ where [(); (W*H+127)/128]: Sized {
             // starvation
             if !snake.is_alive() {
                 snake.health = OUT_OF_HEALTH;
-                new.remove_snake_body(i);
+                self.remove_snake_body(i);
             }
         }
 
         // a 2nd iteration is needed to deal with collisions, since starved snakes cannot collide
         for i in 0..S {
-            if !new.snakes[i].is_alive() {
+            if !self.snakes[i].is_alive() {
                 continue
             }
             // body collisions
-            if new.bodies[0].get_bit(new.snakes[i].head as usize) {
-                new.snakes[i].curled_bodyparts = 100; // marked for removal
+            if self.bodies[0].get_bit(self.snakes[i].head as usize) {
+                self.snakes[i].curled_bodyparts = 100; // marked for removal
                 continue
             }
             // head to head collisions
             for j in 0..S {
                 if i != j
-                && new.snakes[j].is_alive()
-                && new.snakes[i].head == new.snakes[j].head
-                && new.snakes[i].length <= new.snakes[j].length {
-                    new.snakes[i].curled_bodyparts = 101; // marked for removal
+                && self.snakes[j].is_alive()
+                && self.snakes[i].head == self.snakes[j].head
+                && self.snakes[i].length <= self.snakes[j].length {
+                    self.snakes[i].curled_bodyparts = 101; // marked for removal
                 }
             }
         }
 
         // remove collided snakes
         for i in 0..S {
-            if new.snakes[i].curled_bodyparts == 100 {
-                new.snakes[i].curled_bodyparts = 0;
-                new.snakes[i].health = BODY_COLLISION;
-                new.remove_snake_body(i);
+            if self.snakes[i].curled_bodyparts == 100 {
+                self.snakes[i].curled_bodyparts = 0;
+                self.snakes[i].health = BODY_COLLISION;
+                self.remove_snake_body(i);
             }
-            if new.snakes[i].curled_bodyparts == 101 {
-                new.snakes[i].curled_bodyparts = 0;
-                new.snakes[i].health = HEAD_COLLISION;
-                new.remove_snake_body(i);
+            if self.snakes[i].curled_bodyparts == 101 {
+                self.snakes[i].curled_bodyparts = 0;
+                self.snakes[i].health = HEAD_COLLISION;
+                self.remove_snake_body(i);
             }
         }
 
         // remove eaten food
         for food in eaten {
-            new.food.unset_bit(food as usize);
+            self.food.unset_bit(food as usize);
         }
-
-        new
     }
 
     pub fn remove_snake_body(&mut self, snake_index: usize) {
+        if S <= 2 || snake_index == 0 {
+            return  // this is a terminal state, so we can ignore the dead body
+        }
         let snake = &self.snakes[snake_index];
         let mut tail_pos = snake.tail;
         while snake.head != tail_pos {
@@ -218,7 +232,6 @@ where [(); (W*H+127)/128]: Sized {
             }
         }
     }
-
 }
 
 impl<const S: usize, const W: usize, const H: usize> std::fmt::Debug for Bitboard<S, W, H>

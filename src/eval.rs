@@ -12,6 +12,7 @@ lazy_static! {
        [-10, 1, 3, 1, 3]
     };
 }
+// pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
 
 const fn border_mask<const W: usize, const H: usize>(left: bool) -> Bitset<{W*H}>
 where [(); (W*H+127)/128]: Sized {

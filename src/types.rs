@@ -1,13 +1,6 @@
 use rocket_contrib::json::JsonValue;
 
 pub type Score = i16;
-pub type Square = u8;
-
-pub const FOOD: Square = 1;
-pub const HAZARD: Square = 2;
-pub const HEAD: Square = 4;
-pub const BODY: Square = 8;
-pub const TAIL: Square = 16;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,11 +39,14 @@ impl Move {
     }
 }
 
-pub struct Game {
-    pub move_time: std::time::Duration,
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum Ruleset {
+    Standard,
+    Royale,
+    Constrictor,
 }
 
-pub trait Board {
-    fn alphabeta(&self, d: u8, alpha: Score, beta: Score) -> (Move, Score, u8);
-    fn num_snakes(&self) -> usize;
+pub struct Game {
+    pub move_time: std::time::Duration,
+    pub ruleset: Ruleset,
 }

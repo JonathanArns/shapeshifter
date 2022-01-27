@@ -8,7 +8,7 @@ use std::cmp::{Eq, PartialEq};
 /// They might have any value.
 ///
 /// A lot of the implementation is based on the rust-dense-bitset crate.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct Bitset<const N: usize>
 where [(); (N+127)/128]: Sized {
     state: [u128; (N+127)/128],
