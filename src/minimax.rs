@@ -2,7 +2,6 @@ use crate::types::*;
 use crate::bitboard::*;
 use crate::move_gen::*;
 use crate::eval::*;
-use crate::ttable;
 
 use std::env;
 use std::time;
@@ -159,13 +158,15 @@ where [(); (W*H+127)/128]: Sized {  // min call
                 ialpha = eval_terminal(&child);
             } else if depth == 1 {
                 ialpha = eval(&child, ruleset);
-            } else if let Some(entry) = ttable::get(&child) {
-                if entry.get_depth() >= depth {
-                    ialpha = entry.get_score();
-                }
             }
-            // search
-            if ialpha == alpha { // condition is met, if none of the search stops hit
+            // } else if let Some(entry) = ttable::get(&child) {
+            //     if entry.get_depth() >= depth {
+            //         ialpha = entry.get_score();
+            //     }
+            // }
+
+            // continue search
+            if depth > 1 {
                 let mut next_enemy_moves = limited_move_combinations(&child, 1);
                 for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
                     let iscore = alphabeta(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
