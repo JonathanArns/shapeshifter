@@ -3,40 +3,59 @@ use crate::bitboard::*;
 
 use arrayvec::ArrayVec;
 
-/// Can never return a move that moves out of bounds on the board,
+/// Can never return a move that moves out of bounds on the board on unrwapped boards,
 /// because that would cause a panic elsewhere.
 pub fn allowed_moves<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, pos: u16) -> ArrayVec<Move, 4>
 where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
-    let mut tails = [u16::MAX; S];
+    let mut bodies = board.bodies[0];
     for i in 0..S {
         if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-            tails[i] = board.snakes[i].tail;
+            bodies.unset_bit(board.snakes[i].tail as usize)
         }
     }
-    if pos >= W as u16 {
-        some_legal_move = Move::Down;
-        if !board.bodies[0].get_bit(pos as usize - W) || tails.contains(&(pos - W as u16)) {
+    if board.wrap {
+        let mut move_to = if W > pos as usize { W*(H-1) + pos as usize } else { pos as usize - W };
+        if !bodies.get_bit(move_to) {
             moves.push(Move::Down);
         }
-    }
-    if pos < (W * (H-1)) as u16 {
-        some_legal_move = Move::Up;
-        if !board.bodies[0].get_bit(pos as usize + W) || tails.contains(&(pos + W as u16)) {
+        move_to = (pos as usize + W) % (W*H);
+        if !bodies.get_bit(move_to) {
             moves.push(Move::Up);
         }
-    }
-    if pos % (W as u16) > 0 {
-        some_legal_move = Move::Left;
-        if !board.bodies[0].get_bit(pos as usize - 1) || tails.contains(&(pos - 1)) {
+        move_to = if 1 > pos { W*H - 1 as usize } else { pos as usize - 1 };
+        if !bodies.get_bit(move_to) {
             moves.push(Move::Left);
         }
-    }
-    if pos % (W as u16) < (W as u16 - 1) {
-        some_legal_move = Move::Right;
-        if !board.bodies[0].get_bit(pos as usize + 1) || tails.contains(&(pos + 1)) {
+        move_to = (pos as usize + 1) % (W*H);
+        if !bodies.get_bit(move_to) {
             moves.push(Move::Right);
+        }
+    } else {
+        if pos >= W as u16 {
+            some_legal_move = Move::Down;
+            if !bodies.get_bit(pos as usize - W) {
+                moves.push(Move::Down);
+            }
+        }
+        if pos < (W * (H-1)) as u16 {
+            some_legal_move = Move::Up;
+            if !bodies.get_bit(pos as usize + W) {
+                moves.push(Move::Up);
+            }
+        }
+        if pos % (W as u16) > 0 {
+            some_legal_move = Move::Left;
+            if !bodies.get_bit(pos as usize - 1) {
+                moves.push(Move::Left);
+            }
+        }
+        if pos % (W as u16) < (W as u16 - 1) {
+            some_legal_move = Move::Right;
+            if !bodies.get_bit(pos as usize + 1) {
+                moves.push(Move::Right);
+            }
         }
     }
     if moves.len() == 0 {
@@ -191,7 +210,7 @@ mod tests {
                 ],
             },
         };
-        let board = Bitboard::<4, 11, 11>::from_gamestate(state);
+        let board = Bitboard::<4, 11, 11>::from_gamestate(state, Ruleset::Royale);
         b.iter(|| {
             limited_move_combinations(&board, 1)
         });

@@ -2,7 +2,6 @@ use crate::types::*;
 use crate::bitboard::*;
 use crate::move_gen::*;
 use crate::eval::*;
-use crate::util::*;
 use crate::ttable;
 
 use std::env;
@@ -18,8 +17,6 @@ lazy_static! {
         -1
     };
 }
-
-const QUIESCENCE_DEPTH: u8 = 3;
 
 pub fn search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
@@ -160,8 +157,8 @@ where [(); (W*H+127)/128]: Sized {  // min call
             // search stops
             if child.is_terminal() {
                 ialpha = eval_terminal(&child);
-            } else if depth == 1 && is_stable(&child) {
-                ialpha = eval(&child);
+            } else if depth == 1 {
+                ialpha = eval(&child, ruleset);
             } else if let Some(entry) = ttable::get(&child) {
                 if entry.get_depth() >= depth {
                     ialpha = entry.get_score();
@@ -171,11 +168,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             if ialpha == alpha { // condition is met, if none of the search stops hit
                 let mut next_enemy_moves = limited_move_combinations(&child, 1);
                 for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                    let iscore = if depth == 0 {
-                        quiescence_search(&child, ruleset, node_counter, mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, alpha, beta)
-                    } else {
-                        alphabeta(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta)
-                    };
+                    let iscore = alphabeta(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
                     if iscore > ibeta {
                         ialpha = ibeta;
                         break // same as return beta
@@ -185,70 +178,6 @@ where [(); (W*H+127)/128]: Sized {  // min call
                     }
                 }
             }
-            ialpha
-        };
-        if score < alpha {
-            return alpha
-        }
-        if score < beta {
-            beta = score;
-        }
-    }
-    beta
-}
-
-/// Used for quiescence search, to determine, if the position is stable and can be evaluated, or if
-/// search must continue.
-fn is_stable<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> bool
-where [(); (W*H+127)/128]: Sized {
-    // TODO: add check if head to head is possible
-    allowed_moves(board, board.snakes[0].head).len() < 2
-    || (S == 2 && allowed_moves(board, board.snakes[1].head).len() < 2)
-}
-
-fn quiescence_search<const S: usize, const W: usize, const H: usize>(
-    board: &Bitboard<S, W, H>,
-    ruleset: Ruleset,
-    node_counter: &mut u64,
-    mv: Move,
-    enemy_moves: &mut ArrayVec<[Move; S], 4>,
-    depth: u8,
-    alpha: Score,
-    mut beta: Score
-) -> Score
-where [(); (W*H+127)/128]: Sized {
-    *node_counter += 1;
-
-    // search
-    for mvs in enemy_moves { // TODO: apply move ordering
-        let score = { // max call
-            let mut ialpha = alpha;
-            let ibeta = beta;
-            mvs[0] = mv;
-            let mut child = board.clone();
-            child.apply_moves(&mvs, ruleset);
-            *node_counter += 1;
-
-            // search stops
-            if child.is_terminal() {
-                ialpha = eval_terminal(&child);
-            } else if depth == 1 || is_stable(&child) {
-                ialpha = eval(&child);
-            // search
-            } else {
-                let mut next_enemy_moves = limited_move_combinations(&child, 1);
-                for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                    let iscore = quiescence_search(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
-                    if iscore > ibeta {
-                        ialpha = ibeta;
-                        break // same as return beta
-                    }
-                    if iscore > ialpha {
-                        ialpha = iscore;
-                    }
-                }
-            }
-            ttable::insert(&child, ialpha, QUIESCENCE_DEPTH - depth);
             ialpha
         };
         if score < alpha {
@@ -278,7 +207,7 @@ where [(); (W*H+127)/128]: Sized {
                 key += 100;
             }
             // if snake is longer, walk towards me, otherwise walk away from me
-            key += (snake.length > me.length && is_in_direction(snake.head, me.head, mv, W as u16)) as u8;
+            key += (snake.length > me.length && board.is_in_direction(snake.head, me.head, mv)) as u8;
         }
         key
     });

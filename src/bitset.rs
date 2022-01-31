@@ -36,6 +36,22 @@ where [(); (N+127)/128]: Sized {
         ret
     }
 
+    /// Creates a bitset with all bits in the specified range set.
+    /// Note that the bitset might contain more bits, which are still
+    /// accessible but will not be set in this function.
+    pub const fn with_all_bits_set() -> Self {
+        let mut ret = Self::new();
+        let mut i = 0;
+        loop {
+            if i == N {
+                break
+            }
+            ret.state[i>>7] |= 1<<i%128;
+            i += 1;
+        }
+        ret
+    }
+
     /// Sets the bit at index position to true
     pub fn set_bit(&mut self, position: usize) {
         let i = position >> 7;

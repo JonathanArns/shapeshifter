@@ -16,8 +16,12 @@ impl Move {
         *self as u8
     }
 
-    pub fn to_index(&self, board_width: usize) -> i16 {
-        Self::int_to_index(self.to_int(), board_width)
+    pub fn to_index(&self, width: usize) -> i16 {
+        Self::int_to_index(self.to_int(), width)
+    }
+
+    pub fn to_index_wrapping(&self, width: usize, height: usize, from: u16) -> i16 {
+        Self::int_to_index_wrapping(self.to_int(), width, height, from)
     }
 
     pub fn to_json(&self) -> JsonValue {
@@ -37,16 +41,61 @@ impl Move {
     pub fn int_to_index(x: u8, width: usize) -> i16 {
         [width as i16, -(width as i16), 1, -1][x as usize]
     }
+
+    pub fn int_to_index_wrapping(x: u8, width: usize, height: usize, from: u16) -> i16 {
+        let h = height as i16;
+        let w = width as i16;
+        if x == 0 {
+            if (from as i16) < (h - 1) * w {
+                w
+            } else {
+                -(w * (h - 1))
+            }
+        } else if x == 1 {
+            if (from as i16) >= w {
+                -w
+            } else {
+                w * (h - 1)
+            }
+        } else if x == 2 {
+            if (from as i16) % w < w-1 {
+                1
+            } else {
+                -(w - 1)
+            }
+        } else {
+            if (from as i16) % w > 0 {
+                -1
+            } else {
+                w - 1
+            }
+        }
+    }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash)]
 pub enum Ruleset {
     Standard,
     Royale,
-    Constrictor,
+    Wrapped,
+    Constrictor, // currently unsupported
 }
 
 pub struct Game {
     pub move_time: std::time::Duration,
     pub ruleset: Ruleset,
+    pub hazard_damage: i8,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_move_int_conversions() {
+        assert!(Move::Up == Move::from_int(Move::Up.to_int()));
+        assert!(Move::Down == Move::from_int(Move::Down.to_int()));
+        assert!(Move::Left == Move::from_int(Move::Left.to_int()));
+        assert!(Move::Right == Move::from_int(Move::Right.to_int()));
+    }
 }

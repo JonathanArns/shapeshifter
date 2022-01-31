@@ -15,7 +15,6 @@ mod api;
 mod move_gen;
 mod mcts;
 mod eval;
-mod util;
 mod bitset;
 mod ttable;
 
