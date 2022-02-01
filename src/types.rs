@@ -73,7 +73,7 @@ impl Move {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub enum Ruleset {
     Standard,
     Royale,

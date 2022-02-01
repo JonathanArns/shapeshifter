@@ -74,10 +74,10 @@ pub fn handle_start(_req: Json<GameState>) -> Status {
 #[post("/move", format = "json", data = "<req>")]
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
-    let ruleset = match state.game.ruleset["name"].to_string().as_str() {
-        "wrapped" => types::Ruleset::Wrapped,
-        "royale" => types::Ruleset::Royale,
-        "constrictor" => types::Ruleset::Constrictor,
+    let ruleset = match state.game.ruleset["name"].as_str() {
+        Some("wrapped") => types::Ruleset::Wrapped,
+        Some("royale") => types::Ruleset::Royale,
+        Some("constrictor") => types::Ruleset::Constrictor,
         _ => types::Ruleset::Standard,
     };
     let mut game = types::Game{
@@ -125,7 +125,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (14, 25, 25) => minimax::search(&bitboard::Bitboard::<14, 25, 25>::from_gamestate(state, ruleset), &mut game),
         (15, 25, 25) => minimax::search(&bitboard::Bitboard::<15, 25, 25>::from_gamestate(state, ruleset), &mut game),
         (16, 25, 25) => minimax::search(&bitboard::Bitboard::<16, 25, 25>::from_gamestate(state, ruleset), &mut game),
-        _ => panic!("Snake count or board size not supported"),
+        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}", state.board.snakes.len(), state.board.width, state.board.height),
     };
     mv.to_json()
 }
