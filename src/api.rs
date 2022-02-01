@@ -78,7 +78,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         "wrapped" => types::Ruleset::Wrapped,
         "royale" => types::Ruleset::Royale,
         "constrictor" => types::Ruleset::Constrictor,
-        _ => types::Ruleset::Wrapped,
+        _ => types::Ruleset::Standard,
     };
     let mut game = types::Game{
         move_time: std::time::Duration::from_millis(state.game.timeout.into()),
