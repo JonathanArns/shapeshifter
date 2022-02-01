@@ -31,7 +31,7 @@ pub struct Battlesnake {
     pub body: Vec<Coord>,
     pub head: Coord,
     pub length: usize,
-    pub latency: String,
+    // pub latency: String,
 
     // Used in non-standard game modes
     pub shout: Option<String>,
@@ -57,9 +57,9 @@ pub fn handle_index() -> JsonValue {
     json!({
         "apiversion": "1",
         "author": "JonathanArns",
-        "color": "#c9e7ff",
-        "head": "smart-caterpillar",
-        "tail": "present",
+        "color": "#900050",
+        "head": "all-seeing",
+        "tail": "skinny",
     })
 }
 
@@ -78,7 +78,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         "wrapped" => types::Ruleset::Wrapped,
         "royale" => types::Ruleset::Royale,
         "constrictor" => types::Ruleset::Constrictor,
-        _ => types::Ruleset::Standard,
+        _ => types::Ruleset::Wrapped,
     };
     let mut game = types::Game{
         move_time: std::time::Duration::from_millis(state.game.timeout.into()),
