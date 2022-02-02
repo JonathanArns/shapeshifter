@@ -198,7 +198,7 @@ where [(); (W*H+127)/128]: Sized {
         let me = board.snakes[0];
         let mut key = 0;
         for (i, snake) in board.snakes[1..].iter().enumerate() {
-            if !snake.is_alive() {
+            if snake.is_dead() {
                 continue
             }
             let mv = x[i+1];

@@ -19,8 +19,14 @@ pub struct Snake {
 }
 
 impl Snake {
+    #[inline(always)]
     pub fn is_alive(&self) -> bool {
         self.health > 0
+    }
+    
+    #[inline(always)]
+    pub fn is_dead(&self) -> bool {
+        self.health < 1
     }
 }
 
@@ -100,7 +106,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     pub fn is_terminal(&self) -> bool {
-        if !self.snakes[0].is_alive() {
+        if self.snakes[0].is_dead() {
             return true
         }
         for i in 1..S {
@@ -156,7 +162,7 @@ where [(); (W*H+127)/128]: Sized {
         let mut eaten = ArrayVec::<u16, S>::new();
         for i in 0..S {
             let snake = &mut self.snakes[i];
-            if !snake.is_alive() {
+            if snake.is_dead() {
                 continue
             }
 
@@ -204,7 +210,7 @@ where [(); (W*H+127)/128]: Sized {
             }
 
             // starvation
-            if !snake.is_alive() {
+            if snake.is_dead() {
                 snake.health = OUT_OF_HEALTH;
                 self.remove_snake_body(i);
             }
@@ -212,7 +218,7 @@ where [(); (W*H+127)/128]: Sized {
 
         // sanity checks for snake movement
         for snake in self.snakes {
-            if !snake.is_alive() {
+            if snake.is_dead() {
                 continue
             }
             debug_assert!(self.bodies[0].get_bit(snake.tail as usize), "snake tail is not set in bodies bitmap\n{:?}", self);
@@ -220,7 +226,7 @@ where [(); (W*H+127)/128]: Sized {
 
         // a 2nd iteration is needed to deal with collisions, since starved snakes cannot collide
         for i in 0..S {
-            if !self.snakes[i].is_alive() {
+            if self.snakes[i].is_dead() {
                 continue
             }
             // body collisions
@@ -392,5 +398,105 @@ where [(); (W*H+127)/128]: Sized {
             ))?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api;
+    use crate::move_gen;
+    use test::Bencher;
+
+    fn c(x: usize, y: usize) -> api::Coord {
+        api::Coord{x, y}
+    }
+
+    fn create_board() -> Bitboard<4, 11, 11> {
+        let mut ruleset = std::collections::HashMap::new();
+        ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
+        let state = api::GameState{
+            game: api::Game{ id: "".to_string(), timeout: 100, ruleset },
+            turn: 157,
+            you: api::Battlesnake{
+                id: "a".to_string(),
+                name: "a".to_string(),
+                shout: None,
+                squad: None,
+                health: 100,
+                length: 11,
+                head: c(5,2),
+                body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+            },
+            board: api::Board{
+                height: 11,
+                width: 11,
+                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
+                hazards: vec![],
+                snakes: vec![
+                    api::Battlesnake{
+                        id: "a".to_string(),
+                        name: "a".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 100,
+                        length: 11,
+                        head: c(5,2),
+                        body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "b".to_string(),
+                        name: "b".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 12,
+                        head: c(3,4),
+                        body: vec![c(3,4), c(2,4), c(2,5), c(3, 5), c(3,6), c(3,7), c(3,8), c(4,8), c(4,7), c(4,6), c(4,5), c(4,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "c".to_string(),
+                        name: "c".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 3,
+                        head: c(6,7),
+                        body: vec![c(6,7), c(7,7), c(8,7)],
+                    },  
+                    api::Battlesnake{
+                        id: "d".to_string(),
+                        name: "d".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 3,
+                        head: c(9,9),
+                        body: vec![c(9,9), c(9,8), c(8,8)],
+                    },  
+                ],
+            },
+        };
+        Bitboard::<4, 11, 11>::from_gamestate(state, Ruleset::Wrapped)
+    }
+    
+    #[bench]
+    fn bench_simulate(b: &mut Bencher) {
+        let mut board = create_board();
+        b.iter(|| {
+            let moves = move_gen::limited_move_combinations(&board, 0);
+            board.apply_moves(&moves[0], Ruleset::Wrapped)
+        })
+    }
+
+    #[bench]
+    fn bench_remove_snake_body(b: &mut Bencher) {
+        let mut board = create_board();
+        board.snakes[1].health = 0;
+        b.iter(|| {
+            let mut b = board.clone();
+            b.remove_snake_body(1);
+            b
+        })
     }
 }

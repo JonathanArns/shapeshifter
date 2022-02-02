@@ -16,19 +16,21 @@ where [(); (W*H+127)/128]: Sized {
         }
     }
     if board.wrap {
-        let mut move_to = if W > pos as usize { W*(H-1) + pos as usize } else { pos as usize - W };
+        let check = W > pos as usize;
+        let move_to = check as usize * (W*(H-1) + pos as usize) + !check as usize * (pos as usize - W);
         if !bodies.get_bit(move_to) {
             moves.push(Move::Down);
         }
-        move_to = (pos as usize + W) % (W*H);
+        let move_to = (pos as usize + W) % (W*H);
         if !bodies.get_bit(move_to) {
             moves.push(Move::Up);
         }
-        move_to = if 1 > pos { W*H - 1 as usize } else { pos as usize - 1 };
+        let check = 1 > pos;
+        let move_to = check as usize * (W*H - 1 as usize) + check as usize * (pos as usize - 1);
         if !bodies.get_bit(move_to) {
             moves.push(Move::Left);
         }
-        move_to = (pos as usize + 1) % (W*H);
+        let move_to = (pos as usize + 1) % (W*H);
         if !bodies.get_bit(move_to) {
             moves.push(Move::Right);
         }
@@ -89,7 +91,7 @@ where [(); (W*H+127)/128]: Sized {
             if moves.len() <= j {
                 moves.push(moves[0]);
             }
-            moves[j][i+1] = snake_moves[j.min(snake_moves.len()-1)];
+            moves[j][i+skip] = snake_moves[j.min(snake_moves.len()-1)];
         }
     }
     moves
@@ -141,15 +143,13 @@ mod tests {
         api::Coord{x, y}
     }
 
-    #[bench]
-    fn bench_enemy_move_generation(b: &mut Bencher) {
+    fn create_board() -> Bitboard<4, 11, 11> {
         let state = api::GameState{
             game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),
                 name: "a".to_string(),
-                latency: "".to_string(),
                 shout: None,
                 squad: None,
                 health: 100,
@@ -166,7 +166,6 @@ mod tests {
                     api::Battlesnake{
                         id: "a".to_string(),
                         name: "a".to_string(),
-                        latency: "".to_string(),
                         shout: None,
                         squad: None,
                         health: 100,
@@ -177,7 +176,6 @@ mod tests {
                     api::Battlesnake{
                         id: "b".to_string(),
                         name: "b".to_string(),
-                        latency: "".to_string(),
                         shout: None,
                         squad: None,
                         health: 95,
@@ -188,7 +186,6 @@ mod tests {
                     api::Battlesnake{
                         id: "c".to_string(),
                         name: "c".to_string(),
-                        latency: "".to_string(),
                         shout: None,
                         squad: None,
                         health: 95,
@@ -199,7 +196,6 @@ mod tests {
                     api::Battlesnake{
                         id: "d".to_string(),
                         name: "d".to_string(),
-                        latency: "".to_string(),
                         shout: None,
                         squad: None,
                         health: 95,
@@ -210,7 +206,12 @@ mod tests {
                 ],
             },
         };
-        let board = Bitboard::<4, 11, 11>::from_gamestate(state, Ruleset::Royale);
+        Bitboard::<4, 11, 11>::from_gamestate(state, Ruleset::Royale)
+    }
+
+    #[bench]
+    fn bench_enemy_move_generation(b: &mut Bencher) {
+        let board = create_board();
         b.iter(|| {
             limited_move_combinations(&board, 1)
         });

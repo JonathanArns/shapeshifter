@@ -39,7 +39,13 @@ impl Move {
     }
     
     pub fn int_to_index(x: u8, width: usize) -> i16 {
-        [width as i16, -(width as i16), 1, -1][x as usize]
+        match x {
+            0 => width as i16,
+            1 => -(width as i16),
+            2 => 1,
+            3 => -1,
+            _ => panic!("Bad move int")
+        }
     }
 
     pub fn int_to_index_wrapping(x: u8, width: usize, height: usize, from: u16) -> i16 {

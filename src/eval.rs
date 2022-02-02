@@ -102,7 +102,7 @@ where [(); (W*H+127)/128]: Sized {
 
 pub fn eval_terminal<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> Score
 where [(); (W*H+127)/128]: Sized {
-    if !board.snakes[0].is_alive() {
+    if board.snakes[0].is_dead() {
         return Score::MIN - board.snakes[0].health as Score
     } else {
         return Score::MAX
