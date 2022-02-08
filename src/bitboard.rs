@@ -32,17 +32,16 @@ impl Snake {
 
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Bitboard<const S: usize, const W: usize, const H: usize> 
+pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool> 
 where [(); (W*H+127)/128]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
     pub snakes: [Snake; S],
     pub food: Bitset<{W*H}>,
     pub hazards: Bitset<{W*H}>,
-    pub wrap: bool,
 }
 
 // TODO: missing logic for WRAP
-impl<const S: usize, const W: usize, const H: usize> Bitboard<S, W, H>
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Bitboard<S, W, H, WRAP>
 where [(); (W*H+127)/128]: Sized {
     pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = border_mask::<W, H>(true);
     pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = border_mask::<W, H>(false);
@@ -51,6 +50,7 @@ where [(); (W*H+127)/128]: Sized {
     pub const LEFT_EDGE_MASK: Bitset<{W*H}> = vertical_edge_mask::<W, H>(false);
     pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = vertical_edge_mask::<W, H>(true);
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
+    pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = precompute_moves::<S, W, H, WRAP>();
 
     pub fn new() -> Self {
         Bitboard{
@@ -58,13 +58,11 @@ where [(); (W*H+127)/128]: Sized {
             snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; S],
             food: Bitset::new(),
             hazards: Bitset::new(),
-            wrap: false,
         }
     }
 
     pub fn from_gamestate(state: GameState, ruleset: Ruleset) -> Self {
         let mut board = Self::new();
-        board.wrap = matches!(ruleset, Ruleset::Wrapped);
         for food in state.board.food {
             board.food.set_bit(W*food.y + food.x);
         }
@@ -105,6 +103,7 @@ where [(); (W*H+127)/128]: Sized {
         board
     }
 
+    /// Returns true if self is dead or the only one alive
     pub fn is_terminal(&self) -> bool {
         if self.snakes[0].is_dead() {
             return true
@@ -117,8 +116,23 @@ where [(); (W*H+127)/128]: Sized {
         true
     }
 
+    /// Returns wether the game is over and the winner id, if there is a winner
+    pub fn is_over(&self) -> (bool, Option<usize>) {
+        let mut winner = None;
+        for i in 0..S {
+            if self.snakes[i].is_alive() {
+                if winner == None {
+                    winner = Some(i);
+                } else {
+                    return (false, None)
+                }
+            }
+        }
+        (true, winner)
+    }
+
     pub fn distance(&self, from: u16, to: u16) -> u16 {
-        if self.wrap {
+        if WRAP {
             todo!("not implemented for wrapped boards")
         }
         let w = W as u16;
@@ -126,7 +140,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     pub fn is_in_direction(&self, from: u16, to: u16, mv: Move) -> bool {
-        if self.wrap {
+        if WRAP {
             todo!("not implemented for wrapped boards")
         }
         let w = W as u16;
@@ -141,7 +155,7 @@ where [(); (W*H+127)/128]: Sized {
     /// Returns the last move that was made by a snake.
     /// None is returned if the snake has not made a move yet.
     pub fn get_previous_move(&self, snake_index: usize) -> Option<Move> {
-        if self.wrap {
+        if WRAP {
             todo!("not implemented for wrapped boards")
         }
         let head = self.snakes[snake_index].head as usize;
@@ -174,7 +188,7 @@ where [(); (W*H+127)/128]: Sized {
             self.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
             self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
-            if self.wrap {
+            if WRAP {
                 snake.head = (snake.head as i16 + mv.to_index_wrapping(W, H, snake.head)) as u16
             } else {
                 snake.head = (snake.head as i16 + mv.to_index(W)) as u16;
@@ -183,7 +197,7 @@ where [(); (W*H+127)/128]: Sized {
             if snake.curled_bodyparts == 0 {
                 let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
                 let tail_move_int = (self.bodies[1] & tail_mask).any() as u8 | ((self.bodies[2] & tail_mask).any() as u8) << 1;
-                snake.tail = if self.wrap {
+                snake.tail = if WRAP {
                     snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
                 } else {
                     snake.tail as i16 + Move::int_to_index(tail_move_int, W)
@@ -283,7 +297,7 @@ where [(); (W*H+127)/128]: Sized {
             self.bodies[0].unset_bit(tail_pos as usize);
             self.bodies[1].unset_bit(tail_pos as usize);
             self.bodies[2].unset_bit(tail_pos as usize);
-            tail_pos = if self.wrap {
+            tail_pos = if WRAP {
                 tail_pos as i16 + Move::int_to_index_wrapping(move_int, W, H, tail_pos)
             } else {
                 tail_pos as i16 + Move::int_to_index(move_int, W)
@@ -366,7 +380,61 @@ where [(); (W*H+127)/128]: Sized {
     Bitset::<{W*H}>::from_array(arr)
 }
 
-impl<const S: usize, const W: usize, const H: usize> std::fmt::Debug for Bitboard<S, W, H>
+/// Computes possible moves from every position at compile time
+const fn precompute_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>
+() -> [[Option<u16>; 4]; W*H]
+where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
+    let mut result = [[None; 4]; {W*H}];
+    let mut pos = 0;
+    loop {
+        if pos == W*H {
+            break
+        }
+        if WRAP {
+            // up
+            let move_to = (pos + W) % (W*H);
+            result[pos][0] = Some(move_to as u16);
+            
+            // down
+            let move_to = if W > pos { W*(H-1) + pos } else { pos - W };
+            result[pos][1] = Some(move_to as u16);
+            
+            // right
+            let move_to = (pos + 1) % (W*H);
+            result[pos][2] = Some(move_to as u16);
+            
+            // left
+            let move_to = if 1 > pos { W*H - 1 } else { pos - 1 };
+            result[pos][3] = Some(move_to as u16);
+        } else {
+            // up
+            if pos < W * (H-1) {
+                let move_to = pos + W;
+                result[pos][0] = Some(move_to as u16);
+            }
+            // down
+            if pos >= W {
+                let move_to = pos - W;
+                result[pos][1] = Some(move_to as u16);
+            }
+            // right
+            if pos % W < W - 1 {
+                let move_to = pos + 1;
+                result[pos][2] = Some(move_to as u16);
+            }
+            // left
+            if pos % W > 0 {
+                let move_to = pos - 1;
+                result[pos][3] = Some(move_to as u16);
+            }
+        }
+
+        pos += 1;
+    }
+    result
+}
+
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
 where [(); (W*H+127)/128]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..H {
@@ -412,7 +480,7 @@ mod tests {
         api::Coord{x, y}
     }
 
-    fn create_board() -> Bitboard<4, 11, 11> {
+    fn create_board() -> Bitboard<4, 11, 11, true> {
         let mut ruleset = std::collections::HashMap::new();
         ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
         let state = api::GameState{
@@ -477,7 +545,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11>::from_gamestate(state, Ruleset::Wrapped)
+        Bitboard::<4, 11, 11, true>::from_gamestate(state, Ruleset::Wrapped)
     }
     
     #[bench]

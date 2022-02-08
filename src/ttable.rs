@@ -22,7 +22,7 @@ pub fn init() {
 }
 
 /// Get an entry from the transposition table
-pub fn get<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> Option<Entry>
+pub fn get<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Option<Entry>
 where [(); (W*H+127)/128]: Sized {
     let key = hash(board);
     let index = key % TT_LENGTH as u64;
@@ -38,8 +38,8 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 /// Insert an entry into the transposition table
-pub fn insert<const S: usize, const W: usize, const H: usize>(
-    board: &Bitboard<S, W, H>,
+pub fn insert<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>,
     score: Score,
     is_lower_bound: bool,
     is_upper_bound: bool,
@@ -57,7 +57,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 /// The has function that is used for the transposition table
-fn hash<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> u64
+fn hash<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> u64
 where [(); (W*H+127)/128]: Sized {
     let mut hasher = FxHasher64::default();
     board.hash(&mut hasher);

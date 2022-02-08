@@ -17,7 +17,7 @@ lazy_static! {
     };
 }
 
-pub fn search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score, u8)
+pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, g, *FIXED_DEPTH as u8)
@@ -26,7 +26,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game, depth: u8) -> (Move, Score, u8)
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game, depth: u8) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now(); // only used to calculate nodes / second
@@ -36,7 +36,7 @@ where [(); (W*H+127)/128]: Sized {
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let score = alphabeta(board, g.ruleset, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+        let (score, _) = alphabeta(board, g.ruleset, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
         if score > best {
             best = score;
             best_move = *mv;
@@ -47,7 +47,7 @@ where [(); (W*H+127)/128]: Sized {
     (best_move, best_score, depth)
 }
 
-pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, g: &mut Game) -> (Move, Score, u8)
+pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
@@ -65,21 +65,21 @@ where [(); (W*H+127)/128]: Sized {
         let mut node_counter = 0;
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut best_move = Move::Up;
-        let mut best_score = Score::MIN+1;
         let mut depth = 1;
         let mut enemy_moves = limited_move_combinations(&board, 1);
         let my_moves = allowed_moves(&board, board.snakes[0].head);
         loop {
             let mut best = Score::MIN+1;
+            let mut best_unused_depth = depth;
             for mv in &my_moves {
-                let score = alphabeta(&board, ruleset, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
-                if score > best {
+                let (score, unused_depth) = alphabeta(&board, ruleset, &mut node_counter, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX);
+                if score > best || (score == best && unused_depth < best_unused_depth) {
                     best = score;
                     best_move = *mv;
-                    best_score = best;
+                    best_unused_depth = unused_depth;
                 }
             }
-            result_sender.try_send((best_move, best_score, depth)).ok();
+            result_sender.try_send((best_move, best, depth)).ok();
             if best == Score::MAX || best < Score::MIN + 5 {
                 break
             }
@@ -114,8 +114,8 @@ where [(); (W*H+127)/128]: Sized {
     (best_move, best_score, best_depth)
 }
 
-pub fn alphabeta<const S: usize, const W: usize, const H: usize>(
-    board: &Bitboard<S, W, H>,
+pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>,
     ruleset: Ruleset,
     node_counter: &mut u64,
     mv: Move,
@@ -123,26 +123,8 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize>(
     depth: u8,
     alpha: Score,
     mut beta: Score
-) -> Score
+) -> (Score, u8)
 where [(); (W*H+127)/128]: Sized {  // min call
-    // // ProbCut heuristic
-    // if depth == 4 {
-    //     let a = 1.0;
-    //     let b = 0.1;
-    //     let percentile = 1.5;
-    //     let sigma = 0.5;
-    //     let mut bound = ((percentile * sigma + beta as f32 - b) / a).round() as Score;
-    //     if self.alphabeta(mv, enemy_moves, 3, bound-1, bound) >= bound {
-    //         print!("c");
-    //         return beta 
-    //     }
-    //     bound = ((-percentile * sigma + alpha as f32 - b) / a).round() as Score;
-    //     if self.alphabeta(mv, enemy_moves, 3, bound, bound+1) <= bound {
-    //         print!("c");
-    //         return alpha
-    //     }
-    // }
-
     // search
     for mvs in enemy_moves { // TODO: apply move ordering
         let score = { // max call
@@ -169,7 +151,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             if depth > 1 {
                 let mut next_enemy_moves = limited_move_combinations(&child, 1);
                 for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                    let iscore = alphabeta(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
+                    let (iscore, _) = alphabeta(&child, ruleset, node_counter, mv, &mut next_enemy_moves, depth-1, alpha, beta);
                     if iscore > ibeta {
                         ialpha = ibeta;
                         break // same as return beta
@@ -182,16 +164,16 @@ where [(); (W*H+127)/128]: Sized {  // min call
             ialpha
         };
         if score < alpha {
-            return alpha
+            return (alpha, depth)
         }
         if score < beta {
             beta = score;
         }
     }
-    beta
+    (beta, depth)
 }
 
-fn order_enemy_moves<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, moves: &mut Vec<[Move; S]>)
+fn order_enemy_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, moves: &mut Vec<[Move; S]>)
 where [(); (W*H+127)/128]: Sized {
     let mut unique_moves_seen = Vec::<(Move, u8)>::with_capacity(S*S);
     moves.sort_by_cached_key(|x| {

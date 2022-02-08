@@ -596,6 +596,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_pcg"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+dependencies = [
+ "rand_core",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -698,6 +707,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.14",
  "rand",
+ "rand_pcg",
  "rocket",
  "rocket_contrib",
  "serde",

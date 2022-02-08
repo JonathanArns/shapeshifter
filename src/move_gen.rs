@@ -1,11 +1,11 @@
 use crate::types::*;
 use crate::bitboard::*;
+use crate::bitset::Bitset;
 
 use arrayvec::ArrayVec;
+use rand::Rng;
 
-/// Can never return a move that moves out of bounds on the board on unrwapped boards,
-/// because that would cause a panic elsewhere.
-pub fn allowed_moves<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, pos: u16) -> ArrayVec<Move, 4>
+pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, pos: u16) -> ArrayVec<Move, 4>
 where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
@@ -15,48 +15,91 @@ where [(); (W*H+127)/128]: Sized {
             bodies.unset_bit(board.snakes[i].tail as usize)
         }
     }
-    if board.wrap {
-        let check = W > pos as usize;
-        let move_to = check as usize * (W*(H-1) + pos as usize) + !check as usize * (pos as usize - W);
-        if !bodies.get_bit(move_to) {
+
+    if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][0] {
+        some_legal_move = Move::Up;
+        if !bodies.get_bit(dest as usize) {
+            moves.push(Move::Up);
+        }
+    }
+    if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][1] {
+        some_legal_move = Move::Down;
+        if !bodies.get_bit(dest as usize) {
             moves.push(Move::Down);
         }
+    }
+    if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][2] {
+        some_legal_move = Move::Right;
+        if !bodies.get_bit(dest as usize) {
+            moves.push(Move::Right);
+        }
+    }
+    if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][3] {
+        some_legal_move = Move::Left;
+        if !bodies.get_bit(dest as usize) {
+            moves.push(Move::Left);
+        }
+    }
+    if moves.len() == 0 {
+        moves.push(some_legal_move);
+    }
+    debug_assert!(moves == slow_allowed_moves(board, pos), "got {:?}, should get {:?}", moves, slow_allowed_moves(board, pos));
+    moves
+}
+
+/// Can never return a move that moves out of bounds on the board on unrwapped boards,
+/// because that would cause a panic elsewhere.
+#[allow(unused)]
+pub fn slow_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, pos: u16) -> ArrayVec<Move, 4>
+where [(); (W*H+127)/128]: Sized {
+    let mut moves = ArrayVec::<Move, 4>::new();
+    let mut some_legal_move = Move::Left;
+    let mut bodies = board.bodies[0];
+    for i in 0..S {
+        if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
+            bodies.unset_bit(board.snakes[i].tail as usize)
+        }
+    }
+    if WRAP {
         let move_to = (pos as usize + W) % (W*H);
         if !bodies.get_bit(move_to) {
             moves.push(Move::Up);
         }
-        let check = 1 > pos;
-        let move_to = check as usize * (W*H - 1 as usize) + check as usize * (pos as usize - 1);
+        let move_to = if W > pos as usize { W*(H-1) + pos as usize } else { pos as usize - W };
         if !bodies.get_bit(move_to) {
-            moves.push(Move::Left);
+            moves.push(Move::Down);
         }
         let move_to = (pos as usize + 1) % (W*H);
         if !bodies.get_bit(move_to) {
             moves.push(Move::Right);
         }
-    } else {
-        if pos >= W as u16 {
-            some_legal_move = Move::Down;
-            if !bodies.get_bit(pos as usize - W) {
-                moves.push(Move::Down);
-            }
+        let move_to = if 1 > pos { W*H - 1 as usize } else { pos as usize - 1 };
+        if !bodies.get_bit(move_to) {
+            moves.push(Move::Left);
         }
+    } else {
         if pos < (W * (H-1)) as u16 {
             some_legal_move = Move::Up;
             if !bodies.get_bit(pos as usize + W) {
                 moves.push(Move::Up);
             }
         }
-        if pos % (W as u16) > 0 {
-            some_legal_move = Move::Left;
-            if !bodies.get_bit(pos as usize - 1) {
-                moves.push(Move::Left);
+        if pos >= W as u16 {
+            some_legal_move = Move::Down;
+            if !bodies.get_bit(pos as usize - W) {
+                moves.push(Move::Down);
             }
         }
         if pos % (W as u16) < (W as u16 - 1) {
             some_legal_move = Move::Right;
             if !bodies.get_bit(pos as usize + 1) {
                 moves.push(Move::Right);
+            }
+        }
+        if pos % (W as u16) > 0 {
+            some_legal_move = Move::Left;
+            if !bodies.get_bit(pos as usize - 1) {
+                moves.push(Move::Left);
             }
         }
     }
@@ -69,7 +112,45 @@ where [(); (W*H+127)/128]: Sized {
 /// Generates up to 4 move combinations from a position, such that every move for every snake has
 /// been covered at least once.
 /// Can skip the first n snakes, their moves will always be Up in the result.
-pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, skip: usize) -> ArrayVec<[Move; S], 4>
+pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
+where [(); (W*H+127)/128]: Sized {
+    let mut bodies = board.bodies[0];
+    for i in skip..S {
+        if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
+            bodies.unset_bit(board.snakes[i].tail as usize);
+        }
+    }
+
+    // only generate enough move combinations so that every enemy move appears at least once
+    let mut moves = ArrayVec::<[Move; S], 4>::new();
+    moves.push([Move::Up; S]);
+    for i in skip..S {
+        if board.snakes[i].is_dead() {
+            continue
+        }
+        let mut x = 0;
+        let mut some_legal_move = Move::Up;
+        for j in 0..4 {
+            if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[board.snakes[i].head as usize][j] {
+                some_legal_move = Move::from_int(j as u8);
+                if !bodies.get_bit(pos as usize) {
+                    if moves.len() == x {
+                        moves.push(moves[0]);
+                    }
+                    moves[x][i] = Move::from_int(j as u8);
+                    x += 1;
+                }
+            }
+        }
+        for j in x..moves.len() {
+            moves[j][i] = some_legal_move;
+        }
+    }
+    moves
+}
+
+#[allow(unused)]
+pub fn slow_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
@@ -99,7 +180,8 @@ where [(); (W*H+127)/128]: Sized {
 
 /// Generates all possible move combinations from a position.
 /// Can skip the first n snakes, their moves will always be Up in the result.
-pub fn move_combinations<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, skip: usize) -> Vec<[Move; S]>
+#[allow(unused)]
+pub fn move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> Vec<[Move; S]>
 where [(); (W*H+127)/128]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
@@ -133,6 +215,16 @@ where [(); (W*H+127)/128]: Sized {
     moves
 }
 
+pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, rng: &mut impl Rng) -> [Move; S]
+where [(); (W*H+127)/128]: Sized {
+    let mut moves = [Move::Up; S];
+    for i in 0..S {
+        let snake_moves = allowed_moves(board, board.snakes[i].head);
+        moves[i] = snake_moves[rng.gen_range(0..snake_moves.len())];
+    }
+    moves
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,7 +235,7 @@ mod tests {
         api::Coord{x, y}
     }
 
-    fn create_board() -> Bitboard<4, 11, 11> {
+    fn create_board() -> Bitboard<4, 11, 11, true> {
         let state = api::GameState{
             game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new() },
             turn: 157,
@@ -206,7 +298,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11>::from_gamestate(state, Ruleset::Royale)
+        Bitboard::<4, 11, 11, true>::from_gamestate(state, Ruleset::Royale)
     }
 
     #[bench]
@@ -216,4 +308,9 @@ mod tests {
             limited_move_combinations(&board, 1)
         });
     }
+
+    // #[bench]
+    // fn perft(b: &mut Bencher) {
+    //     let board = create_board();
+    // }
 }

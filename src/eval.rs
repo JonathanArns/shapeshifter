@@ -14,7 +14,7 @@ lazy_static! {
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
 
-fn area_control<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> (Bitset<{W*H}>, Bitset<{W*H}>)
+fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> (Bitset<{W*H}>, Bitset<{W*H}>)
 where [(); (W*H+127)/128]: Sized {
     let mut debug_counter = 0;
     let mut x = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
@@ -30,19 +30,19 @@ where [(); (W*H+127)/128]: Sized {
     loop {
         debug_counter += 1;
         debug_assert!(debug_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", x, y);
-        let mut me = b & (x.0 | (Bitboard::<S, W, H>::ALL_BUT_LEFT_EDGE_MASK & x.0)<<1 | (Bitboard::<S, W, H>::ALL_BUT_RIGHT_EDGE_MASK & x.0)>>1 | x.0<<W | x.0>>W);
-        let mut enemies = b & (x.1 | (Bitboard::<S, W, H>::ALL_BUT_LEFT_EDGE_MASK & x.1)<<1 | (Bitboard::<S, W, H>::ALL_BUT_RIGHT_EDGE_MASK & x.1)>>1 | x.1<<W | x.1>>W);
-        if board.wrap {
-            me |= (Bitboard::<S, W, H>::LEFT_EDGE_MASK & x.0) >> (W-1)
-                | (Bitboard::<S, W, H>::RIGHT_EDGE_MASK & x.0) << (W-1)
-                | (Bitboard::<S, W, H>::BOTTOM_EDGE_MASK & x.0) << ((H-1)*W)
-                | (Bitboard::<S, W, H>::TOP_EDGE_MASK & x.0) >> ((H-1)*W);
-            enemies |= (Bitboard::<S, W, H>::LEFT_EDGE_MASK & x.1) >> (W-1)
-                | (Bitboard::<S, W, H>::RIGHT_EDGE_MASK & x.1) << (W-1)
-                | (Bitboard::<S, W, H>::BOTTOM_EDGE_MASK & x.1) << ((H-1)*W) // debug changes
-                | (Bitboard::<S, W, H>::TOP_EDGE_MASK & x.1) >> ((H-1)*W);
+        let mut me = b & (x.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & x.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & x.0)>>1 | x.0<<W | x.0>>W);
+        let mut enemies = b & (x.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & x.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & x.1)>>1 | x.1<<W | x.1>>W);
+        if WRAP {
+            me |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & x.0) >> (W-1)
+                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & x.0) << (W-1)
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & x.0) << ((H-1)*W)
+                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & x.0) >> ((H-1)*W);
+            enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & x.1) >> (W-1)
+                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & x.1) << (W-1)
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & x.1) << ((H-1)*W) // debug changes
+                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & x.1) >> ((H-1)*W);
         }
-        x = (x.0 | (Bitboard::<S, W, H>::FULL_BOARD_MASK & (me & !enemies)), x.1 | (Bitboard::<S, W, H>::FULL_BOARD_MASK & (enemies & !me)));
+        x = (x.0 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (me & !enemies)), x.1 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (enemies & !me)));
         if x == y {
             return x
         } else {
@@ -65,7 +65,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 
-pub fn eval<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>, ruleset: Ruleset) -> Score
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, ruleset: Ruleset) -> Score
 where [(); (W*H+127)/128]: Sized {
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
@@ -100,7 +100,7 @@ where [(); (W*H+127)/128]: Sized {
     score
 }
 
-pub fn eval_terminal<const S: usize, const W: usize, const H: usize>(board: &Bitboard<S, W, H>) -> Score
+pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+127)/128]: Sized {
     if board.snakes[0].is_dead() {
         return Score::MIN - board.snakes[0].health as Score

@@ -13,7 +13,7 @@ mod bitboard;
 mod minimax;
 mod api;
 mod move_gen;
-mod mcts;
+// mod mcts;
 mod eval;
 mod bitset;
 mod ttable;
@@ -40,7 +40,6 @@ fn main() {
       .finalize()
       .unwrap();
 
-    info!("Starting Battlesnake Server at http://{}:{}...", address, port);
     rocket::custom(config)
         .mount("/", routes![api::handle_index, api::handle_start, api::handle_move, api::handle_end])
         .launch();
