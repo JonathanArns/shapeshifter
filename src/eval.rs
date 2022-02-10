@@ -19,11 +19,15 @@ where [(); (W*H+127)/128]: Sized {
     let mut debug_counter = 0;
     let mut x = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
     let mut b = !board.bodies[0];
-    b.set_bit(board.snakes[0].tail as usize);
+    if board.ruleset != Ruleset::Constrictor && board.snakes[0].curled_bodyparts == 0 {
+        b.set_bit(board.snakes[0].tail as usize);
+    }
     for snake in &board.snakes[1..] {
         if snake.is_alive() {
             x.1.set_bit(snake.head as usize);
-            b.set_bit(snake.tail as usize);
+            if board.ruleset != Ruleset::Constrictor && snake.curled_bodyparts == 0 {
+                b.set_bit(snake.tail as usize);
+            }
         }
     }
     let mut y = x; // x at n-1
@@ -65,7 +69,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 
-pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, ruleset: Ruleset) -> Score
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+127)/128]: Sized {
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;

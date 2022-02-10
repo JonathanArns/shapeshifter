@@ -17,17 +17,17 @@ lazy_static! {
     };
 }
 
-pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game) -> (Move, Score, u8)
+pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
-        fixed_depth_search(board, g, *FIXED_DEPTH as u8)
+        fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
-        // iterative_deepening_search(board, g)
-        best_node_search(board, g)
+        iterative_deepening_search(board, deadline)
+        // best_node_search(board, g)
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game, depth: u8) -> (Move, Score, u8)
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now(); // only used to calculate nodes / second
@@ -38,7 +38,7 @@ where [(); (W*H+127)/128]: Sized {
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let (score, _) = alphabeta(board, g.ruleset, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
+        let (score, _) = alphabeta(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
         if score > best {
             best = score;
             best_move = *mv;
@@ -56,18 +56,16 @@ fn next_bns_guess(alpha: Score, beta: Score, subtree_count: usize) -> Score {
     // * (subtree_count as Score - 1) / subtree_count as Score
 }
 
-pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game) -> (Move, Score, u8)
+pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
     let mut best_depth = 1;
     let start_time = time::Instant::now();
-    let deadline = start_time + g.move_time / 2;
 
     let (stop_sender, stop_receiver) = unbounded();
     let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
 
-    let ruleset = g.ruleset;
     let board = board.clone();
     thread::spawn(move || {
         let mut node_counter = 0;
@@ -77,8 +75,10 @@ where [(); (W*H+127)/128]: Sized {
         let mut last_test = 0;
         'outer_loop: loop {
             let mut my_moves = allowed_moves(&board, board.snakes[0].head);
-            let mut alpha = Score::MIN+1;
-            let mut beta = Score::MAX;
+            // let mut alpha = Score::MIN+1;
+            // let mut beta = Score::MAX;
+            let mut alpha = -200;
+            let mut beta = 200;
             let best_move;
             loop {
                 let test = if last_test > alpha && last_test < beta {
@@ -88,7 +88,7 @@ where [(); (W*H+127)/128]: Sized {
                 };
                 let mut better_moves = ArrayVec::<Move, 4>::new();
                 for mv in &my_moves {
-                    if let Some((score, _)) = alphabeta(&board, ruleset, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
+                    if let Some((score, _)) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
                         if score >= test {
                             better_moves.push(*mv);
                             best_score = score;
@@ -134,18 +134,16 @@ where [(); (W*H+127)/128]: Sized {
     (best_move, best_score, best_depth)
 }
 
-pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, g: &mut Game) -> (Move, Score, u8)
+pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
     let mut best_depth = 1;
     let start_time = time::Instant::now();
-    let deadline = start_time + g.move_time / 2;
 
     let (stop_sender, stop_receiver) = unbounded();
     let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
 
-    let ruleset = g.ruleset;
     let board = board.clone();
     thread::spawn(move || {
         let mut node_counter = 0;
@@ -158,7 +156,7 @@ where [(); (W*H+127)/128]: Sized {
             let mut best = Score::MIN+1;
             let mut best_unused_depth = depth;
             for mv in &my_moves {
-                if let Some((score, unused_depth)) = alphabeta(&board, ruleset, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX) {
+                if let Some((score, unused_depth)) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX) {
                     if score > best || (score == best && unused_depth < best_unused_depth) {
                         best = score;
                         best_move = *mv;
@@ -196,7 +194,6 @@ where [(); (W*H+127)/128]: Sized {
 /// Returns None if it received a timeout from stop_receiver.
 pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
-    ruleset: Ruleset,
     node_counter: &mut u64,
     stop_receiver: &Receiver<u8>,
     mv: Move,
@@ -218,14 +215,14 @@ where [(); (W*H+127)/128]: Sized {  // min call
             let ibeta = beta;
             mvs[0] = mv;
             let mut child = board.clone();
-            child.apply_moves(&mvs, ruleset);
+            child.apply_moves(&mvs);
             *node_counter += 1;
 
             // search stops
             if child.is_terminal() {
                 ibest_score = eval_terminal(&child);
             } else if depth == 1 {
-                ibest_score = eval(&child, ruleset);
+                ibest_score = eval(&child);
             }
             // } else if let Some(entry) = ttable::get(&child) {
             //     if entry.get_depth() >= depth {
@@ -237,7 +234,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             if depth > 1 {
                 let mut next_enemy_moves = limited_move_combinations(&child, 1);
                 for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                    let (iscore, _) = alphabeta(&child, ruleset, node_counter, stop_receiver, mv, &mut next_enemy_moves, depth-1, alpha, beta)?;
+                    let (iscore, _) = alphabeta(&child, node_counter, stop_receiver, mv, &mut next_enemy_moves, depth-1, alpha, beta)?;
                     if iscore > ibeta {
                         ibest_score = iscore;
                         break;

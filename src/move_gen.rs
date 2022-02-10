@@ -10,9 +10,11 @@ where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
     let mut bodies = board.bodies[0];
-    for i in 0..S {
-        if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-            bodies.unset_bit(board.snakes[i].tail as usize)
+    if board.ruleset != Ruleset::Constrictor {
+        for i in 0..S {
+            if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
+                bodies.unset_bit(board.snakes[i].tail as usize)
+            }
         }
     }
 
@@ -55,9 +57,11 @@ where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Left;
     let mut bodies = board.bodies[0];
-    for i in 0..S {
-        if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-            bodies.unset_bit(board.snakes[i].tail as usize)
+    if board.ruleset != Ruleset::Constrictor {
+        for i in 0..S {
+            if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
+                bodies.unset_bit(board.snakes[i].tail as usize)
+            }
         }
     }
     if WRAP {
@@ -115,9 +119,11 @@ where [(); (W*H+127)/128]: Sized {
 pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
     let mut bodies = board.bodies[0];
-    for i in skip..S {
-        if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-            bodies.unset_bit(board.snakes[i].tail as usize);
+    if board.ruleset != Ruleset::Constrictor {
+        for i in skip..S {
+            if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
+                bodies.unset_bit(board.snakes[i].tail as usize);
+            }
         }
     }
 
@@ -298,7 +304,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state, Ruleset::Royale)
+        Bitboard::<4, 11, 11, true>::from_gamestate(state)
     }
 
     #[bench]
@@ -308,9 +314,4 @@ mod tests {
             limited_move_combinations(&board, 1)
         });
     }
-
-    // #[bench]
-    // fn perft(b: &mut Bencher) {
-    //     let board = create_board();
-    // }
 }

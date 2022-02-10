@@ -38,6 +38,8 @@ where [(); (W*H+127)/128]: Sized {
     pub snakes: [Snake; S],
     pub food: Bitset<{W*H}>,
     pub hazards: Bitset<{W*H}>,
+    pub ruleset: Ruleset,
+    pub hazard_dmg: i8,
 }
 
 // TODO: missing logic for WRAP
@@ -58,11 +60,26 @@ where [(); (W*H+127)/128]: Sized {
             snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; S],
             food: Bitset::new(),
             hazards: Bitset::new(),
+            hazard_dmg: 0,
+            ruleset: Ruleset::Standard,
         }
     }
 
-    pub fn from_gamestate(state: GameState, ruleset: Ruleset) -> Self {
+    pub fn from_gamestate(state: GameState) -> Self {
+        let ruleset = match state.game.ruleset["name"].as_str() {
+            Some("wrapped") => Ruleset::Wrapped,
+            Some("royale") => Ruleset::Royale,
+            Some("constrictor") => Ruleset::Constrictor,
+            _ => Ruleset::Standard,
+        };
         let mut board = Self::new();
+        board.ruleset = ruleset;
+        board.hazard_dmg = if let Some(x) = state.game.ruleset["settings"]["hazardDamagePerTurn"].as_i64() {
+            // if let Some(y) = x.as_i64() { y as i8 } else { 14 }
+            x as i8
+        } else {
+            14
+        };
         for food in state.board.food {
             board.food.set_bit(W*food.y + food.x);
         }
@@ -172,7 +189,7 @@ where [(); (W*H+127)/128]: Sized {
         }
     }
 
-    pub fn apply_moves(&mut self, moves: &[Move; S], _ruleset: Ruleset) {
+    pub fn apply_moves(&mut self, moves: &[Move; S]) {
         let mut eaten = ArrayVec::<u16, S>::new();
         for i in 0..S {
             let snake = &mut self.snakes[i];
@@ -194,25 +211,27 @@ where [(); (W*H+127)/128]: Sized {
                 snake.head = (snake.head as i16 + mv.to_index(W)) as u16;
             }
             // move old tail if necessary
-            if snake.curled_bodyparts == 0 {
-                let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
-                let tail_move_int = (self.bodies[1] & tail_mask).any() as u8 | ((self.bodies[2] & tail_mask).any() as u8) << 1;
-                snake.tail = if WRAP {
-                    snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
+            if self.ruleset != Ruleset::Constrictor {
+                if snake.curled_bodyparts == 0 {
+                    let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
+                    let tail_move_int = (self.bodies[1] & tail_mask).any() as u8 | ((self.bodies[2] & tail_mask).any() as u8) << 1;
+                    snake.tail = if WRAP {
+                        snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
+                    } else {
+                            snake.tail as i16 + Move::int_to_index(tail_move_int, W)
+                        } as u16;
+                    tail_mask = !tail_mask;
+                    self.bodies[0] &= tail_mask;
+                    self.bodies[1] &= tail_mask;
+                    self.bodies[2] &= tail_mask;
                 } else {
-                    snake.tail as i16 + Move::int_to_index(tail_move_int, W)
-                } as u16;
-                tail_mask = !tail_mask;
-                self.bodies[0] &= tail_mask;
-                self.bodies[1] &= tail_mask;
-                self.bodies[2] &= tail_mask;
-            } else {
-                snake.curled_bodyparts -= 1;
+                    snake.curled_bodyparts -= 1;
+                }
             }
 
             // reduce health
             let is_on_hazard = self.hazards.get_bit(snake.head as usize) as i8;
-            snake.health -= 1 + 15 * is_on_hazard;
+            snake.health -= 1 + self.hazard_dmg * is_on_hazard;
 
             // feed snake
             let is_on_food = self.food.get_bit(snake.head as usize);
@@ -545,7 +564,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state, Ruleset::Wrapped)
+        Bitboard::<4, 11, 11, true>::from_gamestate(state)
     }
     
     #[bench]
@@ -553,7 +572,7 @@ mod tests {
         let mut board = create_board();
         b.iter(|| {
             let moves = move_gen::limited_move_combinations(&board, 0);
-            board.apply_moves(&moves[0], Ruleset::Wrapped)
+            board.apply_moves(&moves[0])
         })
     }
 
