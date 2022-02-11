@@ -7,6 +7,7 @@ use std::time;
 use crate::types;
 use crate::bitboard;
 use crate::minimax;
+use crate::ttable;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Game {
@@ -66,9 +67,7 @@ pub fn handle_index() -> JsonValue {
 
 #[post("/start", format = "json", data = "<_req>")]
 pub fn handle_start(_req: Json<GameState>) -> Status {
-    // unsafe {
-    //     crate::eval::WEIGHTS = serde_json::from_str(&std::fs::read_to_string("weights.json").unwrap()).unwrap();
-    // }
+    // ttable::init_clean();
     Status::Ok
 }
 

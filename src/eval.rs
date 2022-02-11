@@ -104,11 +104,17 @@ where [(); (W*H+127)/128]: Sized {
     score
 }
 
-pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> Score
 where [(); (W*H+127)/128]: Sized {
     if board.snakes[0].is_dead() {
-        return Score::MIN - board.snakes[0].health as Score
+        for snake in board.snakes[1..].iter() {
+            if snake.is_alive() {
+                return Score::MIN + depth as i16
+            }
+        }
+        return 0
+        // return Score::MIN - board.snakes[0].health as Score
     } else {
-        return Score::MAX
+        return Score::MAX - depth as i16
     }
 }

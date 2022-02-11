@@ -39,7 +39,7 @@ where [(); (W*H+127)/128]: Sized {
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let (score, _) = alphabeta(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
+        let score = alphabeta(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, 0, Score::MIN+1, Score::MAX).unwrap();
         if score > best {
             best = score;
             best_move = *mv;
@@ -92,7 +92,7 @@ where [(); (W*H+127)/128]: Sized {
                 let test = next_bns_guess(last_test, alpha, beta, my_moves.len());
                 let mut better_moves = ArrayVec::<Move, 4>::new();
                 for mv in &my_moves {
-                    if let Some((score, _)) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
+                    if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, 0, test-1, test) {
                         // println!("test: {}, score: {}, move: {:?}, alpha: {}, beta: {}", test, score, *mv, alpha, beta);
                         if score >= test {
                             better_moves.push(*mv);
@@ -115,7 +115,7 @@ where [(); (W*H+127)/128]: Sized {
                 }
             }
             result_sender.try_send((best_move, best_score, depth)).ok();
-            if best_score == Score::MAX || best_score < Score::MIN+5 || depth == u8::MAX {
+            if best_score > Score::MAX-20 || best_score < Score::MIN+20 || depth == u8::MAX {
                 break // Our last best move resulted in a terminal state, so we don't need to search deeper
             }
             depth += 1;
@@ -161,13 +161,11 @@ where [(); (W*H+127)/128]: Sized {
         let my_moves = allowed_moves(&board, board.snakes[0].head);
         'outer_loop: loop {
             let mut best = Score::MIN+1;
-            let mut best_unused_depth = depth;
             for mv in &my_moves {
-                if let Some((score, unused_depth)) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX) {
-                    if score > best || (score == best && unused_depth > best_unused_depth) {
+                if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, 0, Score::MIN+1, Score::MAX) {
+                    if score > best {
                         best = score;
                         best_move = *mv;
-                        best_unused_depth = unused_depth;
                     }
                 } else {
                     break 'outer_loop
@@ -208,9 +206,10 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     depth: u8,
-    alpha: Score,
+    depth_searched: u8,
+    mut alpha: Score,
     mut beta: Score
-) -> Option<(Score, u8)>
+) -> Option<Score>
 where [(); (W*H+127)/128]: Sized {  // min call
     if let Ok(_) = stop_receiver.try_recv() {
         return None
@@ -219,11 +218,15 @@ where [(); (W*H+127)/128]: Sized {  // min call
     // if let Some(entry) = tt_entry {
     //     if entry.get_depth() >= depth {
     //         let tt_score = entry.get_score();
-    //         if entry.is_exact() || entry.is_lower_bound() && tt_score < alpha {
-    //             return Some((tt_score, depth))
+    //         if entry.is_exact() {
+    //             return Some(tt_score)
+    //         } else if entry.is_lower_bound() {
+    //             alpha = alpha.max(tt_score);
+    //         } else if entry.is_upper_bound() && tt_score < beta {
+    //             beta = beta.min(tt_score);
     //         }
-    //         if entry.is_upper_bound() && tt_score < beta {
-    //             beta = tt_score;
+    //         if alpha >= beta {
+    //             return Some(tt_score);
     //         }
     //     }
     // }
@@ -234,7 +237,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
     for mvs in enemy_moves { // TODO: apply move ordering
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
-            let ibeta = beta;
+            let mut ibeta = beta;
             let mut ibest_score = Score::MIN;
             let mut ibest_move = Move::Up;
             mvs[0] = mv;
@@ -244,7 +247,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
 
             // search stops
             if child.is_terminal() {
-                break 'max_call eval_terminal(&child);
+                break 'max_call eval_terminal(&child, depth_searched);
             } else if depth == 1 {
                 // TODO: insert into TT and move TT check to before?
                 break 'max_call eval(&child);
@@ -254,19 +257,26 @@ where [(); (W*H+127)/128]: Sized {  // min call
             // if let Some(entry) = itt_entry {
             //     if entry.get_depth() >= depth {
             //         let tt_score = entry.get_score();
-            //         if entry.is_exact() || entry.is_upper_bound() && tt_score > ibeta {
+            //         if entry.is_exact() {
             //             break 'max_call tt_score;
+            //         } else if entry.is_lower_bound() {
+            //             ialpha = ialpha.max(tt_score);
+            //         } else if entry.is_upper_bound() && tt_score < beta {
+            //             ibeta = ibeta.min(tt_score);
             //         }
-            //         if entry.is_lower_bound() && tt_score > ialpha {
-            //             ialpha = tt_score;
+            //         if alpha >= beta {
+            //             return Some(tt_score);
             //         }
             //     }
+            //     // if let Some(mv) = entry.get_best_moves::<1>() {
+            //     //     let my_mv = mv[0];
+            //     // }
             // }
 
             // continue search
             let mut next_enemy_moves = limited_move_combinations(&child, 1);
             for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                let (iscore, _) = alphabeta(&child, node_counter, stop_receiver, mv, &mut next_enemy_moves, depth-1, alpha, beta)?;
+                let iscore = alphabeta(&child, node_counter, stop_receiver, mv, &mut next_enemy_moves, depth-1, depth_searched+1, alpha, beta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
                     ibest_move = mv;
@@ -280,7 +290,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
                     }
                 }
             }
-            ttable::insert(board, ibest_score, ibest_score < ialpha, ibest_score > ibeta, depth, [ibest_move; S]);
+            // ttable::insert(board, ibest_score, ibest_score >= ibeta, ibest_score <= ialpha, depth, [ibest_move; 1]);
             ibest_score
         };
         if score < alpha {
@@ -296,8 +306,8 @@ where [(); (W*H+127)/128]: Sized {  // min call
             }
         }
     }
-    // ttable::insert(&(board, mv), best_score, best_score < alpha, best_score > beta, depth, best_moves); // TODO: is &board hashed like I expect?
-    Some((best_score, depth))
+    // ttable::insert(&(board, mv), best_score, best_score >= beta, best_score <= alpha, depth, best_moves); // TODO: is &board hashed like I expect?
+    Some(best_score)
 }
 
 fn order_enemy_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, moves: &mut Vec<[Move; S]>)

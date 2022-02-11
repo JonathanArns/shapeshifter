@@ -3,37 +3,24 @@ use crate::types::*;
 use std::hash::{Hash, Hasher};
 use fxhash::FxHasher64;
 
-const TT_LENGTH: usize = 10000000;
+const TT_LENGTH: usize = 100000000;
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.
 static mut TABLE: Option<Vec<Entry>> = None;
 
-// The debug table holds a hash value for each entry that was computed using a different
-// hash function. This is used to detect key collisions in debug mode.
-#[cfg(feature = "detect_hash_collisions")]
-static mut DEBUG_TABLE: Option<Vec<u64>> = None;
+// /// The lock is only used when clearing the TT
+// static mut LOCK: Option<std::sync::RwLock<usize>> = None;
 
-/// Initializes the transposition table.
-/// Should be called at startup.
-pub fn init() {
-    unsafe {
-        if let None = TABLE {
-            TABLE = Some(vec![Entry{data: 0, key: 0}; TT_LENGTH]);
-        }
-
-        #[cfg(feature = "detect_hash_collisions")]
-        if let None = DEBUG_TABLE {
-            DEBUG_TABLE = Some(vec![0; TT_LENGTH]);
-        }
-    }
-    println!("TTable initialized");
-}
-
-pub fn clear() {
+/// Initializes an empty transposition table.
+pub fn init_clean() {
     unsafe {
         TABLE = Some(vec![Entry{data: 0, key: 0}; TT_LENGTH]);
+        // if let Some(table) = &mut TABLE {
+        //     table.clear();
+        // }
     }
+    println!("TTable cleared")
 }
 
 /// Get an entry from the transposition table
@@ -41,23 +28,10 @@ pub fn get(board: &impl Hash) -> Option<Entry> {
     let key = hash(board);
     let index = key % TT_LENGTH as u64;
 
-
     unsafe {
         if let Some(table) = &TABLE {
             let entry = table[index as usize];
             if entry.matches_key(key) {
-
-                #[cfg(feature = "detect_hash_collisions")]
-                {
-                    let debug_hash_val = debug_hash(board);
-                    if let Some(table) = &DEBUG_TABLE {
-                        let debug_val = table[index as usize];
-                        if debug_val != debug_hash_val {
-                            println!("TT KEY COLLISION DETECTED!");
-                        }
-                    }
-                }
-
                 return Some(entry)
             }
         }
@@ -81,25 +55,11 @@ pub fn insert<const S: usize>(
             table[index as usize] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
         }
     }
-
-    #[cfg(feature = "detect_hash_collisions")]
-    unsafe {
-        if let Some(table) = &mut DEBUG_TABLE {
-            table[index as usize] = debug_hash(board);
-        }
-    }
 }
 
 /// The hash function that is used for the transposition table
 fn hash(board: &impl Hash) -> u64 {
     let mut hasher = FxHasher64::default();
-    board.hash(&mut hasher);
-    hasher.finish()
-}
-
-/// The hash function that is used for the debug table
-fn debug_hash(board: &impl Hash) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::default();
     board.hash(&mut hasher);
     hasher.finish()
 }
