@@ -5,9 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# [features]
-# default = ["mcts"]
-# mcts = []
+[features]
+detect_hash_collisions = []
+spl = []
 
 [dependencies]
 rocket = { version = "0.4.10", default-features = false }
