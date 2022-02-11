@@ -3,7 +3,7 @@ use rocket_contrib::json::JsonValue;
 pub type Score = i16;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Move {
     Up = 0,
     Down = 1,
