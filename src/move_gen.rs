@@ -223,12 +223,8 @@ where [(); (W*H+127)/128]: Sized {
 
 pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, rng: &mut impl Rng) -> [Move; S]
 where [(); (W*H+127)/128]: Sized {
-    let mut moves = [Move::Up; S];
-    for i in 0..S {
-        let snake_moves = allowed_moves(board, board.snakes[i].head);
-        moves[i] = snake_moves[rng.gen_range(0..snake_moves.len())];
-    }
-    moves
+    let moves = limited_move_combinations(board, 0);
+    moves[rng.gen_range(0..moves.len())]
 }
 
 #[cfg(test)]
