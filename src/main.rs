@@ -13,17 +13,17 @@ mod bitboard;
 mod minimax;
 mod api;
 mod move_gen;
-// mod mcts;
+mod mcts;
+mod uct;
 mod eval;
 mod bitset;
 mod ttable;
 
-use log::info;
 use rocket::config::{Config, Environment};
 use std::env;
 
 fn main() {
-    // ttable::init_clean();
+    // ttable::init();
     let address = "0.0.0.0";
     let env_port = env::var("PORT").ok();
     let env_port = env_port

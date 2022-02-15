@@ -1,36 +1,63 @@
 use crate::types::*;
 
 use std::hash::{Hash, Hasher};
+use std::sync::Mutex;
 use fxhash::FxHasher64;
 
-const TT_LENGTH: usize = 100000000;
+const TT_LENGTH: usize = 0x_1000000;
+const TT_MASK: u64 = 0x_ffffff;
+const MAX_SIMUL_GAMES: usize = 10;
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.
-static mut TABLE: Option<Vec<Entry>> = None;
+static mut TABLES: Option<Vec<Vec<Entry>>> = None;
 
-// /// The lock is only used when clearing the TT
-// static mut LOCK: Option<std::sync::RwLock<usize>> = None;
+/// The Pair holds the next tt_id to give out and a list of game IDs.
+/// The index of a game ID is the tt_id of that game.
+static mut GAME_IDS: Option<Mutex<(u8, Vec<String>)>> = None;
 
 /// Initializes an empty transposition table.
-pub fn init_clean() {
+pub fn init() {
     unsafe {
-        TABLE = Some(vec![Entry{data: 0, key: 0}; TT_LENGTH]);
-        // if let Some(table) = &mut TABLE {
-        //     table.clear();
-        // }
+        if let None = TABLES {
+            TABLES = Some(vec![vec![Entry{data: 0, key: 0}; TT_LENGTH]; MAX_SIMUL_GAMES]);
+        }
+        if let None = GAME_IDS {
+            GAME_IDS = Some(Mutex::new((0, vec!["".to_string(); MAX_SIMUL_GAMES])));
+        }
     }
-    println!("TTable cleared")
+    println!("TTables initialized")
+}
+
+pub fn get_tt_id(game_id: String) -> u8 {
+    unsafe {
+        if let Some(tmp) = &mut GAME_IDS {
+            let mut game_ids = tmp.lock().unwrap();
+            for (i, id) in &mut game_ids.1.iter().enumerate() {
+                if *id == game_id {
+                    return i as u8;
+                }
+            }
+            let tt_id = game_ids.0;
+            game_ids.1[tt_id as usize] = game_id;
+            game_ids.0 += 1;
+            game_ids.0 %= MAX_SIMUL_GAMES as u8;
+            if let Some(tables) = &mut TABLES {
+                tables[tt_id as usize] = vec![Entry{data: 0, key: 0}; TT_LENGTH];
+            }
+            tt_id
+        } else {
+            panic!("TTable not initialized")
+        }
+    }
 }
 
 /// Get an entry from the transposition table
-pub fn get(board: &impl Hash) -> Option<Entry> {
-    let key = hash(board);
-    let index = key % TT_LENGTH as u64;
-
+pub fn get(key: u64, tt_id: u8) -> Option<Entry> {
+    let index = key & TT_MASK;
     unsafe {
-        if let Some(table) = &TABLE {
-            let entry = table[index as usize];
+        if let Some(tables) = &TABLES {
+            let entry = tables[tt_id as usize][index as usize];
             if entry.matches_key(key) {
                 return Some(entry)
             }
@@ -41,24 +68,24 @@ pub fn get(board: &impl Hash) -> Option<Entry> {
 
 /// Insert an entry into the transposition table
 pub fn insert<const S: usize>(
-    board: &impl Hash,
+    key: u64,
+    tt_id: u8,
     score: Score,
     is_lower_bound: bool,
     is_upper_bound: bool,
     depth: u8,
     best_moves: [Move; S]
 ) {
-    let key = hash(board);
-    let index = key % TT_LENGTH as u64;
+    let index = key & TT_MASK;
     unsafe {
-        if let Some(table) = &mut TABLE {
-            table[index as usize] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
+        if let Some(tables) = &mut TABLES {
+            tables[tt_id as usize][index as usize] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
         }
     }
 }
 
 /// The hash function that is used for the transposition table
-fn hash(board: &impl Hash) -> u64 {
+pub fn hash(board: &impl Hash) -> u64 {
     let mut hasher = FxHasher64::default();
     board.hash(&mut hasher);
     hasher.finish()

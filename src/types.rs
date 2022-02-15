@@ -84,13 +84,8 @@ pub enum Ruleset {
     Standard,
     Royale,
     Wrapped,
-    Constrictor, // currently unsupported
-}
-
-pub struct Game {
-    pub move_time: std::time::Duration,
-    pub ruleset: Ruleset,
-    pub hazard_damage: i8,
+    WrappedSpiral,
+    Constrictor,
 }
 
 #[cfg(test)]

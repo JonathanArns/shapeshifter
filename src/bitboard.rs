@@ -1,6 +1,7 @@
 use crate::types::*;
 use crate::api::GameState;
 use crate::bitset::Bitset;
+// use crate::ttable;
 
 use arrayvec::ArrayVec;
 
@@ -40,6 +41,8 @@ where [(); (W*H+127)/128]: Sized {
     pub hazards: Bitset<{W*H}>,
     pub ruleset: Ruleset,
     pub hazard_dmg: i8,
+    // pub tt_id: u8,
+    pub turn: u16,
 }
 
 // TODO: missing logic for WRAP
@@ -60,8 +63,10 @@ where [(); (W*H+127)/128]: Sized {
             snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; S],
             food: Bitset::new(),
             hazards: Bitset::new(),
-            hazard_dmg: 0,
+            hazard_dmg: 14,
             ruleset: Ruleset::Standard,
+            // tt_id: 0,
+            turn: 0,
         }
     }
 
@@ -73,13 +78,17 @@ where [(); (W*H+127)/128]: Sized {
             _ => Ruleset::Standard,
         };
         let mut board = Self::new();
+        // board.tt_id = ttable::get_tt_id(state.game.id);
         board.ruleset = ruleset;
-        board.hazard_dmg = if let Some(x) = state.game.ruleset["settings"]["hazardDamagePerTurn"].as_i64() {
-            // if let Some(y) = x.as_i64() { y as i8 } else { 14 }
-            x as i8
-        } else {
-            14
-        };
+        board.turn = state.turn as u16;
+        if let Some(settings) = state.game.ruleset.get("settings") {
+            board.hazard_dmg = if let Some(x) = settings["hazardDamagePerTurn"].as_i64() {
+                // if let Some(y) = x.as_i64() { y as i8 } else { 14 }
+                x as i8
+            } else {
+                14
+            };
+        }
         for food in state.board.food {
             board.food.set_bit(W*food.y + food.x);
         }
@@ -190,6 +199,7 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     pub fn apply_moves(&mut self, moves: &[Move; S]) {
+        self.turn += 1;
         let mut eaten = ArrayVec::<u16, S>::new();
         for i in 0..S {
             let snake = &mut self.snakes[i];
@@ -300,6 +310,11 @@ where [(); (W*H+127)/128]: Sized {
         for food in eaten {
             self.food.unset_bit(food as usize);
         }
+
+        // expand hazard spiral if relevant
+        // if self.ruleset == Ruleset::WrappedSpiral && self.turn > 3 && self.turn % 3 == 0 {
+
+        // }
     }
 
     pub fn remove_snake_body(&mut self, snake_index: usize) {
