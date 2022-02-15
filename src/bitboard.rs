@@ -419,7 +419,7 @@ where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
             result[pos][1] = Some(move_to as u16);
             
             // right
-            let move_to = (pos + 1) % (W*H);
+            let move_to = if pos % W == W-1 { pos - (W-1) } else { pos + 1};
             result[pos][2] = Some(move_to as u16);
             
             // left
