@@ -46,6 +46,7 @@ where [(); (W*H+127)/128]: Sized {
             best_score = best;
         }
     }
+    println!("Move: {:?}, Score: {}", best_move, best_score);
     println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
     (best_move, best_score, depth)
 }

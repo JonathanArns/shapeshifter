@@ -1,6 +1,5 @@
 use crate::types::*;
 use crate::bitboard::*;
-use crate::bitset::Bitset;
 
 use arrayvec::ArrayVec;
 use rand::Rng;
@@ -9,14 +8,7 @@ pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP:
 where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
-    let mut bodies = board.bodies[0];
-    if board.ruleset != Ruleset::Constrictor {
-        for i in 0..S {
-            if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-                bodies.unset_bit(board.snakes[i].tail as usize)
-            }
-        }
-    }
+    let bodies = board.bodies_without_tails();
 
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][0] {
         some_legal_move = Move::Up;
@@ -56,14 +48,8 @@ pub fn slow_allowed_moves<const S: usize, const W: usize, const H: usize, const 
 where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Left;
-    let mut bodies = board.bodies[0];
-    if board.ruleset != Ruleset::Constrictor {
-        for i in 0..S {
-            if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-                bodies.unset_bit(board.snakes[i].tail as usize)
-            }
-        }
-    }
+    let bodies = board.bodies_without_tails();
+
     if WRAP {
         let move_to = (pos as usize + W) % (W*H);
         if !bodies.get_bit(move_to) {
@@ -118,14 +104,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Can skip the first n snakes, their moves will always be Up in the result.
 pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
-    let mut bodies = board.bodies[0];
-    if board.ruleset != Ruleset::Constrictor {
-        for i in skip..S {
-            if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
-                bodies.unset_bit(board.snakes[i].tail as usize);
-            }
-        }
-    }
+    let bodies = board.bodies_without_tails();
 
     // only generate enough move combinations so that every enemy move appears at least once
     let mut moves = ArrayVec::<[Move; S], 4>::new();

@@ -339,6 +339,18 @@ where [(); (W*H+127)/128]: Sized {
         }
     }
 
+    pub fn bodies_without_tails(&self) -> Bitset<{W*H}> {
+        let mut bodies = self.bodies[0];    
+        if self.ruleset != Ruleset::Constrictor {
+            for i in 0..S {
+                if self.snakes[i].is_alive() && self.snakes[i].curled_bodyparts == 0 {
+                    bodies.unset_bit(self.snakes[i].tail as usize)
+                }
+            }
+        }
+        bodies
+    }
+
     fn coord_string_from_index(&self, idx: u16) -> String {
         let x = idx % W as u16;
         let y = idx / W as u16;
