@@ -110,6 +110,7 @@ where [(); (W*H+127)/128]: Sized {
             board.snakes[n].tail = (W*snake.body[snake.body.len()-1].y) as u16 + snake.body[snake.body.len()-1].x as u16;
             let mut prev_pos = board.snakes[n].head;
             let mut pos;
+            board.bodies[0].set_bit(W*snake.head.y + snake.head.x);
             for bod in snake.body[1..].iter() {
                 pos = (W*bod.y + bod.x) as u16;
                 if pos == prev_pos {
@@ -210,8 +211,7 @@ where [(); (W*H+127)/128]: Sized {
             // move snake
             let mv = moves[i];
             let mv_int = mv.to_int();
-            // set new body part
-            self.bodies[0].set_bit(snake.head as usize);
+            // set direction of new body part
             self.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
             self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
@@ -291,8 +291,9 @@ where [(); (W*H+127)/128]: Sized {
             }
         }
 
-        // remove collided snakes
+        // remove collided snakes and mark new heads
         for i in 0..S {
+            // remove collided snakes
             if self.snakes[i].curled_bodyparts >= 100 {
                 if self.snakes[i].curled_bodyparts == 100 {
                     self.snakes[i].health = BODY_COLLISION;
@@ -303,6 +304,11 @@ where [(); (W*H+127)/128]: Sized {
                 }
                 self.snakes[i].curled_bodyparts = 0;
                 self.remove_snake_body(i);
+            } else if self.snakes[i].is_alive() {
+                // set snake heads in bodies
+                // we do this last, since it would break collision checks earlier, but we want this info
+                // for move gen on the new board, since moving into the current space of a head is illegal
+                self.bodies[0].set_bit(self.snakes[i].head as usize);
             }
         }
 
