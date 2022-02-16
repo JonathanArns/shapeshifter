@@ -83,7 +83,6 @@ where [(); (W*H+127)/128]: Sized {
         board.turn = state.turn as u16;
         if let Some(settings) = state.game.ruleset.get("settings") {
             board.hazard_dmg = if let Some(x) = settings["hazardDamagePerTurn"].as_i64() {
-                // if let Some(y) = x.as_i64() { y as i8 } else { 14 }
                 x as i8
             } else {
                 14
@@ -456,7 +455,7 @@ where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
             result[pos][2] = Some(move_to as u16);
             
             // left
-            let move_to = if 1 > pos { W*H - 1 } else { pos - 1 };
+            let move_to = if pos % W == 0 { pos + (W-1) } else { pos - 1 };
             result[pos][3] = Some(move_to as u16);
         } else {
             // up

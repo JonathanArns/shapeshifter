@@ -63,7 +63,7 @@ where [(); (W*H+127)/128]: Sized {
         if !bodies.get_bit(move_to) {
             moves.push(Move::Right);
         }
-        let move_to = if 1 > pos { W*H - 1 as usize } else { pos as usize - 1 };
+        let move_to = if pos as usize % W == 0 { pos as usize + (W-1) } else { pos as usize - 1 };
         if !bodies.get_bit(move_to) {
             moves.push(Move::Left);
         }
