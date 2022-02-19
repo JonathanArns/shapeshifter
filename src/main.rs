@@ -23,7 +23,9 @@ use rocket::config::{Config, Environment};
 use std::env;
 
 fn main() {
-    // ttable::init();
+    if cfg!(feature = "tt") {
+        ttable::init();
+    }
     let address = "0.0.0.0";
     let env_port = env::var("PORT").ok();
     let env_port = env_port

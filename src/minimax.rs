@@ -2,7 +2,7 @@ use crate::types::*;
 use crate::bitboard::*;
 use crate::move_gen::*;
 use crate::eval::*;
-// use crate::ttable;
+use crate::ttable;
 
 use std::env;
 use std::time;
@@ -205,40 +205,43 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     depth: u8,
-    alpha: Score,
+    mut alpha: Score,
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+127)/128]: Sized {  // min call
     if let Ok(_) = stop_receiver.try_recv() {
         return None
     }
-    // let tt_key = ttable::hash(&(board, mv));
-    // let tt_entry = ttable::get(tt_key, board.tt_id);
-    // if let Some(entry) = tt_entry {
-    //     if entry.get_depth() >= depth {
-    //         let tt_score = entry.get_score();
-    //         if entry.is_lower_bound() {
-    //             alpha = alpha.max(tt_score);
-    //         } else if entry.is_upper_bound() {
-    //             beta = beta.min(tt_score);
-    //         } else {
-    //             return Some(tt_score) // got exact score
-    //         }
-    //         if alpha >= beta {
-    //             return Some(tt_score);
-    //         }
-    //     }
-    // }
+    let tt_key = ttable::hash(&(board, mv));
+    let tt_entry = ttable::get(tt_key, board.tt_id);
+    let mut tt_move = None;
+    if let Some(entry) = tt_entry {
+        if entry.get_depth() >= depth {
+            let tt_score = entry.get_score();
+            if entry.is_lower_bound() {
+                alpha = alpha.max(tt_score);
+            } else if entry.is_upper_bound() {
+                beta = beta.min(tt_score);
+            } else {
+                return Some(tt_score) // got exact score
+            }
+            if alpha >= beta {
+                return Some(tt_score);
+            }
+        }
+        tt_move = entry.get_best_moves::<S>();
+    }
 
     // search
     let mut best_score = Score::MAX;
-    // let mut best_moves = [Move::Up; S];
-    for mvs in enemy_moves { // TODO: apply move ordering
+    let mut best_moves = [Move::Up; S];
+    for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
+    // for mvs in enemy_moves { // TODO: apply move ordering
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
-            let ibeta = beta;
+            let mut ibeta = beta;
             let mut ibest_score = Score::MIN;
-            // let mut ibest_move = Move::Up;
+            let mut ibest_move = Move::Up;
             mvs[0] = mv;
             let mut child = board.clone();
             child.apply_moves(&mvs);
@@ -252,61 +255,63 @@ where [(); (W*H+127)/128]: Sized {  // min call
                 break 'max_call eval(&child);
             }
             // check TT
-            // let itt_key = ttable::hash(&child);
-            // let itt_entry = ttable::get(itt_key, child.tt_id);
-            // if let Some(entry) = itt_entry {
-            //     if entry.get_depth() >= depth {
-            //         let tt_score = entry.get_score();
-            //         if entry.is_lower_bound() {
-            //             ialpha = ialpha.max(tt_score);
-            //         } else if entry.is_upper_bound() {
-            //             ibeta = ibeta.min(tt_score);
-            //         } else {
-            //             break 'max_call tt_score; // got exact score
-            //         }
-            //         if ialpha >= ibeta {
-            //             break 'max_call tt_score;
-            //         }
-            //     }
-            //     // if let Some(mv) = entry.get_best_moves::<1>() {
-            //     //     let my_mv = mv[0];
-            //     // }
-            // }
+            let itt_key = ttable::hash(&child);
+            let itt_entry = ttable::get(itt_key, child.tt_id);
+            let mut itt_move = None;
+            if let Some(entry) = itt_entry {
+                if entry.get_depth() >= depth {
+                    let tt_score = entry.get_score();
+                    if entry.is_lower_bound() {
+                        ialpha = ialpha.max(tt_score);
+                    } else if entry.is_upper_bound() {
+                        ibeta = ibeta.min(tt_score);
+                    } else {
+                        break 'max_call tt_score; // got exact score
+                    }
+                    if ialpha >= ibeta {
+                        break 'max_call tt_score;
+                    }
+                }
+                if let Some(x) = entry.get_best_moves::<1>() {
+                    itt_move = Some(x[0]);
+                }
+            }
 
             // continue search
             let mut next_enemy_moves = limited_move_combinations(&child, 1);
-            for mv in allowed_moves(&child, child.snakes[0].head) { // TODO: apply move ordering
-                let iscore = alphabeta(&child, node_counter, stop_receiver, mv, &mut next_enemy_moves, depth-1, alpha, beta)?;
+            for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
+            // for mv in &allowed_moves(&child, child.snakes[0].head) {
+                let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, alpha, beta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
-                    // ibest_move = mv;
+                    ibest_move = *mv;
                     break;
                 }
                 if iscore > ibest_score {
                     ibest_score = iscore;
-                    // ibest_move = mv;
+                    ibest_move = *mv;
                     if iscore > ialpha {
                         ialpha = iscore;
                     }
                 }
             }
-            // ttable::insert(itt_key, child.tt_id, ibest_score, ibest_score >= ibeta, ibest_score <= ialpha, depth, [ibest_move; 1]);
+            ttable::insert(itt_key, child.tt_id, ibest_score, ibest_score >= ibeta, ibest_score <= ialpha, depth, [ibest_move; 1]);
             ibest_score
         };
         if score < alpha {
             best_score = score;
-            // best_moves = *mvs;
+            best_moves = *mvs;
             break;
         }
         if score < best_score {
             best_score = score;
-            // best_moves = *mvs;
+            best_moves = *mvs;
             if score < beta {
                 beta = score;
             }
         }
     }
-    // ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
+    ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
     Some(best_score)
 }
 

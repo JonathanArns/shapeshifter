@@ -8,7 +8,6 @@ use crate::types;
 use crate::bitboard;
 use crate::minimax;
 use crate::uct;
-// use crate::ttable;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Game {
@@ -68,7 +67,11 @@ pub fn handle_index() -> JsonValue {
 
 #[post("/start", format = "json", data = "<_req>")]
 pub fn handle_start(_req: Json<GameState>) -> Status {
-    // ttable::init_clean();
+    Status::Ok
+}
+
+#[post("/end")]
+pub fn handle_end() -> Status {
     Status::Ok
 }
 
@@ -294,9 +297,4 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}", state.board.snakes.len(), state.board.width, state.board.height),
     };
     mv.to_json()
-}
-
-#[post("/end", format = "json", data = "<_req>")]
-pub fn handle_end(_req: Json<GameState>) -> Status {
-    Status::Ok
 }

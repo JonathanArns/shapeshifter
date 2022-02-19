@@ -1,7 +1,7 @@
 use crate::types::*;
 use crate::api::GameState;
 use crate::bitset::Bitset;
-// use crate::ttable;
+use crate::ttable;
 
 use arrayvec::ArrayVec;
 
@@ -41,7 +41,7 @@ where [(); (W*H+127)/128]: Sized {
     pub hazards: Bitset<{W*H}>,
     pub ruleset: Ruleset,
     pub hazard_dmg: i8,
-    // pub tt_id: u8,
+    pub tt_id: u8,
     pub turn: u16,
 }
 
@@ -65,7 +65,7 @@ where [(); (W*H+127)/128]: Sized {
             hazards: Bitset::new(),
             hazard_dmg: 14,
             ruleset: Ruleset::Standard,
-            // tt_id: 0,
+            tt_id: 0,
             turn: 0,
         }
     }
@@ -78,7 +78,7 @@ where [(); (W*H+127)/128]: Sized {
             _ => Ruleset::Standard,
         };
         let mut board = Self::new();
-        // board.tt_id = ttable::get_tt_id(state.game.id);
+        board.tt_id = ttable::get_tt_id(state.game.id);
         board.ruleset = ruleset;
         board.turn = state.turn as u16;
         if let Some(settings) = state.game.ruleset.get("settings") {
@@ -214,11 +214,8 @@ where [(); (W*H+127)/128]: Sized {
             self.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
             self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
-            if WRAP {
-                snake.head = (snake.head as i16 + mv.to_index_wrapping(W, H, snake.head)) as u16
-            } else {
-                snake.head = (snake.head as i16 + mv.to_index(W)) as u16;
-            }
+            snake.head = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
+
             // move old tail if necessary
             if self.ruleset != Ruleset::Constrictor {
                 if snake.curled_bodyparts == 0 {

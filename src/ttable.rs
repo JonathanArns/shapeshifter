@@ -4,8 +4,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use fxhash::FxHasher64;
 
-const TT_LENGTH: usize = 0x_1000000;
-const TT_MASK: u64 = 0x_ffffff;
+const TT_LENGTH: usize = 0x_100000;
+const TT_MASK: u64 =      0x_fffff;
 const MAX_SIMUL_GAMES: usize = 10;
 
 /// The transposition table of this battlesnake.
@@ -47,16 +47,16 @@ pub fn get_tt_id(game_id: String) -> u8 {
             }
             tt_id
         } else {
-            panic!("TTable not initialized")
+            0
         }
     }
 }
 
 /// Get an entry from the transposition table
 pub fn get(key: u64, tt_id: u8) -> Option<Entry> {
-    let index = key & TT_MASK;
     unsafe {
         if let Some(tables) = &TABLES {
+            let index = key & TT_MASK;
             let entry = tables[tt_id as usize][index as usize];
             if entry.matches_key(key) {
                 return Some(entry)
@@ -76,9 +76,9 @@ pub fn insert<const S: usize>(
     depth: u8,
     best_moves: [Move; S]
 ) {
-    let index = key & TT_MASK;
     unsafe {
         if let Some(tables) = &mut TABLES {
+            let index = key & TT_MASK;
             tables[tt_id as usize][index as usize] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
         }
     }
@@ -86,9 +86,14 @@ pub fn insert<const S: usize>(
 
 /// The hash function that is used for the transposition table
 pub fn hash(board: &impl Hash) -> u64 {
-    let mut hasher = FxHasher64::default();
-    board.hash(&mut hasher);
-    hasher.finish()
+    #[cfg(feature = "tt")]
+    {
+        let mut hasher = FxHasher64::default();
+        board.hash(&mut hasher);
+        hasher.finish()
+    }
+    #[cfg(not(feature = "tt"))]
+    0
 }
 
 /// A transposition table entry.
@@ -117,7 +122,7 @@ impl Entry {
         depth: u8,
         best_moves: [Move; S],
     ) -> Self {
-        let mut data = (score as u64) << Self::SCORE_SHIFT
+        let mut data = ((score as u16) as u64) << Self::SCORE_SHIFT // rust cast semantics are annoying here
             | (depth as u64) << Self::DEPTH_SHIFT
             | (is_lower_bound as u64) << Self::LOWER_BOUND_SHIFT
             | (is_upper_bound as u64) << Self::UPPER_BOUND_SHIFT;
@@ -128,11 +133,16 @@ impl Entry {
                 data |= (0b_11 & best_moves[i].to_int() as u64) << (Self::BEST_MOVES_SHIFT + i as u32 * Self::MOVE_WIDTH);
             }
         }
-        Entry{key: key ^ data, data}
+
+        let entry = Entry{key: key ^ data, data};
+
+        debug_assert!(best_moves == entry.get_best_moves::<S>().unwrap(), "IN {:?} OUT {:?}", best_moves, entry.get_best_moves::<S>().unwrap());
+
+        entry
     }
 
     /// Performs a correctnes check on this entry with a given key.
-    /// This is used instead of locking for concurrent access.
+    /// This is used instead of locking for mostly safe concurrent access.
     fn matches_key(&self, key: u64) -> bool {
         self.key != 0
         && self.data != 0
