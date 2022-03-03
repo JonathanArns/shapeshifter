@@ -158,11 +158,14 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     pub fn distance(&self, from: u16, to: u16) -> u16 {
-        if WRAP {
-            todo!("not implemented for wrapped boards")
-        }
         let w = W as u16;
-        ((from/w).max(to/w) - (from/w).min(to/w)) + ((from%w).max(to%w) - (from%w).min(to%w))
+        let dist_x = (from%w).max(to%w) - (from%w).min(to%w);
+        let dist_y = (from/w).max(to/w) - (from/w).min(to/w);
+        if WRAP {
+            dist_x.min(w - dist_x) + dist_y.min(H as u16 - dist_y)
+        } else {
+            dist_x + dist_y
+        }
     }
 
     pub fn is_in_direction(&self, from: u16, to: u16, mv: Move) -> bool {
