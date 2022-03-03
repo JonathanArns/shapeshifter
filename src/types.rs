@@ -1,4 +1,5 @@
 use rocket_contrib::json::JsonValue;
+use rand::Rng;
 
 pub type Score = i16;
 
@@ -76,6 +77,10 @@ impl Move {
                 w - 1
             }
         }
+    }
+
+    pub fn random() -> Self {
+        Move::from_int(rand::thread_rng().gen_range(0..4))
     }
 }
 

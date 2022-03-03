@@ -9,6 +9,7 @@ use std::time;
 use std::thread;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 use arrayvec::ArrayVec;
+use rand::seq::SliceRandom;
 
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
@@ -67,7 +68,7 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score, subtree_count: u
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
-    let mut best_move = Move::Up;
+    let mut best_move = Move::random();
     let mut best_score = Score::MIN+1;
     let mut best_depth = 1;
     let start_time = time::Instant::now();
@@ -77,6 +78,7 @@ where [(); (W*H+127)/128]: Sized {
 
     let board = board.clone();
     thread::spawn(move || {
+        let mut rng = rand::thread_rng();
         let mut node_counter = 0;
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut depth = 1;
@@ -84,6 +86,7 @@ where [(); (W*H+127)/128]: Sized {
         let mut last_test = 0;
         'outer_loop: loop {
             let mut my_moves = allowed_moves(&board, board.snakes[0].head);
+            my_moves.shuffle(&mut rng);
             let mut alpha = Score::MIN;
             let mut beta = Score::MAX;
             let best_move;
