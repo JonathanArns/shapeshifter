@@ -9,7 +9,7 @@ lazy_static! {
     static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-       [-10, 1, 3, 1, 3, 3, 10]
+       [-10, 1, 6, 1, 3, 3, 10]
     };
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
