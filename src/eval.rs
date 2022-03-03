@@ -69,7 +69,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 
-pub fn old_eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+127)/128]: Sized {
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
@@ -113,7 +113,7 @@ where [(); (W*H+127)/128]: Sized {
     score
 }
 
-pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+pub fn new_eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+127)/128]: Sized {
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
