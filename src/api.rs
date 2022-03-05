@@ -79,7 +79,7 @@ pub fn handle_end() -> Status {
 #[post("/move", format = "json", data = "<req>")]
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
-    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout - 150)).into());
+    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(150) - 150)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => types::Ruleset::Wrapped,
         Some("royale") => types::Ruleset::Royale,
@@ -215,7 +215,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
 #[post("/move", format = "json", data = "<req>")]
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
-    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout - 150)).into());
+    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(150) - 150)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => types::Ruleset::Wrapped,
         Some("royale") => types::Ruleset::Royale,
