@@ -284,7 +284,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             let mut next_enemy_moves = limited_move_combinations(&child, 1);
             for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
             // for mv in &allowed_moves(&child, child.snakes[0].head) {
-                let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, alpha, beta)?;
+                let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
                     ibest_move = *mv;
