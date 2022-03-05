@@ -93,6 +93,28 @@ where [(); (W*H+127)/128]: Sized {
     new
 }
 
+pub fn search_with_all_results<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> [f64; 4]
+where [(); (W*H+127)/128]: Sized {
+    let mut node_counter = 0;
+    let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
+    let root = Rc::new(RefCell::new(Node::<S, W, H, WRAP>::new(board.clone(), 0, None, true)));
+    while time::Instant::now() < deadline {
+        once(Rc::clone(&root), &mut rng, &mut node_counter);
+    }
+    let moves = if let Moves::Me(mvs) = &root.borrow().moves {
+        mvs.clone()
+    } else {
+        panic!("search root does not have me moves");
+    };
+    let mut results = [0.0; 4];
+    for (i, child) in root.borrow().children.iter().enumerate() {
+        if let Some(node) = child {
+            results[moves[i].to_int() as usize] = node.borrow().wins as f64 / node.borrow().visits as f64;
+        }
+    }
+    results
+}
+
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, f64)
 where [(); (W*H+127)/128]: Sized {
     let mut node_counter = 0;

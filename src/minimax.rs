@@ -3,6 +3,7 @@ use crate::bitboard::*;
 use crate::move_gen::*;
 use crate::eval::*;
 use crate::ttable;
+use crate::uct;
 
 use std::env;
 use std::time;
@@ -76,6 +77,8 @@ where [(); (W*H+127)/128]: Sized {
     let (stop_sender, stop_receiver) = unbounded();
     let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
 
+    let mcts_results = uct::search_with_all_results(board, time::Instant::now() + time::Duration::from_millis(50));
+
     let board = board.clone();
     thread::spawn(move || {
         let mut rng = rand::thread_rng();
@@ -94,7 +97,14 @@ where [(); (W*H+127)/128]: Sized {
                 let test = next_bns_guess(last_test, alpha, beta, my_moves.len());
                 let mut better_moves = ArrayVec::<Move, 4>::new();
                 for mv in &my_moves {
-                    if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
+
+                    // this line basically adds the mcts result to the search score as a feature
+                    let mut inner_test = test;
+                    if test > Score::MIN + 10 {
+                        inner_test = test.max(Score::MIN + 10) - (mcts_results[mv.to_int() as usize] * 10.0).floor() as Score;
+                    }
+
+                    if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, inner_test-1, inner_test) {
                         // println!("test: {}, score: {}, move: {:?}, alpha: {}, beta: {}", test, score, *mv, alpha, beta);
                         if score >= test {
                             better_moves.push(*mv);
