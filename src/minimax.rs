@@ -11,12 +11,24 @@ use crossbeam_channel::{unbounded, Sender, Receiver};
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
 
+struct MPCParams {
+    d: u8, // shallow search depth
+    t: f64, // cut threshold
+    a: f64, // slope
+    b: f64, // offset
+    sigma: f64, // standard deviation
+}
+
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
         var.parse().unwrap()
     } else {
         -1
     };
+
+    static ref MPC: [MPCParams; 1] = [
+        MPCParams{ d: 2, t: 1.5, a: 1.0, b: 1.0, sigma: 0.05 },
+    ];
 }
 
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
@@ -239,7 +251,6 @@ where [(); (W*H+127)/128]: Sized {  // min call
     let mut best_score = Score::MAX;
     let mut best_moves = [Move::Up; S];
     for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
-    // for mvs in enemy_moves { // TODO: apply move ordering
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
             let mut ibeta = beta;
@@ -282,8 +293,45 @@ where [(); (W*H+127)/128]: Sized {  // min call
 
             // continue search
             let mut next_enemy_moves = limited_move_combinations(&child, 1);
-            for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
-            // for mv in &allowed_moves(&child, child.snakes[0].head) {
+            let my_moves = allowed_moves(&child, child.snakes[0].head);
+
+
+            // // ProbCut Heuristic
+            // if depth == 6 {
+            //     let mpc = &MPC[0];
+            //     let bound = ((mpc.t * mpc.sigma + beta as f64 - mpc.b) / mpc.a).floor() as Score;
+            //     for mv in &my_moves {
+            //         if alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, mpc.d, bound-1, bound)? >= bound {
+            //             break 'max_call ibeta;
+            //         }
+            //     }
+            //     let bound = ((-mpc.t * mpc.sigma + alpha as f64 - mpc.b) / mpc.a).floor() as Score;
+            //     for mv in &my_moves {
+            //         if alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, mpc.d, bound, bound+1)? <= bound {
+            //             break 'max_call ialpha;
+            //         }
+            //     }
+            // }
+
+
+            // normal search
+            for mv in itt_move.iter().chain(my_moves.iter()) { // TODO: apply move ordering
+
+
+                // // probcut heuristic
+                // if depth == 7 {
+                //     let mpc = &MPC[0];
+                //     let bound = ((mpc.t * mpc.sigma + beta as f64 - mpc.b) / mpc.a).floor() as Score;
+                //     if alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, mpc.d, bound-1, bound)? >= bound {
+                //         break 'max_call ibeta;
+                //     }
+                //     let bound = ((-mpc.t * mpc.sigma + alpha as f64 - mpc.b) / mpc.a).floor() as Score;
+                //     if alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, mpc.d, bound, bound+1)? <= bound {
+                //         break 'max_call ialpha;
+                //     }
+                // }
+
+
                 let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
