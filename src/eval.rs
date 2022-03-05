@@ -113,63 +113,6 @@ where [(); (W*H+127)/128]: Sized {
     score
 }
 
-pub fn new_eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
-where [(); (W*H+127)/128]: Sized {
-    let mut enemies_alive = 0;
-    let mut lowest_enemy_health = 100;
-    let mut largest_enemy_length = 0;
-    let mut tail_mask = Bitset::<{W*H}>::with_bit_set(board.snakes[0].tail as usize);
-
-    for i in 1..S {
-        if board.snakes[i].is_alive() {
-            enemies_alive += 1;
-            tail_mask.set_bit(board.snakes[i].tail as usize);
-            let len = board.snakes[i].length;
-            if len > largest_enemy_length {
-                largest_enemy_length = len;
-            }
-            if board.snakes[i].health < lowest_enemy_health {
-                lowest_enemy_health = board.snakes[i].health;
-            }
-        }
-    }
-    let (my_area, enemy_area) = area_control(board);
-
-    // let mut score: Score = 0;
-    // // number of enemies alive
-    // score += WEIGHTS[0] * enemies_alive as Score;
-    // // difference in health to lowest enemy
-    // score += WEIGHTS[1] * board.snakes[0].health as Score - lowest_enemy_health as Score;
-    // // difference in length to longest enemy
-    // score += WEIGHTS[2] * board.snakes[0].length as Score - largest_enemy_length as Score;
-    // // difference in controlled non-hazard area
-    // score += WEIGHTS[3] * (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score;
-    // // difference in controlled food
-    // score += WEIGHTS[4] * (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
-    // // difference in controlled tails
-    // score += WEIGHTS[5] * (my_area & tail_mask).count_ones() as Score - (enemy_area & tail_mask).count_ones() as Score;
-
-    let my_area_count = my_area.count_ones();
-    let enemy_area_count = enemy_area.count_ones();
-
-    // raw area control
-    let raw_area_control = my_area_count as f64 / (my_area_count + enemy_area_count) as f64;
-    // my health
-    let my_health_score = board.snakes[0].health as f64 / 100_f64;
-    // // enemy health
-    // let enemy_health_score = 1.0 + (100 - lowest_enemy_health) as f64 / 1000_f64;
-    // food control
-    let food_control = 1.0 + ((my_area & board.food).count_ones() as f64 / (board.food.count_ones() + 1) as f64);
-    // size difference
-    let size_difference = (1.0 + ((board.snakes[0].length as f64 - largest_enemy_length as f64) / board.snakes[0].length.max(largest_enemy_length) as f64)).powi(2);
-
-    let score = 1000.0 * raw_area_control * my_health_score /* * enemy_health_score */ * food_control * size_difference;
-
-    debug_assert!(score < 10000.0, "Score way too big: {}, {} {} {} {}", score, raw_area_control, my_health_score, /* enemy_health_score, */ food_control, size_difference);
-
-    score as Score
-}
-
 pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+127)/128]: Sized {
     if board.snakes[0].is_dead() {
