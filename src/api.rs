@@ -79,7 +79,7 @@ pub fn handle_end() -> Status {
 #[post("/move", format = "json", data = "<req>")]
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
-    let deadline = time::Instant::now() + time::Duration::from_millis((state.game.timeout / 2).into());
+    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout - 150)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => types::Ruleset::Wrapped,
         Some("royale") => types::Ruleset::Royale,
@@ -107,11 +107,19 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (2, 7, 7, true) => uct::search(&bitboard::Bitboard::<2, 7, 7, true>::from_gamestate(state), deadline),
         (3, 7, 7, true) => uct::search(&bitboard::Bitboard::<3, 7, 7, true>::from_gamestate(state), deadline),
         (4, 7, 7, true) => uct::search(&bitboard::Bitboard::<4, 7, 7, true>::from_gamestate(state), deadline),
+        (5, 7, 7, true) => uct::search(&bitboard::Bitboard::<5, 7, 7, true>::from_gamestate(state), deadline),
+        (6, 7, 7, true) => uct::search(&bitboard::Bitboard::<6, 7, 7, true>::from_gamestate(state), deadline),
+        (7, 7, 7, true) => uct::search(&bitboard::Bitboard::<7, 7, 7, true>::from_gamestate(state), deadline),
+        (8, 7, 7, true) => uct::search(&bitboard::Bitboard::<8, 7, 7, true>::from_gamestate(state), deadline),
 
         (1, 7, 7, false) => uct::search(&bitboard::Bitboard::<1, 7, 7, false>::from_gamestate(state), deadline),
         (2, 7, 7, false) => uct::search(&bitboard::Bitboard::<2, 7, 7, false>::from_gamestate(state), deadline),
         (3, 7, 7, false) => uct::search(&bitboard::Bitboard::<3, 7, 7, false>::from_gamestate(state), deadline),
         (4, 7, 7, false) => uct::search(&bitboard::Bitboard::<4, 7, 7, false>::from_gamestate(state), deadline),
+        (5, 7, 7, false) => uct::search(&bitboard::Bitboard::<5, 7, 7, false>::from_gamestate(state), deadline),
+        (6, 7, 7, false) => uct::search(&bitboard::Bitboard::<6, 7, 7, false>::from_gamestate(state), deadline),
+        (7, 7, 7, false) => uct::search(&bitboard::Bitboard::<7, 7, 7, false>::from_gamestate(state), deadline),
+        (8, 7, 7, false) => uct::search(&bitboard::Bitboard::<8, 7, 7, false>::from_gamestate(state), deadline),
 
         (1, 11, 11, true) => uct::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline),
         (2, 11, 11, true) => uct::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline),
@@ -139,6 +147,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (6, 19, 19, true) => uct::search(&bitboard::Bitboard::<6, 19, 19, true>::from_gamestate(state), deadline),
         (7, 19, 19, true) => uct::search(&bitboard::Bitboard::<7, 19, 19, true>::from_gamestate(state), deadline),
         (8, 19, 19, true) => uct::search(&bitboard::Bitboard::<8, 19, 19, true>::from_gamestate(state), deadline),
+        (9, 19, 19, true) => uct::search(&bitboard::Bitboard::<9, 19, 19, true>::from_gamestate(state), deadline),
+        (10, 19, 19, true) => uct::search(&bitboard::Bitboard::<10, 19, 19, true>::from_gamestate(state), deadline),
+        (11, 19, 19, true) => uct::search(&bitboard::Bitboard::<11, 19, 19, true>::from_gamestate(state), deadline),
+        (12, 19, 19, true) => uct::search(&bitboard::Bitboard::<12, 19, 19, true>::from_gamestate(state), deadline),
+        (13, 19, 19, true) => uct::search(&bitboard::Bitboard::<13, 19, 19, true>::from_gamestate(state), deadline),
+        (14, 19, 19, true) => uct::search(&bitboard::Bitboard::<14, 19, 19, true>::from_gamestate(state), deadline),
+        (15, 19, 19, true) => uct::search(&bitboard::Bitboard::<15, 19, 19, true>::from_gamestate(state), deadline),
+        (16, 19, 19, true) => uct::search(&bitboard::Bitboard::<16, 19, 19, true>::from_gamestate(state), deadline),
 
         (1, 19, 19, false) => uct::search(&bitboard::Bitboard::<1, 19, 19, false>::from_gamestate(state), deadline),
         (2, 19, 19, false) => uct::search(&bitboard::Bitboard::<2, 19, 19, false>::from_gamestate(state), deadline),
@@ -148,6 +164,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (6, 19, 19, false) => uct::search(&bitboard::Bitboard::<6, 19, 19, false>::from_gamestate(state), deadline),
         (7, 19, 19, false) => uct::search(&bitboard::Bitboard::<7, 19, 19, false>::from_gamestate(state), deadline),
         (8, 19, 19, false) => uct::search(&bitboard::Bitboard::<8, 19, 19, false>::from_gamestate(state), deadline),
+        (9, 19, 19, false) => uct::search(&bitboard::Bitboard::<9, 19, 19, false>::from_gamestate(state), deadline),
+        (10, 19, 19, false) => uct::search(&bitboard::Bitboard::<10, 19, 19, false>::from_gamestate(state), deadline),
+        (11, 19, 19, false) => uct::search(&bitboard::Bitboard::<11, 19, 19, false>::from_gamestate(state), deadline),
+        (12, 19, 19, false) => uct::search(&bitboard::Bitboard::<12, 19, 19, false>::from_gamestate(state), deadline),
+        (13, 19, 19, false) => uct::search(&bitboard::Bitboard::<13, 19, 19, false>::from_gamestate(state), deadline),
+        (14, 19, 19, false) => uct::search(&bitboard::Bitboard::<14, 19, 19, false>::from_gamestate(state), deadline),
+        (15, 19, 19, false) => uct::search(&bitboard::Bitboard::<15, 19, 19, false>::from_gamestate(state), deadline),
+        (16, 19, 19, false) => uct::search(&bitboard::Bitboard::<16, 19, 19, false>::from_gamestate(state), deadline),
 
         (1, 25, 25, true) => uct::search(&bitboard::Bitboard::<1, 25, 25, true>::from_gamestate(state), deadline),
         (2, 25, 25, true) => uct::search(&bitboard::Bitboard::<2, 25, 25, true>::from_gamestate(state), deadline),
@@ -191,7 +215,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
 #[post("/move", format = "json", data = "<req>")]
 pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
-    let deadline = time::Instant::now() + time::Duration::from_millis((state.game.timeout / 2).into());
+    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout - 150)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => types::Ruleset::Wrapped,
         Some("royale") => types::Ruleset::Royale,
@@ -219,11 +243,19 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (2, 7, 7, true) => minimax::search(&bitboard::Bitboard::<2, 7, 7, true>::from_gamestate(state), deadline),
         (3, 7, 7, true) => minimax::search(&bitboard::Bitboard::<3, 7, 7, true>::from_gamestate(state), deadline),
         (4, 7, 7, true) => minimax::search(&bitboard::Bitboard::<4, 7, 7, true>::from_gamestate(state), deadline),
+        (5, 7, 7, true) => minimax::search(&bitboard::Bitboard::<5, 7, 7, true>::from_gamestate(state), deadline),
+        (6, 7, 7, true) => minimax::search(&bitboard::Bitboard::<6, 7, 7, true>::from_gamestate(state), deadline),
+        (7, 7, 7, true) => minimax::search(&bitboard::Bitboard::<7, 7, 7, true>::from_gamestate(state), deadline),
+        (8, 7, 7, true) => minimax::search(&bitboard::Bitboard::<8, 7, 7, true>::from_gamestate(state), deadline),
 
         (1, 7, 7, false) => minimax::search(&bitboard::Bitboard::<1, 7, 7, false>::from_gamestate(state), deadline),
         (2, 7, 7, false) => minimax::search(&bitboard::Bitboard::<2, 7, 7, false>::from_gamestate(state), deadline),
         (3, 7, 7, false) => minimax::search(&bitboard::Bitboard::<3, 7, 7, false>::from_gamestate(state), deadline),
         (4, 7, 7, false) => minimax::search(&bitboard::Bitboard::<4, 7, 7, false>::from_gamestate(state), deadline),
+        (5, 7, 7, false) => minimax::search(&bitboard::Bitboard::<5, 7, 7, false>::from_gamestate(state), deadline),
+        (6, 7, 7, false) => minimax::search(&bitboard::Bitboard::<6, 7, 7, false>::from_gamestate(state), deadline),
+        (7, 7, 7, false) => minimax::search(&bitboard::Bitboard::<7, 7, 7, false>::from_gamestate(state), deadline),
+        (8, 7, 7, false) => minimax::search(&bitboard::Bitboard::<8, 7, 7, false>::from_gamestate(state), deadline),
 
         (1, 11, 11, true) => minimax::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline),
         (2, 11, 11, true) => minimax::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline),
@@ -251,6 +283,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (6, 19, 19, true) => minimax::search(&bitboard::Bitboard::<6, 19, 19, true>::from_gamestate(state), deadline),
         (7, 19, 19, true) => minimax::search(&bitboard::Bitboard::<7, 19, 19, true>::from_gamestate(state), deadline),
         (8, 19, 19, true) => minimax::search(&bitboard::Bitboard::<8, 19, 19, true>::from_gamestate(state), deadline),
+        (9, 19, 19, true) => minimax::search(&bitboard::Bitboard::<9, 19, 19, true>::from_gamestate(state), deadline),
+        (10, 19, 19, true) => minimax::search(&bitboard::Bitboard::<10, 19, 19, true>::from_gamestate(state), deadline),
+        (11, 19, 19, true) => minimax::search(&bitboard::Bitboard::<11, 19, 19, true>::from_gamestate(state), deadline),
+        (12, 19, 19, true) => minimax::search(&bitboard::Bitboard::<12, 19, 19, true>::from_gamestate(state), deadline),
+        (13, 19, 19, true) => minimax::search(&bitboard::Bitboard::<13, 19, 19, true>::from_gamestate(state), deadline),
+        (14, 19, 19, true) => minimax::search(&bitboard::Bitboard::<14, 19, 19, true>::from_gamestate(state), deadline),
+        (15, 19, 19, true) => minimax::search(&bitboard::Bitboard::<15, 19, 19, true>::from_gamestate(state), deadline),
+        (16, 19, 19, true) => minimax::search(&bitboard::Bitboard::<16, 19, 19, true>::from_gamestate(state), deadline),
 
         (1, 19, 19, false) => minimax::search(&bitboard::Bitboard::<1, 19, 19, false>::from_gamestate(state), deadline),
         (2, 19, 19, false) => minimax::search(&bitboard::Bitboard::<2, 19, 19, false>::from_gamestate(state), deadline),
@@ -260,6 +300,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (6, 19, 19, false) => minimax::search(&bitboard::Bitboard::<6, 19, 19, false>::from_gamestate(state), deadline),
         (7, 19, 19, false) => minimax::search(&bitboard::Bitboard::<7, 19, 19, false>::from_gamestate(state), deadline),
         (8, 19, 19, false) => minimax::search(&bitboard::Bitboard::<8, 19, 19, false>::from_gamestate(state), deadline),
+        (9, 19, 19, false) => minimax::search(&bitboard::Bitboard::<9, 19, 19, false>::from_gamestate(state), deadline),
+        (10, 19, 19, false) => minimax::search(&bitboard::Bitboard::<10, 19, 19, false>::from_gamestate(state), deadline),
+        (11, 19, 19, false) => minimax::search(&bitboard::Bitboard::<11, 19, 19, false>::from_gamestate(state), deadline),
+        (12, 19, 19, false) => minimax::search(&bitboard::Bitboard::<12, 19, 19, false>::from_gamestate(state), deadline),
+        (13, 19, 19, false) => minimax::search(&bitboard::Bitboard::<13, 19, 19, false>::from_gamestate(state), deadline),
+        (14, 19, 19, false) => minimax::search(&bitboard::Bitboard::<14, 19, 19, false>::from_gamestate(state), deadline),
+        (15, 19, 19, false) => minimax::search(&bitboard::Bitboard::<15, 19, 19, false>::from_gamestate(state), deadline),
+        (16, 19, 19, false) => minimax::search(&bitboard::Bitboard::<16, 19, 19, false>::from_gamestate(state), deadline),
 
         (1, 25, 25, true) => minimax::search(&bitboard::Bitboard::<1, 25, 25, true>::from_gamestate(state), deadline),
         (2, 25, 25, true) => minimax::search(&bitboard::Bitboard::<2, 25, 25, true>::from_gamestate(state), deadline),
