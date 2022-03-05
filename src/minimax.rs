@@ -36,7 +36,7 @@ where [(); (W*H+127)/128]: Sized {
     let (_, stop_receiver) = unbounded(); // only used for alphabeta type signature
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
-    let mut enemy_moves = limited_move_combinations(board, 1);
+    let mut enemy_moves = move_combinations(board, 1);
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
@@ -82,7 +82,7 @@ where [(); (W*H+127)/128]: Sized {
         let mut node_counter = 0;
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut depth = 1;
-        let mut enemy_moves = limited_move_combinations(&board, 1);
+        let mut enemy_moves = move_combinations(&board, 1);
         let mut last_test = 0;
         'outer_loop: loop {
             let mut my_moves = allowed_moves(&board, board.snakes[0].head);
@@ -159,7 +159,7 @@ where [(); (W*H+127)/128]: Sized {
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut best_move = Move::Up;
         let mut depth = 1;
-        let mut enemy_moves = limited_move_combinations(&board, 1);
+        let mut enemy_moves = move_combinations(&board, 1);
         let my_moves = allowed_moves(&board, board.snakes[0].head);
         'outer_loop: loop {
             let mut best = Score::MIN+1;
@@ -206,7 +206,7 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     node_counter: &mut u64,
     stop_receiver: &Receiver<u8>,
     mv: Move,
-    enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    enemy_moves: &mut Vec<[Move; S]>,
     depth: u8,
     mut alpha: Score,
     mut beta: Score
@@ -239,7 +239,6 @@ where [(); (W*H+127)/128]: Sized {  // min call
     let mut best_score = Score::MAX;
     let mut best_moves = [Move::Up; S];
     for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
-    // for mvs in enemy_moves { // TODO: apply move ordering
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
             let mut ibeta = beta;
@@ -281,9 +280,8 @@ where [(); (W*H+127)/128]: Sized {  // min call
             }
 
             // continue search
-            let mut next_enemy_moves = limited_move_combinations(&child, 1);
+            let mut next_enemy_moves = move_combinations(&child, 1);
             for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
-            // for mv in &allowed_moves(&child, child.snakes[0].head) {
                 let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;

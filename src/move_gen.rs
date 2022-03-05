@@ -200,6 +200,65 @@ where [(); (W*H+127)/128]: Sized {
     moves
 }
 
+/// Generates pruned move combinations from a position.
+/// Can skip the first n snakes, their moves will always be Up in the result.
+#[allow(unused)]
+pub fn experimental_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> Vec<[Move; S]>
+where [(); (W*H+127)/128]: Sized {
+    // get 2 closest enemies
+    let mut closest = skip.min(S-1);
+    let mut closest_dist = board.distance(board.snakes[0].head, board.snakes[closest].head) as usize;
+    let mut second_closest = (skip+1).min(S-1);
+    let mut second_closest_dist = board.distance(board.snakes[0].head, board.snakes[second_closest].head) as usize;
+    for (i, snake) in board.snakes[0+skip+2..].iter().enumerate() {
+        let dist = board.distance(snake.head, board.snakes[0].head) as usize;
+        if dist < closest_dist {
+            second_closest = closest;
+            closest = dist;
+        } else if dist < second_closest_dist {
+            second_closest = dist;
+        }
+    }
+
+    // get moves for each enemy
+    let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
+    for snake in board.snakes[0+skip..].iter() {
+        if snake.is_alive() {
+            moves_per_snake.push(allowed_moves(board, snake.head));
+        } else {
+            let mut none_move = ArrayVec::<_, 4>::new();
+            none_move.insert(0, Move::Up);
+            moves_per_snake.push(none_move);
+        }
+    }
+
+    // kartesian product of the possible moves to get the possible combinations
+    let mut moves: Vec<[Move; S]> = Vec::with_capacity(9);
+    moves.push([Move::Up; S]);
+    let mut moves_start;
+    let mut moves_end = 0;
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        if i == closest || i == second_closest {
+            moves_start = moves_end;
+            moves_end = moves.len();
+            for mv in snake_moves.iter() {
+                for j in moves_start..moves_end {
+                    let mut tmp = moves[j];
+                    tmp[i+skip] = *mv;
+                    moves.push(tmp);
+                }
+            }
+        }
+    }
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        if i != closest || i != second_closest {
+
+        }
+    }
+    moves.drain(0..moves_end);
+    moves
+}
+
 pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, rng: &mut impl Rng) -> [Move; S]
 where [(); (W*H+127)/128]: Sized {
     let moves = limited_move_combinations(board, 0);
