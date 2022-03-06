@@ -22,7 +22,8 @@ lazy_static! {
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
-        fixed_depth_search(board, *FIXED_DEPTH as u8)
+        // fixed_depth_search(board, *FIXED_DEPTH as u8)
+        confident_fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
         // iterative_deepening_search(board, deadline)
         best_node_search(board, deadline)
@@ -38,13 +39,30 @@ where [(); (W*H+127)/128]: Sized {
     let mut best_score = Score::MIN+1;
     let mut enemy_moves = limited_move_combinations(board, 1);
     let my_moves = allowed_moves(board, board.snakes[0].head);
-    let mut best = Score::MIN+1;
     for mv in &my_moves {
         let score = alphabeta(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
-        if score > best {
-            best = score;
+        if score > best_score {
             best_move = *mv;
-            best_score = best;
+            best_score = score;
+        }
+    }
+    println!("Move: {:?}, Score: {}", best_move, best_score);
+    println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
+    (best_move, best_score, depth)
+}
+
+pub fn confident_fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> (Move, Score, u8)
+where [(); (W*H+127)/128]: Sized {
+    let mut node_counter = 0;
+    let start_time = time::Instant::now(); // only used to calculate nodes / second
+    let (_, stop_receiver) = unbounded(); // only used for alphabeta type signature
+    let mut best_move = Move::Up;
+    let mut best_score = Score::MIN+1;
+    let scores = confident_alphabeta(board, &mut node_counter, &stop_receiver, depth, Score::MIN+1, Score::MAX).unwrap();
+    for mv in 0..4 {
+        if scores[mv] > best_score {
+            best_move = Move::from_int(mv as u8);
+            best_score = scores[mv];
         }
     }
     println!("Move: {:?}, Score: {}", best_move, best_score);
@@ -76,6 +94,8 @@ where [(); (W*H+127)/128]: Sized {
     let (stop_sender, stop_receiver) = unbounded();
     let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
 
+    let confident_scores = confident_alphabeta(board, &mut 0, &stop_receiver, 4, Score::MIN, Score::MAX).unwrap();
+
     let board = board.clone();
     thread::spawn(move || {
         let mut rng = rand::thread_rng();
@@ -89,7 +109,7 @@ where [(); (W*H+127)/128]: Sized {
             my_moves.shuffle(&mut rng);
             let mut alpha = Score::MIN;
             let mut beta = Score::MAX;
-            let best_move;
+            let mut best_move;
             loop {
                 let test = next_bns_guess(last_test, alpha, beta, my_moves.len());
                 let mut better_moves = ArrayVec::<Move, 4>::new();
@@ -113,6 +133,11 @@ where [(); (W*H+127)/128]: Sized {
                 if (beta as i32 - alpha as i32) < 2 || my_moves.len() == 1 {
                     last_test = test;
                     best_move = my_moves[0];
+                    for mv in my_moves[1..].iter() {
+                        if confident_scores[best_move.to_int() as usize] < confident_scores[mv.to_int() as usize] {
+                            best_move = *mv;
+                        }
+                    }
                     break
                 }
             }
@@ -317,6 +342,167 @@ where [(); (W*H+127)/128]: Sized {  // min call
     ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
     Some(best_score)
 }
+
+/// Returns None if it received a timeout from stop_receiver.
+pub fn confident_alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>,
+    node_counter: &mut u64,
+    stop_receiver: &Receiver<u8>,
+    depth: u8,
+    mut alpha: Score,
+    mut beta: Score
+) -> Option<[Score; 4]>
+where [(); (W*H+127)/128]: Sized {  // min call
+    if let Ok(_) = stop_receiver.try_recv() {
+        return None
+    }
+    // let tt_key = ttable::hash(&(board, mv));
+    // let tt_entry = ttable::get(tt_key, board.tt_id);
+    // let mut tt_move = None;
+    // if let Some(entry) = tt_entry {
+    //     if entry.get_depth() >= depth {
+    //         let tt_score = entry.get_score();
+    //         if entry.is_lower_bound() {
+    //             alpha = alpha.max(tt_score);
+    //         } else if entry.is_upper_bound() {
+    //             beta = beta.min(tt_score);
+    //         } else {
+    //             return Some(tt_score) // got exact score
+    //         }
+    //         if alpha >= beta {
+    //             return Some(tt_score);
+    //         }
+    //     }
+    //     tt_move = entry.get_best_moves::<S>();
+    // }
+
+    // search
+    let mut results = [Score::MIN; 4];
+    let mut best_score = Score::MAX;
+    // let mut best_moves = [Move::Up; S];
+    let mut enemy_moves = limited_move_combinations(board, 1);
+    // for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
+    for mvs in &mut enemy_moves { // TODO: apply move ordering
+        let (score, iresults) = 'max_call: { // max call
+            let mut ialpha = alpha;
+            let mut ibeta = beta;
+            let mut ibest_score = Score::MIN;
+            // let mut ibest_move = Move::Up;
+            let mut iresults = [Score::MIN; 4];
+            // check TT
+            // let itt_key = ttable::hash(&child);
+            // let itt_entry = ttable::get(itt_key, child.tt_id);
+            // let mut itt_move = None;
+            // if let Some(entry) = itt_entry {
+            //     if entry.get_depth() >= depth {
+            //         let tt_score = entry.get_score();
+            //         if entry.is_lower_bound() {
+            //             ialpha = ialpha.max(tt_score);
+            //         } else if entry.is_upper_bound() {
+            //             ibeta = ibeta.min(tt_score);
+            //         } else {
+            //             break 'max_call tt_score; // got exact score
+            //         }
+            //         if ialpha >= ibeta {
+            //             break 'max_call tt_score;
+            //         }
+            //     }
+            //     if let Some(x) = entry.get_best_moves::<1>() {
+            //         itt_move = Some(x[0]);
+            //     }
+            // }
+
+            // for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
+            for mv in &allowed_moves(&board, board.snakes[0].head) {
+                mvs[0] = *mv;
+                let mut child = board.clone();
+                child.apply_moves(&mvs);
+                *node_counter += 1;
+
+                // search stops
+                if child.is_terminal() {
+                    iresults[mv.to_int() as usize] = eval_terminal(&child);
+                    continue // TODO: cut
+                } else if depth == 1 {
+                    iresults[mv.to_int() as usize] = eval(&child);
+                    continue
+                }
+
+                iresults[mv.to_int() as usize] = *confident_alphabeta(&child, node_counter, stop_receiver, depth-1, ialpha, ibeta)?
+                    .iter().max().expect("confident_alphabeta returned result with no max");
+                if iresults[mv.to_int() as usize] > ibeta {
+                    ibest_score = iresults[mv.to_int() as usize];
+                    // ibest_move = *mv;
+                    break;
+                }
+                if iresults[mv.to_int() as usize] > ibest_score {
+                    ibest_score = iresults[mv.to_int() as usize];
+                    // ibest_move = *mv;
+                    if iresults[mv.to_int() as usize] > ialpha {
+                        ialpha = iresults[mv.to_int() as usize];
+                    }
+                }
+            }
+            // ttable::insert(itt_key, child.tt_id, ibest_score, ibest_score >= ibeta, ibest_score <= ialpha, depth, [ibest_move; 1]);
+            (ibest_score, iresults)
+        };
+        if score < alpha {
+            // best_score = score;
+            results = iresults;
+            // best_moves = mvs;
+            break;
+        }
+        if score < best_score {
+            best_score = score;
+            results = iresults;
+            // best_moves = mvs;
+            if score < beta {
+                beta = score;
+            }
+        }
+    }
+    // ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
+    Some(results)
+}
+
+// /// Returns None if it received a timeout from stop_receiver.
+// pub fn nash_equilibrium<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+//     board: &Bitboard<S, W, H, WRAP>,
+//     node_counter: &mut u64,
+//     stop_receiver: &Receiver<u8>,
+//     depth: u8,
+//     mut alpha: Score,
+//     mut beta: Score
+// ) -> Option<Move>
+// where [(); (W*H+127)/128]: Sized {
+//     if let Ok(_) = stop_receiver.try_recv() {
+//         return None
+//     }
+
+//     let mut enemy_moves = limited_move_combinations(board, 1);
+//     let my_moves = allowed_moves(board, board.snakes[0].head);
+//     let mut best_upper = Score::MIN;
+//     let mut best_lower = Score::MAX;
+//     let mut best_move = Move::Up;
+
+//     for mv in my_moves {
+//         for mvs in &mut enemy_moves {
+//             mvs[0] = mv;
+//             let mut child = board.clone();
+//             child.apply_moves(&mvs);
+//             let score = if depth == 1 {
+//                 if child.is_terminal() {
+//                     eval_terminal(&child)
+//                 } else {
+//                     eval(&child)
+//                 }
+//             } else {
+//                 
+//             }
+//         }
+//     }
+//     Some(best_move)
+// }
 
 fn order_enemy_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, moves: &mut Vec<[Move; S]>)
 where [(); (W*H+127)/128]: Sized {
