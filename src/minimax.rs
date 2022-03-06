@@ -465,44 +465,45 @@ where [(); (W*H+127)/128]: Sized {  // min call
     Some(results)
 }
 
-// /// Returns None if it received a timeout from stop_receiver.
-// pub fn nash_equilibrium<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-//     board: &Bitboard<S, W, H, WRAP>,
-//     node_counter: &mut u64,
-//     stop_receiver: &Receiver<u8>,
-//     depth: u8,
-//     mut alpha: Score,
-//     mut beta: Score
-// ) -> Option<Move>
-// where [(); (W*H+127)/128]: Sized {
-//     if let Ok(_) = stop_receiver.try_recv() {
-//         return None
-//     }
+/// Returns None if it received a timeout from stop_receiver.
+pub fn nash_equilibrium<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>,
+    node_counter: &mut u64,
+    stop_receiver: &Receiver<u8>,
+    depth: u8,
+    mut alpha: Score,
+    mut beta: Score
+) -> Option<(Move, Score)>
+where [(); (W*H+127)/128]: Sized {
+    if let Ok(_) = stop_receiver.try_recv() {
+        return None
+    }
 
-//     let mut enemy_moves = limited_move_combinations(board, 1);
-//     let my_moves = allowed_moves(board, board.snakes[0].head);
-//     let mut best_upper = Score::MIN;
-//     let mut best_lower = Score::MAX;
-//     let mut best_move = Move::Up;
+    let mut enemy_moves = limited_move_combinations(board, 1);
+    let my_moves = allowed_moves(board, board.snakes[0].head);
+    let mut best_upper = Score::MIN;
+    let mut best_lower = Score::MAX;
+    let mut best_move = Move::Up;
 
-//     for mv in my_moves {
-//         for mvs in &mut enemy_moves {
-//             mvs[0] = mv;
-//             let mut child = board.clone();
-//             child.apply_moves(&mvs);
-//             let score = if depth == 1 {
-//                 if child.is_terminal() {
-//                     eval_terminal(&child)
-//                 } else {
-//                     eval(&child)
-//                 }
-//             } else {
-//                 
-//             }
-//         }
-//     }
-//     Some(best_move)
-// }
+    for mv in my_moves {
+        for mvs in &mut enemy_moves {
+            mvs[0] = mv;
+            let mut child = board.clone();
+            child.apply_moves(&mvs);
+            let score = if child.is_terminal() {
+                eval_terminal(&child)
+            } else if depth == 1 {
+                eval(&child)
+            } else {
+                nash_equilibrium(&child, node_counter, stop_receiver, depth-1, alpha, beta)?.1
+            };
+            
+            if score > best_score
+            
+        }
+    }
+    Some(best_move)
+}
 
 fn order_enemy_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, moves: &mut Vec<[Move; S]>)
 where [(); (W*H+127)/128]: Sized {
