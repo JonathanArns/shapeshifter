@@ -206,17 +206,23 @@ where [(); (W*H+127)/128]: Sized {
 pub fn experimental_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> Vec<[Move; S]>
 where [(); (W*H+127)/128]: Sized {
     // get 2 closest enemies
-    let mut closest = skip.min(S-1);
-    let mut closest_dist = board.distance(board.snakes[0].head, board.snakes[closest].head) as usize;
-    let mut second_closest = (skip+1).min(S-1);
-    let mut second_closest_dist = board.distance(board.snakes[0].head, board.snakes[second_closest].head) as usize;
-    for (i, snake) in board.snakes[0+skip+2..].iter().enumerate() {
+    let mut closest = 0;
+    let mut closest_dist = 1000;
+    let mut second_closest = 0;
+    let mut second_closest_dist = 1001;
+    for (i, snake) in board.snakes[0+skip..].iter().enumerate() {
+        if snake.is_dead() {
+            continue
+        }
         let dist = board.distance(snake.head, board.snakes[0].head) as usize;
         if dist < closest_dist {
             second_closest = closest;
-            closest = dist;
+            second_closest_dist = closest_dist;
+            closest = i+skip;
+            closest_dist = dist;
         } else if dist < second_closest_dist {
-            second_closest = dist;
+            second_closest = i+skip;
+            second_closest_dist = dist
         }
     }
 
@@ -232,13 +238,13 @@ where [(); (W*H+127)/128]: Sized {
         }
     }
 
-    // kartesian product of the possible moves to get the possible combinations
-    let mut moves: Vec<[Move; S]> = Vec::with_capacity(9);
+    // kartesian product of the possible moves of 2 closest snakes
+    let mut moves: Vec<[Move; S]> = Vec::with_capacity(18);
     moves.push([Move::Up; S]);
     let mut moves_start;
     let mut moves_end = 0;
     for (i, snake_moves) in moves_per_snake.iter().enumerate() {
-        if i == closest || i == second_closest {
+        if i+skip == closest || i+skip == second_closest {
             moves_start = moves_end;
             moves_end = moves.len();
             for mv in snake_moves.iter() {
@@ -250,12 +256,23 @@ where [(); (W*H+127)/128]: Sized {
             }
         }
     }
-    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
-        if i != closest || i != second_closest {
+    moves.drain(0..moves_end);
 
+    // add moves of further away snakes
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        if i+skip != closest && i+skip != second_closest {
+            let mut x = 0;
+            while x < moves.len() {
+                for mv in snake_moves.iter() {
+                    if moves.len() == x {
+                        moves.push(moves[0]);
+                    }
+                    moves[x][i+skip] = *mv;
+                    x += 1;
+                }
+            }
         }
     }
-    moves.drain(0..moves_end);
     moves
 }
 
