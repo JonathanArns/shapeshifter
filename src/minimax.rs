@@ -327,7 +327,22 @@ where [(); (W*H+127)/128]: Sized {  // min call
 /// search must continue.
 fn is_stable<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> bool
 where [(); (W*H+127)/128]: Sized {
-    allowed_moves(board, board.snakes[0].head).len() < 2 || limited_move_combinations(board, 1).len() < 2
+    for snake in board.snakes {
+        // if snake.health < 3 || (snake.health < board.hazard_dmg * 3 && board.hazards.get_bit(snake.head as usize)) {
+        //     return false
+        // }
+        for i in 0..4 {
+            if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][i] {
+                if board.food.get_bit(pos as usize) {
+                    return false
+                }
+            }
+        }
+        
+    }
+    true
+    // let me = board.snakes[0];
+    // allowed_moves(board, me.head).len() > 1 && limited_move_combinations(board, 1).len() > 1
 }
 
 /// Returns None if it received a timeout from stop_receiver.
