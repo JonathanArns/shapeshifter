@@ -4,8 +4,13 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use fxhash::FxHasher64;
 
-const TT_LENGTH: usize = 0x_100000;
-const TT_MASK: u64 =      0x_fffff;
+#[cfg(feature = "debug_tt")]
+use std::collections::hash_map::HashMap;
+
+// const TT_LENGTH: usize = 0b_100000000000000000;
+// const TT_MASK: u64 =     0b__11111111111111111;
+const TT_LENGTH: usize = 0b_1000000000000000000000000;
+const TT_MASK: u64 =     0b__111111111111111111111111;
 const MAX_SIMUL_GAMES: usize = 10;
 
 /// The transposition table of this battlesnake.
@@ -16,6 +21,11 @@ static mut TABLES: Option<Vec<Vec<Entry>>> = None;
 /// The index of a game ID is the tt_id of that game.
 static mut GAME_IDS: Option<Mutex<(u8, Vec<String>)>> = None;
 
+#[cfg(feature = "debug_tt")]
+static mut DEBUG_TABLE: Option<Mutex<Vec<u64>>> = None;
+#[cfg(feature = "debug_tt")]
+static mut DEBUG_COUNTER: u64 = 0;
+
 /// Initializes an empty transposition table.
 pub fn init() {
     unsafe {
@@ -24,6 +34,12 @@ pub fn init() {
         }
         if let None = GAME_IDS {
             GAME_IDS = Some(Mutex::new((0, vec!["".to_string(); MAX_SIMUL_GAMES])));
+        }
+        #[cfg(feature = "debug_tt")]
+        {
+            if let None = DEBUG_TABLE {
+                DEBUG_TABLE = Some(Mutex::new(vec![0; TT_LENGTH]));
+            }
         }
     }
     println!("TTables initialized")
@@ -42,9 +58,6 @@ pub fn get_tt_id(game_id: String) -> u8 {
             game_ids.1[tt_id as usize] = game_id;
             game_ids.0 += 1;
             game_ids.0 %= MAX_SIMUL_GAMES as u8;
-            if let Some(tables) = &mut TABLES {
-                tables[tt_id as usize] = vec![Entry{data: 0, key: 0}; TT_LENGTH];
-            }
             tt_id
         } else {
             0
@@ -90,10 +103,42 @@ pub fn hash(board: &impl Hash) -> u64 {
     {
         let mut hasher = FxHasher64::default();
         board.hash(&mut hasher);
-        hasher.finish()
+        let hash = hasher.finish();
+        #[cfg(feature = "debug_tt")]
+        {
+            unsafe {
+                if let Some(tmp) = &mut DEBUG_TABLE {
+                    DEBUG_COUNTER += 1;
+                    let mut table = tmp.lock().unwrap();
+                    let index = hash & TT_MASK;
+                    table[index as usize] += 1;
+                }
+            }
+        }
+        return hash
     }
     #[cfg(not(feature = "tt"))]
     0
+}
+
+#[cfg(feature = "debug_tt")]
+pub fn write_debug_info() {
+    let mut agg = HashMap::<u64, u64>::default();
+    unsafe {
+        if let Some(tmp) = &DEBUG_TABLE {
+            let table = tmp.lock().unwrap();
+            for x in table.iter() {
+                if let Some(y) = agg.get_mut(x) {
+                    *y += 1;
+                } else {
+                    agg.insert(*x, 1);
+                }
+            }
+        }
+    }
+    unsafe {
+        println!("total hashes: {}\n{:?}", DEBUG_COUNTER, agg);
+    }
 }
 
 /// A transposition table entry.
@@ -178,5 +223,114 @@ impl Entry {
 
     pub fn is_exact(&self) -> bool {
         (self.data >> Self::LOWER_BOUND_SHIFT) & 0b_11 == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+    use crate::bitboard::*;
+    use crate::api;
+
+    fn c(x: usize, y: usize) -> api::Coord {
+        api::Coord{x, y}
+    }
+
+    fn create_board() -> Bitboard<4, 11, 11, true> {
+        let mut ruleset = std::collections::HashMap::new();
+        ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
+        let state = api::GameState{
+            game: api::Game{ id: "testing123".to_string(), timeout: 100, ruleset },
+            turn: 157,
+            you: api::Battlesnake{
+                id: "a".to_string(),
+                name: "a".to_string(),
+                shout: None,
+                squad: None,
+                health: 100,
+                length: 11,
+                head: c(5,2),
+                body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+            },
+            board: api::Board{
+                height: 11,
+                width: 11,
+                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
+                hazards: vec![],
+                snakes: vec![
+                    api::Battlesnake{
+                        id: "a".to_string(),
+                        name: "a".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 100,
+                        length: 11,
+                        head: c(5,2),
+                        body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "b".to_string(),
+                        name: "b".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 12,
+                        head: c(3,4),
+                        body: vec![c(3,4), c(2,4), c(2,5), c(3, 5), c(3,6), c(3,7), c(3,8), c(4,8), c(4,7), c(4,6), c(4,5), c(4,4)],
+                    },  
+                    api::Battlesnake{
+                        id: "c".to_string(),
+                        name: "c".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 3,
+                        head: c(6,7),
+                        body: vec![c(6,7), c(7,7), c(8,7)],
+                    },  
+                    api::Battlesnake{
+                        id: "d".to_string(),
+                        name: "d".to_string(),
+                        shout: None,
+                        squad: None,
+                        health: 95,
+                        length: 3,
+                        head: c(9,9),
+                        body: vec![c(9,9), c(9,8), c(8,8)],
+                    },  
+                ],
+            },
+        };
+        Bitboard::<4, 11, 11, true>::from_gamestate(state)
+    }
+    
+    #[bench]
+    fn bench_tt_access(b: &mut Bencher) {
+        let board = create_board();
+        super::init();
+        let key = super::hash(&board);
+        b.iter(|| {
+            super::get(key, board.tt_id)
+        })
+    }
+
+    #[bench]
+    fn bench_tt_hash(b: &mut Bencher) {
+        let board = create_board();
+        super::init();
+        b.iter(|| {
+            super::hash(&board)
+        })
+    }
+
+    #[bench]
+    fn bench_tt_insert(b: &mut Bencher) {
+        let board = create_board();
+        super::init();
+        let key = super::hash(&board);
+        b.iter(|| {
+            super::insert(key, board.tt_id, 0, false, true, 5, [Move::Up])
+        })
     }
 }

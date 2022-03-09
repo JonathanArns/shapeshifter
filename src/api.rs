@@ -8,6 +8,7 @@ use crate::types;
 use crate::bitboard;
 use crate::minimax;
 use crate::uct;
+use crate::ttable;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Game {
@@ -72,6 +73,9 @@ pub fn handle_start(_req: Json<GameState>) -> Status {
 
 #[post("/end")]
 pub fn handle_end() -> Status {
+    #[cfg(feature = "debug_tt")]
+    ttable::write_debug_info();
+
     Status::Ok
 }
 
