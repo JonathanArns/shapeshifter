@@ -169,15 +169,39 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     pub fn is_in_direction(&self, from: u16, to: u16, mv: Move) -> bool {
-        if WRAP {
-            todo!("not implemented for wrapped boards")
-        }
         let w = W as u16;
-        match mv {
-            Move::Left => from % w > to % w,
-            Move::Right => from % w < to % w,
-            Move::Down => from / w > to / w,
-            Move::Up => from / w < to / w,
+        if WRAP {
+            let f;
+            let t;
+            match mv {
+                Move::Left => {
+                    f = from % w;
+                    t = to % w;
+                    (f > t && f - t < w / 2) || (f < t && t - f > w - 2)
+                },
+                Move::Right => {
+                    f = from % w;
+                    t = to % w;
+                    (f > t && f - t > w / 2) || (f < t && t - f < w - 2)
+                },
+                Move::Down => {
+                    f = from / w;
+                    t = to / w;
+                    (f > t && f - t < w / 2) || (f < t && t - f > w - 2)
+                },
+                Move::Up => {
+                    f = from / w;
+                    t = to / w;
+                    (f > t && f - t > w / 2) || (f < t && t - f < w - 2)
+                },
+            }
+        } else {
+            match mv {
+                Move::Left => from % w > to % w,
+                Move::Right => from % w < to % w,
+                Move::Down => from / w > to / w,
+                Move::Up => from / w < to / w,
+            }
         }
     }
 

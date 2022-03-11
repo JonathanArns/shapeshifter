@@ -71,11 +71,11 @@ where [(); (W*H+127)/128]: Sized {
 
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+127)/128]: Sized {
+    let me = board.snakes[0];
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
     let mut largest_enemy_length = 0;
     let mut tail_mask = Bitset::<{W*H}>::with_bit_set(board.snakes[0].tail as usize);
-    let mut closest_distance = 1000;
 
     for i in 1..S {
         if board.snakes[i].is_alive() {
@@ -88,27 +88,42 @@ where [(); (W*H+127)/128]: Sized {
             if board.snakes[i].health < lowest_enemy_health {
                 lowest_enemy_health = board.snakes[i].health;
             }
-            let distance = board.distance(board.snakes[0].head, board.snakes[i].head) as Score;
-            if distance < closest_distance {
-                closest_distance = distance;
-            }
         }
     }
     let (my_area, enemy_area) = area_control(board);
+
+    let mut closest_food_distance = 1000;
+    for pos in 0..(W*H) {
+        if board.food.get_bit(pos) {
+            let dist = board.distance(me.head, pos as u16);
+            if dist < closest_food_distance {
+                closest_food_distance = dist;
+            }
+        }
+    }
 
     let mut score: Score = 0;
     // number of enemies alive
     score += WEIGHTS[0] * enemies_alive as Score;
     // difference in health to lowest enemy
-    score += WEIGHTS[1] * board.snakes[0].health as Score - lowest_enemy_health as Score;
+    score += WEIGHTS[1] * me.health as Score - lowest_enemy_health as Score;
     // difference in length to longest enemy
-    score += WEIGHTS[2] * board.snakes[0].length as Score - largest_enemy_length as Score;
+    score += WEIGHTS[2] * me.length as Score - largest_enemy_length as Score;
     // difference in controlled non-hazard area
     score += WEIGHTS[3] * (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score;
     // difference in controlled food
     score += WEIGHTS[4] * (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
     // difference in controlled tails
     score += WEIGHTS[5] * (my_area & tail_mask).count_ones() as Score - (enemy_area & tail_mask).count_ones() as Score;
+
+
+    // score += -1 * closest_food_distance as Score;
+
+
+    // TODO: features to try: my health, distance to closest food, distance to non hazard area
+    // distance out of hazard is greater than 1 -> food reachable in time
+    // TODO: quiescence search
+    // TODO: spiral code
 
     score
 }
