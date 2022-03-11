@@ -327,9 +327,9 @@ where [(); (W*H+127)/128]: Sized {  // min call
 fn is_stable<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> bool
 where [(); (W*H+127)/128]: Sized {
     for snake in board.snakes {
-        // if snake.health < 3 || (snake.health < board.hazard_dmg * 3 && board.hazards.get_bit(snake.head as usize)) {
-        //     return false
-        // }
+        if snake.curled_bodyparts != 0 {
+            return false
+        }
         for i in 0..4 {
             if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][i] {
                 if board.food.get_bit(pos as usize) {
@@ -340,8 +340,6 @@ where [(); (W*H+127)/128]: Sized {
         
     }
     true
-    // let me = board.snakes[0];
-    // allowed_moves(board, me.head).len() > 1 && limited_move_combinations(board, 1).len() > 1
 }
 
 /// Returns None if it received a timeout from stop_receiver.
@@ -424,7 +422,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             // }
 
             // continue search
-            let mut next_enemy_moves = limited_move_combinations(&child, 1);
+            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1); // No idea why, but using unordered movegen here is a big improvement
             // for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
             for mv in &allowed_moves(&child, child.snakes[0].head) {
                 let iscore = quiescence(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
