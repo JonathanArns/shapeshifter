@@ -9,6 +9,7 @@ const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
 const HEAD_COLLISION: i8 = -3;
 const EVEN_HEAD_COLLISION: i8 = -4;
+const MASKED: i8 = i8::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Snake {
@@ -28,6 +29,11 @@ impl Snake {
     #[inline(always)]
     pub fn is_dead(&self) -> bool {
         self.health < 1
+    }
+
+    #[inline(always)]
+    pub fn is_masked(&self) -> bool {
+        self.health == MASKED
     }
 }
 
@@ -94,9 +100,10 @@ where [(); (W*H+127)/128]: Sized {
         for hazard in state.board.hazards {
             board.hazards.set_bit(W*hazard.y + hazard.x);
         }
+        let mut num_masked = 0;
         let mut m = 0;
         let mut n;
-        for snake in state.board.snakes {
+        for snake in &state.board.snakes {
             if snake.id == state.you.id {
                 n = 0;
             } else {
@@ -125,8 +132,21 @@ where [(); (W*H+127)/128]: Sized {
                 }
                 prev_pos = pos;
             }
+            // mask snakes that are far away. masked snakes are still on the board, but don't move
+            if board.distance(board.snakes[0].head, board.snakes[n].head) > 8 {
+                board.snakes[n].health = MASKED;
+                num_masked += 1;
+            }
+        }
+        if num_masked == (S-1).min(1) {
+            board.snakes[1].health = state.board.snakes[1].health as i8;
         }
         board
+    }
+
+    /// TODO: make this logic a little more nice
+    pub fn mask_far_away_snakes(&mut self) {
+        todo!()
     }
 
     /// Returns true if self is dead or the only one alive
@@ -210,7 +230,33 @@ where [(); (W*H+127)/128]: Sized {
                 continue
             }
 
-            // move snake
+            // move old tail if necessary
+            if self.ruleset != Ruleset::Constrictor {
+                if snake.curled_bodyparts == 0 {
+                    if snake.tail != snake.head {
+                        // TODO: rewrite this logic with get_bit and set_bit
+                        let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
+                        let tail_move_int = (self.bodies[1] & tail_mask).any() as u8 | ((self.bodies[2] & tail_mask).any() as u8) << 1;
+                        snake.tail = if WRAP {
+                            snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
+                        } else {
+                                snake.tail as i16 + Move::int_to_index(tail_move_int, W)
+                            } as u16;
+                        tail_mask = !tail_mask;
+                        self.bodies[0] &= tail_mask;
+                        self.bodies[1] &= tail_mask;
+                        self.bodies[2] &= tail_mask;
+                    }
+                } else {
+                    snake.curled_bodyparts -= 1;
+                }
+            }
+
+            if snake.is_masked() {
+                continue // only need to move tail on masked snakes
+            }
+
+            // move snake head
             let mv = moves[i];
             let mv_int = mv.to_int();
             // set direction of new body part
@@ -218,25 +264,6 @@ where [(); (W*H+127)/128]: Sized {
             self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
             snake.head = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
-
-            // move old tail if necessary
-            if self.ruleset != Ruleset::Constrictor {
-                if snake.curled_bodyparts == 0 {
-                    let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
-                    let tail_move_int = (self.bodies[1] & tail_mask).any() as u8 | ((self.bodies[2] & tail_mask).any() as u8) << 1;
-                    snake.tail = if WRAP {
-                        snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
-                    } else {
-                            snake.tail as i16 + Move::int_to_index(tail_move_int, W)
-                        } as u16;
-                    tail_mask = !tail_mask;
-                    self.bodies[0] &= tail_mask;
-                    self.bodies[1] &= tail_mask;
-                    self.bodies[2] &= tail_mask;
-                } else {
-                    snake.curled_bodyparts -= 1;
-                }
-            }
 
             // reduce health
             let is_on_hazard = self.hazards.get_bit(snake.head as usize) as i8;

@@ -24,7 +24,9 @@ where [(); (W*H+127)/128]: Sized {
     }
     for snake in &board.snakes[1..] {
         if snake.is_alive() {
-            x.1.set_bit(snake.head as usize);
+            if !snake.is_masked() {
+                x.1.set_bit(snake.head as usize);
+            }
             if board.ruleset != Ruleset::Constrictor && snake.curled_bodyparts == 0 {
                 b.set_bit(snake.tail as usize);
             }
@@ -109,6 +111,11 @@ where [(); (W*H+127)/128]: Sized {
     score += WEIGHTS[4] * (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
     // difference in controlled tails
     score += WEIGHTS[5] * (my_area & tail_mask).count_ones() as Score - (enemy_area & tail_mask).count_ones() as Score;
+
+    // TODO: features to try: my health, distance to closest food, distance to non hazard area
+    // distance out of hazard is greater than 1 -> food reachable in time
+    // TODO: quiescence search
+    // TODO: less aggressive pruning with multiple enemies
 
     score
 }

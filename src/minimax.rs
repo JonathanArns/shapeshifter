@@ -82,7 +82,7 @@ where [(); (W*H+127)/128]: Sized {
         let mut node_counter = 0;
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut depth = 1;
-        let mut enemy_moves = move_combinations(&board, 1);
+        let mut enemy_moves = slow_limited_move_combinations(&board, 1);
         let mut last_test = 0;
         'outer_loop: loop {
             let mut my_moves = allowed_moves(&board, board.snakes[0].head);
@@ -280,7 +280,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             }
 
             // continue search
-            let mut next_enemy_moves = move_combinations(&child, 1);
+            let mut next_enemy_moves = slow_limited_move_combinations(&child, 1);
             for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
                 let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
