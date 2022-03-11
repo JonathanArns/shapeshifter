@@ -102,6 +102,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Generates up to 4 move combinations from a position, such that every move for every snake has
 /// been covered at least once.
 /// Can skip the first n snakes, their moves will always be Up in the result.
+#[allow(unused)]
 pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
     let bodies = board.bodies_without_tails();
@@ -134,14 +135,24 @@ where [(); (W*H+127)/128]: Sized {
     moves
 }
 
+/// Generates up to 4 move combinations from a position, such that every move for every snake has
+/// been covered at least once.
+/// Can skip the first n snakes, their moves will always be Up in the result.
+/// Applies move ordering to the individual moves of each enemy.
 #[allow(unused)]
-pub fn slow_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
+pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
+    let mut i = 0;
     for snake in board.snakes[0+skip..].iter() {
         if snake.is_alive() {
-            moves_per_snake.push(allowed_moves(board, snake.head));
+            i += 1;
+            let mut moves = allowed_moves(board, snake.head);
+            moves.sort_by_key(|x| {
+                (!board.is_in_direction(snake.head, board.snakes[0].head, *x)) as u8
+            });
+            moves_per_snake.push(moves);
         } else {
             let mut none_move = ArrayVec::<_, 4>::new();
             none_move.insert(0, Move::Up);

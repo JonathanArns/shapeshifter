@@ -36,7 +36,7 @@ where [(); (W*H+127)/128]: Sized {
     let (_, stop_receiver) = unbounded(); // only used for alphabeta type signature
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
-    let mut enemy_moves = limited_move_combinations(board, 1);
+    let mut enemy_moves = ordered_limited_move_combinations(board, 1);
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
@@ -82,7 +82,7 @@ where [(); (W*H+127)/128]: Sized {
         let mut node_counter = 0;
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut depth = 1;
-        let mut enemy_moves = limited_move_combinations(&board, 1);
+        let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
         let mut last_test = 0;
         'outer_loop: loop {
             let mut my_moves = allowed_moves(&board, board.snakes[0].head);
@@ -159,7 +159,7 @@ where [(); (W*H+127)/128]: Sized {
         let start_time = time::Instant::now(); // only used to calculate nodes / second
         let mut best_move = Move::Up;
         let mut depth = 1;
-        let mut enemy_moves = limited_move_combinations(&board, 1);
+        let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
         let my_moves = allowed_moves(&board, board.snakes[0].head);
         'outer_loop: loop {
             let mut best = Score::MIN+1;
@@ -281,7 +281,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             }
 
             // continue search
-            let mut next_enemy_moves = limited_move_combinations(&child, 1);
+            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1);
             for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
             // for mv in &allowed_moves(&child, child.snakes[0].head) {
                 let iscore = alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
