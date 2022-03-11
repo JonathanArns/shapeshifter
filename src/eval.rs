@@ -9,7 +9,7 @@ lazy_static! {
     static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-       [-10, 1, 15, 1, 3, 3, 10]
+       [-10, 1, 15, 1, 3, 5, 10]
     };
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
@@ -92,16 +92,6 @@ where [(); (W*H+127)/128]: Sized {
     }
     let (my_area, enemy_area) = area_control(board);
 
-    let mut closest_food_distance = 1000;
-    for pos in 0..(W*H) {
-        if board.food.get_bit(pos) {
-            let dist = board.distance(me.head, pos as u16);
-            if dist < closest_food_distance {
-                closest_food_distance = dist;
-            }
-        }
-    }
-
     let mut score: Score = 0;
     // number of enemies alive
     score += WEIGHTS[0] * enemies_alive as Score;
@@ -115,10 +105,6 @@ where [(); (W*H+127)/128]: Sized {
     score += WEIGHTS[4] * (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
     // difference in controlled tails
     score += WEIGHTS[5] * (my_area & tail_mask).count_ones() as Score - (enemy_area & tail_mask).count_ones() as Score;
-
-
-    // score += -1 * closest_food_distance as Score;
-
 
     // TODO: features to try: my health, distance to closest food, distance to non hazard area
     // distance out of hazard is greater than 1 -> food reachable in time
