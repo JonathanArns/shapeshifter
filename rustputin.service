@@ -1,10 +1,10 @@
 [Unit]
-Description=Rustputin battlesnake
+Description=Shapeshifter battlesnake
 
 [Service]
-User=jonathan
+User=root
 Restart=always
-ExecStart=/home/jonathan/rustputin/target/release/rustputin
+ExecStart=/root/rustputin/target/release/rustputin
 
 [Install]
 WantedBy=multi-user.target
