@@ -9,7 +9,7 @@ lazy_static! {
     static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-       [-10, 1, 15, 1, 3, 5, 10]
+       [-10, 1, 2, 1, 3, 5, 10]
     };
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
@@ -98,7 +98,7 @@ where [(); (W*H+127)/128]: Sized {
     // difference in health to lowest enemy
     score += WEIGHTS[1] * me.health as Score - lowest_enemy_health as Score;
     // difference in length to longest enemy
-    score += WEIGHTS[2] * me.length as Score - largest_enemy_length as Score;
+    score += WEIGHTS[2] *  W as Score * me.length as Score - largest_enemy_length as Score;
     // difference in controlled non-hazard area
     score += WEIGHTS[3] * (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score;
     // difference in controlled food
