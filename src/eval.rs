@@ -9,48 +9,42 @@ lazy_static! {
     static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-       [-10, 1, 2, 1, 3, 5, 10]
+       [-10, 1, 2, 1, 3, 5, 1]
     };
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
 
 fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> (Bitset<{W*H}>, Bitset<{W*H}>)
 where [(); (W*H+127)/128]: Sized {
-    let mut debug_counter = 0;
-    let mut x = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
+    let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
     let mut b = !board.bodies[0];
-    if board.ruleset != Ruleset::Constrictor && board.snakes[0].curled_bodyparts == 0 {
-        b.set_bit(board.snakes[0].tail as usize);
-    }
     for snake in &board.snakes[1..] {
         if snake.is_alive() {
-            x.1.set_bit(snake.head as usize);
-            if board.ruleset != Ruleset::Constrictor && snake.curled_bodyparts == 0 {
-                b.set_bit(snake.tail as usize);
-            }
+            state.1.set_bit(snake.head as usize);
         }
     }
-    let mut y = x; // x at n-1
+    let mut old_state = state; // state at n-1
+    let mut turn_counter = 0;
     loop {
-        debug_counter += 1;
-        debug_assert!(debug_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", x, y);
-        let mut me = b & (x.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & x.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & x.0)>>1 | x.0<<W | x.0>>W);
-        let mut enemies = b & (x.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & x.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & x.1)>>1 | x.1<<W | x.1>>W);
+        turn_counter += 1;
+        debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
+        let mut me = b & (state.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W);
+        let mut enemies = b & (state.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W);
         if WRAP {
-            me |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & x.0) >> (W-1)
-                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & x.0) << (W-1)
-                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & x.0) << ((H-1)*W)
-                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & x.0) >> ((H-1)*W);
-            enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & x.1) >> (W-1)
-                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & x.1) << (W-1)
-                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & x.1) << ((H-1)*W) // debug changes
-                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & x.1) >> ((H-1)*W);
+            me |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.0) >> (W-1)
+                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.0) << (W-1)
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.0) << ((H-1)*W)
+                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
+            enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.1) >> (W-1)
+                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.1) << (W-1)
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W) // debug changes
+                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
         }
-        x = (x.0 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (me & !enemies)), x.1 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (enemies & !me)));
-        if x == y {
-            return x
+        state = (state.0 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (me & !enemies)), state.1 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (enemies & !me)));
+        if state == old_state {
+            return state
         } else {
-            y = x;
+            old_state = state;
         }
     }
 }
@@ -110,6 +104,8 @@ where [(); (W*H+127)/128]: Sized {
     // distance out of hazard is greater than 1 -> food reachable in time
     // TODO: quiescence search
     // TODO: spiral code
+    
+    // TODO: idea: percentage of completely empty board positions as gradual measurement for transition to lategame eval
 
     score
 }

@@ -283,11 +283,12 @@ where [(); (W*H+127)/128]: Sized {
         }
 
         // sanity checks for snake movement
+        #[cfg(debug_assertions)]
         for snake in self.snakes {
             if snake.is_dead() {
                 continue
             }
-            debug_assert!(self.bodies[0].get_bit(snake.tail as usize), "snake tail is not set in bodies bitmap\n{:?}", self);
+            debug_assert!(self.bodies[0].get_bit(snake.tail as usize), "snake tail is not set in bodies bitmap, before it should be removed\n{:?}", self);
         }
 
         // a 2nd iteration is needed to deal with collisions, since starved snakes cannot collide
@@ -332,6 +333,13 @@ where [(); (W*H+127)/128]: Sized {
                 // we do this last, since it would break collision checks earlier, but we want this info
                 // for move gen on the new board, since moving into the current space of a head is illegal
                 self.bodies[0].set_bit(self.snakes[i].head as usize);
+                // unset tail bits for snakes that have no curled bodyparts 
+                // we do this, since it is allowed to move there and we can effectively treat these
+                // spaces as empty for the next move
+                // we also do this last, since we need it earlier for collision checks of this turn
+                if self.snakes[i].curled_bodyparts == 0 && self.ruleset != Ruleset::Constrictor {
+                    self.bodies[0].unset_bit(self.snakes[i].tail as usize);
+                }
             }
         }
 
@@ -366,18 +374,6 @@ where [(); (W*H+127)/128]: Sized {
                 tail_pos as i16 + Move::int_to_index(move_int, W)
             } as u16;
         }
-    }
-
-    pub fn bodies_without_tails(&self) -> Bitset<{W*H}> {
-        let mut bodies = self.bodies[0];    
-        if self.ruleset != Ruleset::Constrictor {
-            for i in 0..S {
-                if self.snakes[i].is_alive() && self.snakes[i].curled_bodyparts == 0 {
-                    bodies.unset_bit(self.snakes[i].tail as usize)
-                }
-            }
-        }
-        bodies
     }
 
     fn coord_string_from_index(&self, idx: u16) -> String {

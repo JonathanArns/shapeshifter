@@ -8,29 +8,28 @@ pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP:
 where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
-    let bodies = board.bodies_without_tails();
 
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][0] {
         some_legal_move = Move::Up;
-        if !bodies.get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) {
             moves.push(Move::Up);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][1] {
         some_legal_move = Move::Down;
-        if !bodies.get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) {
             moves.push(Move::Down);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][2] {
         some_legal_move = Move::Right;
-        if !bodies.get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) {
             moves.push(Move::Right);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][3] {
         some_legal_move = Move::Left;
-        if !bodies.get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) {
             moves.push(Move::Left);
         }
     }
@@ -48,47 +47,46 @@ pub fn slow_allowed_moves<const S: usize, const W: usize, const H: usize, const 
 where [(); (W*H+127)/128]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Left;
-    let bodies = board.bodies_without_tails();
 
     if WRAP {
         let move_to = (pos as usize + W) % (W*H);
-        if !bodies.get_bit(move_to) {
+        if !board.bodies[0].get_bit(move_to) {
             moves.push(Move::Up);
         }
         let move_to = if W > pos as usize { W*(H-1) + pos as usize } else { pos as usize - W };
-        if !bodies.get_bit(move_to) {
+        if !board.bodies[0].get_bit(move_to) {
             moves.push(Move::Down);
         }
         let move_to = if pos as usize % W == W-1 { pos as usize - (W-1) } else { pos as usize + 1};
-        if !bodies.get_bit(move_to) {
+        if !board.bodies[0].get_bit(move_to) {
             moves.push(Move::Right);
         }
         let move_to = if pos as usize % W == 0 { pos as usize + (W-1) } else { pos as usize - 1 };
-        if !bodies.get_bit(move_to) {
+        if !board.bodies[0].get_bit(move_to) {
             moves.push(Move::Left);
         }
     } else {
         if pos < (W * (H-1)) as u16 {
             some_legal_move = Move::Up;
-            if !bodies.get_bit(pos as usize + W) {
+            if !board.bodies[0].get_bit(pos as usize + W) {
                 moves.push(Move::Up);
             }
         }
         if pos >= W as u16 {
             some_legal_move = Move::Down;
-            if !bodies.get_bit(pos as usize - W) {
+            if !board.bodies[0].get_bit(pos as usize - W) {
                 moves.push(Move::Down);
             }
         }
         if pos % (W as u16) < (W as u16 - 1) {
             some_legal_move = Move::Right;
-            if !bodies.get_bit(pos as usize + 1) {
+            if !board.bodies[0].get_bit(pos as usize + 1) {
                 moves.push(Move::Right);
             }
         }
         if pos % (W as u16) > 0 {
             some_legal_move = Move::Left;
-            if !bodies.get_bit(pos as usize - 1) {
+            if !board.bodies[0].get_bit(pos as usize - 1) {
                 moves.push(Move::Left);
             }
         }
@@ -105,8 +103,6 @@ where [(); (W*H+127)/128]: Sized {
 #[allow(unused)]
 pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+127)/128]: Sized {
-    let bodies = board.bodies_without_tails();
-
     // only generate enough move combinations so that every enemy move appears at least once
     let mut moves = ArrayVec::<[Move; S], 4>::new();
     moves.push([Move::Up; S]);
@@ -119,7 +115,7 @@ where [(); (W*H+127)/128]: Sized {
         for j in 0..4 {
             if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[board.snakes[i].head as usize][j] {
                 some_legal_move = Move::from_int(j as u8);
-                if !bodies.get_bit(pos as usize) {
+                if !board.bodies[0].get_bit(pos as usize) {
                     if moves.len() == x {
                         moves.push(moves[0]);
                     }
