@@ -125,6 +125,9 @@ where [(); (W*H+127)/128]: Sized {
                 }
                 prev_pos = pos;
             }
+            if board.snakes[n].curled_bodyparts == 0 && board.ruleset != Ruleset::Constrictor {
+                board.bodies[0].unset_bit(board.snakes[n].tail as usize);
+            }
         }
         board
     }
