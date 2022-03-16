@@ -42,7 +42,7 @@ where [(); (W*H+127)/128]: Sized {
     let my_moves = allowed_moves(board, board.snakes[0].head);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let score = ab_min(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
+        let score = ab_min(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, 0, true, depth, Score::MIN+1, Score::MAX).unwrap();
         if score > best {
             best = score;
             best_move = *mv;
@@ -96,7 +96,7 @@ where [(); (W*H+127)/128]: Sized {
                 let test = next_bns_guess(last_test, alpha, beta, my_moves.len());
                 let mut better_moves = ArrayVec::<Move, 4>::new();
                 for mv in &my_moves {
-                    if let Some(score) = ab_min(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
+                    if let Some(score) = ab_min(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, 0, true, depth, test-1, test) {
                         if score >= test {
                             better_moves.push(*mv);
                             best_score = score;
@@ -163,7 +163,7 @@ where [(); (W*H+127)/128]: Sized {
         'outer_loop: loop {
             let mut best = Score::MIN+1;
             for mv in &my_moves {
-                if let Some(score) = ab_min(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX) {
+                if let Some(score) = ab_min(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, 0, true, depth, Score::MIN+1, Score::MAX) {
                     if score > best {
                         best = score;
                         best_move = *mv;
@@ -199,6 +199,10 @@ where [(); (W*H+127)/128]: Sized {
     (best_move, best_score, best_depth)
 }
 
+const MULTI_CUT_REDUCTION: u8 = 2;
+const MULTI_CUT_CUTS: u8 = 2;
+const MULTI_CUT_PLY: u8 = 1;
+
 /// Returns None if it received a timeout from stop_receiver.
 pub fn ab_min<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
@@ -206,6 +210,8 @@ pub fn ab_min<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     stop_receiver: &Receiver<u8>,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    ply: u8,
+    mc: bool,
     depth: u8,
     mut alpha: Score,
     mut beta: Score
@@ -214,6 +220,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
     if let Ok(_) = stop_receiver.try_recv() {
         return None
     }
+    // TODO: try only using TT lookup if depth > 1
     let tt_key = ttable::hash(&(board, mv));
     let tt_entry = ttable::get(tt_key, board.tt_id);
     let mut tt_move = None;
@@ -234,12 +241,38 @@ where [(); (W*H+127)/128]: Sized {  // min call
         tt_move = entry.get_best_moves::<S>();
     }
 
+
+
+    // multi-cut pruning
+    if mc {
+        if ply > MULTI_CUT_PLY && depth > MULTI_CUT_REDUCTION+1 && enemy_moves.len() >= MULTI_CUT_CUTS as usize {
+            let mut reduction = MULTI_CUT_REDUCTION;
+            if depth > MULTI_CUT_REDUCTION * 2 {
+                reduction += 1;
+            }
+            let mut cuts = 0;
+            for mvs in enemy_moves.iter_mut() {
+                mvs[0] = mv;
+                let score = ab_max(board, node_counter, stop_receiver, mvs, ply+1, false, depth-reduction, alpha, beta)?;
+                if score < alpha {
+                    cuts += 1;
+                    if cuts == MULTI_CUT_CUTS {
+                        return Some(score)
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
     // search
     let mut best_score = Score::MAX;
     let mut best_moves = [Move::Up; S];
     for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
         mvs[0] = mv;
-        let score = ab_max(board, node_counter, stop_receiver, mvs, depth, alpha, beta)?;
+        let score = ab_max(board, node_counter, stop_receiver, mvs, ply+1, mc, depth, alpha, beta)?;
         if score < alpha {
             best_score = score;
             best_moves = *mvs;
@@ -262,6 +295,8 @@ pub fn ab_max<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     node_counter: &mut u64,
     stop_receiver: &Receiver<u8>,
     moves: &[Move; S],
+    ply: u8,
+    mc: bool,
     depth: u8,
     mut alpha: Score,
     mut beta: Score
@@ -302,14 +337,38 @@ where [(); (W*H+127)/128]: Sized {  // min call
             tt_move = Some(x[0]);
         }
     }
+    let my_moves = allowed_moves(&child, child.snakes[0].head);
+    let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1);
+
+
+    // multi-cut pruning
+    if mc {
+        if ply > MULTI_CUT_PLY && depth > MULTI_CUT_REDUCTION+1 && my_moves.len() >= MULTI_CUT_CUTS as usize {
+            let mut reduction = MULTI_CUT_REDUCTION;
+            if depth > MULTI_CUT_REDUCTION * 2 {
+                reduction += 1;
+            }
+            let mut cuts = 0;
+            for mv in &my_moves {
+                let score = ab_min(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, ply+1, false, depth-reduction, alpha, beta)?;
+                if score > beta {
+                    cuts += 1;
+                    if cuts == MULTI_CUT_CUTS {
+                        return Some(score)
+                    }
+                }
+            }
+        }
+    }
+
+
 
     // continue search
-    let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1);
-    for mv in tt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) {
+    for mv in tt_move.iter().chain(my_moves.iter()) {
         let score = if depth == 1 {
             q_min(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, alpha, beta)?
         } else {
-            ab_min(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, alpha, beta)?
+            ab_min(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, ply+1, mc, depth-1, alpha, beta)?
         };
         if score > beta {
             best_score = score;
