@@ -2,6 +2,7 @@ use crate::types::*;
 use crate::api::GameState;
 use crate::bitset::Bitset;
 use crate::ttable;
+use std::hash::{Hash, Hasher};
 
 use arrayvec::ArrayVec;
 
@@ -32,7 +33,7 @@ impl Snake {
 }
 
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool> 
 where [(); (W*H+127)/128]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
@@ -45,7 +46,22 @@ where [(); (W*H+127)/128]: Sized {
     pub turn: u16,
 }
 
-// TODO: missing logic for WRAP
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Hash for Bitboard<S, W, H, WRAP>
+where [(); (W*H+127)/128]: Sized {
+    fn hash<T: Hasher>(&self, state: &mut T) {
+        self.bodies.hash(state);
+        self.food.hash(state);
+        self.hazards.hash(state);
+        self.ruleset.hash(state);
+        self.hazard_dmg.hash(state);
+        for snake in self.snakes {
+            if snake.is_alive() {
+                snake.hash(state);
+            }
+        }
+    }
+}
+
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Bitboard<S, W, H, WRAP>
 where [(); (W*H+127)/128]: Sized {
     pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = border_mask::<W, H>(true);
