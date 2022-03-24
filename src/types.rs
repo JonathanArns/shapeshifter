@@ -89,7 +89,7 @@ pub enum Ruleset {
     Standard,
     Royale,
     Wrapped,
-    WrappedSpiral,
+    WrappedSpiral(u16),
     Constrictor,
 }
 
