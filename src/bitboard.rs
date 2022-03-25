@@ -72,7 +72,7 @@ where [(); (W*H+127)/128]: Sized {
     pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = vertical_edge_mask::<W, H>(true);
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
     pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = precompute_moves::<S, W, H, WRAP>();
-    pub const HAZARD_SPIRAL_SHIFTS: [i16; 144] = precompute_hazard_spiral::<W, H>();
+    pub const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = precompute_hazard_spiral();
 
     pub fn new() -> Self {
         Bitboard{
@@ -96,7 +96,6 @@ where [(); (W*H+127)/128]: Sized {
         };
         if ruleset == Ruleset::Wrapped && state.board.hazards.len() != 0 {
             ruleset = Ruleset::WrappedSpiral(state.board.hazards[0].x as u16 + state.board.hazards[0].y as u16 * W as u16);
-            println!("hazards: {:?}", state.board.hazards);
         }
         let mut board = Self::new();
         board.tt_id = ttable::get_tt_id(state.game.id);
@@ -150,7 +149,6 @@ where [(); (W*H+127)/128]: Sized {
                 board.bodies[0].unset_bit(board.snakes[n].tail as usize);
             }
         }
-        println!("{:?}", board);
         board
     }
 
@@ -377,22 +375,17 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     fn inc_spiral_hazards(&mut self) {
-        // spiral
         if let Ruleset::WrappedSpiral(center) = self.ruleset {
             let round = self.turn % 3;
             if round != 0 || self.turn / 3 > 142 || self.turn == 0 {
                 return
             }
-            let shift = Self::HAZARD_SPIRAL_SHIFTS[((self.turn/3)-1) as usize];
-            let next_hazard = center as i16 + shift;
-
-            // let x = center as i16 % W as i16 + shift % W as i16;
-            // let y = center as i16 / W as i16 + shift / W as i16;
-            // if x >= 0 && x < W as i16 && y >= 0 && y < H as i16 {
-                self.hazards.set_bit(next_hazard as usize);
-            // }
-
-            debug_assert!(self.turn / 3 == self.hazards.count_ones() as u16, "Missing hazards\n{:?}", self);
+            let (x_shift, y_shift) = Self::HAZARD_SPIRAL_SHIFTS[((self.turn/3)-1) as usize];
+            let x = center as i16 % W as i16 + x_shift as i16;
+            let y = center as i16 / W as i16 + y_shift as i16;
+            if x >= 0 && x < W as i16 && y >= 0 && y < H as i16 {
+                self.hazards.set_bit((center as i16 + x_shift as i16 + y_shift as i16 * W as i16) as usize);
+            }
         }
     }
 
@@ -547,9 +540,8 @@ where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
     result
 }
 
-const fn precompute_hazard_spiral<const W: usize, const H: usize>() -> [i16; 144] {
-    let w = W as i16;
-    [ 0, w, w+1, 1, -w+1, -w, -w-1, -1, w-1, 2*w-1, 2*w, 2*w+1, 2*w+2, w+2, 2, -w+2, -2*w+2, -2*w+1, -2*w, -2*w-1, -2*w-2, -w-2, -2, w-2, 2*w-2, 3*w-2, 3*w-1, 3*w, 3*w+1, 3*w+2, 3*w+3, 2*w+3, w+3, 3, -w+3, -2*w+3, -3*w+3, -3*w+2, -3*w+1, -3*w, -3*w-1, -3*w-2, -3*w-3, -2*w-3, -w-3, -3, w-3, 2*w-3, 3*w-3, 4*w-3, 4*w-2, 4*w-1, 4*w, 4*w+1, 4*w+2, 4*w+3, 4*w+4, 3*w+4, 2*w+4, w+4, 4, -w+4, -2*w+4, -3*w+4, -4*w+4, -4*w+3, -4*w+2, -4*w+1, -4*w, -4*w-1, -4*w-2, -4*w-3, -4*w-4, -3*w-4, -2*w-4, -w-4, -4, w-4, 2*w-4, 3*w-4, 4*w-4, 5*w-4, 5*w-3, 5*w-2, 5*w-1, 5*w, 5*w+1, 5*w+2, 5*w+3, 5*w+4, 5*w+5, 4*w+5, 3*w+5, 2*w+5, w+5, 5, -w+5, -2*w+5, -3*w+5, -4*w+5, -5*w+5, -5*w+4, -5*w+3, -5*w+2, -5*w+1, -5*w, -5*w-1, -5*w-2, -5*w-3, -5*w-4, -5*w-5, -4*w-5, -3*w-5, -2*w-5, -w-5, -5, w-5, 2*w-5, 3*w-5, 4*w-5, 5*w-5, 6*w-5, 6*w-4, 6*w-3, 6*w-2, 6*w-1, 6*w, 6*w+1, 6*w+2, 6*w+3, 6*w+4, 6*w+5, 6*w+6, 5*w+6, 4*w+6, 3*w+6, 2*w+6, w+6, 6, -w+6, -2*w+6, -3*w+6, -4*w+6, -5*w+6 ]
+const fn precompute_hazard_spiral() -> [(i8, i8); 144] {
+    [ (0,0), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, 2), (1, 2), (2, 2), (2, 1), (2, 0), (2, -1), (2, -2), (1, -2), (0, -2), (-1, -2), (-2, -2), (-2, -1), (-2, 0), (-2, 1), (-2, 2), (-2, 3), (-1, 3), (0, 3), (1, 3), (2, 3), (3, 3), (3, 2), (3, 1), (3, 0), (3, -1), (3, -2), (3, -3), (2, -3), (1, -3), (0, -3), (-1, -3), (-2, -3), (-3, -3), (-3, -2), (-3, -1), (-3, 0), (-3, 1), (-3, 2), (-3, 3), (-3, 4), (-2, 4), (-1, 4), (0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (4, 1), (4, 0), (4, -1), (4, -2), (4, -3), (4, -4), (3, -4), (2, -4), (1, -4), (0, -4), (-1, -4), (-2, -4), (-3, -4), (-4, -4), (-4, -3), (-4, -2), (-4, -1), (-4, 0), (-4, 1), (-4, 2), (-4, 3), (-4, 4), (-4, 5), (-3, 5), (-2, 5), (-1, 5), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (5, 4), (5, 3), (5, 2), (5, 1), (5, 0), (5, -1), (5, -2), (5, -3), (5, -4), (5, -5), (4, -5), (3, -5), (2, -5), (1, -5), (0, -5), (-1, -5), (-2, -5), (-3, -5), (-4, -5), (-5, -5), (-5, -4), (-5, -3), (-5, -2), (-5, -1), (-5, 0), (-5, 1), (-5, 2), (-5, 3), (-5, 4), (-5, 5), (-5, 6), (-4, 6), (-3, 6), (-2, 6), (-1, 6), (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (6, 5), (6, 4), (6, 3), (6, 2), (6, 1), (6, 0), (6, -1), (6, -2), (6, -3), (6, -4), (6, -5) ]
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
