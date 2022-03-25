@@ -2,6 +2,7 @@ use crate::types::*;
 use crate::api::GameState;
 use crate::bitset::Bitset;
 use crate::ttable;
+use std::hash::{Hash, Hasher};
 
 use arrayvec::ArrayVec;
 
@@ -32,7 +33,7 @@ impl Snake {
 }
 
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool> 
 where [(); (W*H+127)/128]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
@@ -45,7 +46,22 @@ where [(); (W*H+127)/128]: Sized {
     pub turn: u16,
 }
 
-// TODO: missing logic for WRAP
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Hash for Bitboard<S, W, H, WRAP>
+where [(); (W*H+127)/128]: Sized {
+    fn hash<T: Hasher>(&self, state: &mut T) {
+        self.bodies.hash(state);
+        self.food.hash(state);
+        self.hazards.hash(state);
+        self.ruleset.hash(state);
+        self.hazard_dmg.hash(state);
+        for snake in self.snakes {
+            if snake.is_alive() {
+                snake.hash(state);
+            }
+        }
+    }
+}
+
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Bitboard<S, W, H, WRAP>
 where [(); (W*H+127)/128]: Sized {
     pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = border_mask::<W, H>(true);
@@ -56,6 +72,7 @@ where [(); (W*H+127)/128]: Sized {
     pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = vertical_edge_mask::<W, H>(true);
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
     pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = precompute_moves::<S, W, H, WRAP>();
+    pub const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = precompute_hazard_spiral();
 
     pub fn new() -> Self {
         Bitboard{
@@ -71,12 +88,15 @@ where [(); (W*H+127)/128]: Sized {
     }
 
     pub fn from_gamestate(state: GameState) -> Self {
-        let ruleset = match state.game.ruleset["name"].as_str() {
+        let mut ruleset = match state.game.ruleset["name"].as_str() {
             Some("wrapped") => Ruleset::Wrapped,
             Some("royale") => Ruleset::Royale,
             Some("constrictor") => Ruleset::Constrictor,
             _ => Ruleset::Standard,
         };
+        if ruleset == Ruleset::Wrapped && state.board.hazards.len() != 0 {
+            ruleset = Ruleset::WrappedSpiral(state.board.hazards[0].x as u16 + state.board.hazards[0].y as u16 * W as u16);
+        }
         let mut board = Self::new();
         board.tt_id = ttable::get_tt_id(state.game.id);
         board.ruleset = ruleset;
@@ -351,10 +371,22 @@ where [(); (W*H+127)/128]: Sized {
             self.food.unset_bit(food as usize);
         }
 
-        // expand hazard spiral if relevant
-        // if self.ruleset == Ruleset::WrappedSpiral && self.turn > 3 && self.turn % 3 == 0 {
+        self.inc_spiral_hazards();
+    }
 
-        // }
+    fn inc_spiral_hazards(&mut self) {
+        if let Ruleset::WrappedSpiral(center) = self.ruleset {
+            let round = self.turn % 3;
+            if round != 0 || self.turn / 3 > 142 || self.turn == 0 {
+                return
+            }
+            let (x_shift, y_shift) = Self::HAZARD_SPIRAL_SHIFTS[((self.turn/3)-1) as usize];
+            let x = center as i16 % W as i16 + x_shift as i16;
+            let y = center as i16 / W as i16 + y_shift as i16;
+            if x >= 0 && x < W as i16 && y >= 0 && y < H as i16 {
+                self.hazards.set_bit((center as i16 + x_shift as i16 + y_shift as i16 * W as i16) as usize);
+            }
+        }
     }
 
     pub fn remove_snake_body(&mut self, snake_index: usize) {
@@ -508,6 +540,10 @@ where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
     result
 }
 
+const fn precompute_hazard_spiral() -> [(i8, i8); 144] {
+    [ (0,0), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, 2), (1, 2), (2, 2), (2, 1), (2, 0), (2, -1), (2, -2), (1, -2), (0, -2), (-1, -2), (-2, -2), (-2, -1), (-2, 0), (-2, 1), (-2, 2), (-2, 3), (-1, 3), (0, 3), (1, 3), (2, 3), (3, 3), (3, 2), (3, 1), (3, 0), (3, -1), (3, -2), (3, -3), (2, -3), (1, -3), (0, -3), (-1, -3), (-2, -3), (-3, -3), (-3, -2), (-3, -1), (-3, 0), (-3, 1), (-3, 2), (-3, 3), (-3, 4), (-2, 4), (-1, 4), (0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (4, 1), (4, 0), (4, -1), (4, -2), (4, -3), (4, -4), (3, -4), (2, -4), (1, -4), (0, -4), (-1, -4), (-2, -4), (-3, -4), (-4, -4), (-4, -3), (-4, -2), (-4, -1), (-4, 0), (-4, 1), (-4, 2), (-4, 3), (-4, 4), (-4, 5), (-3, 5), (-2, 5), (-1, 5), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (5, 4), (5, 3), (5, 2), (5, 1), (5, 0), (5, -1), (5, -2), (5, -3), (5, -4), (5, -5), (4, -5), (3, -5), (2, -5), (1, -5), (0, -5), (-1, -5), (-2, -5), (-3, -5), (-4, -5), (-5, -5), (-5, -4), (-5, -3), (-5, -2), (-5, -1), (-5, 0), (-5, 1), (-5, 2), (-5, 3), (-5, 4), (-5, 5), (-5, 6), (-4, 6), (-3, 6), (-2, 6), (-1, 6), (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (6, 5), (6, 4), (6, 3), (6, 2), (6, 1), (6, 0), (6, -1), (6, -2), (6, -3), (6, -4), (6, -5) ]
+}
+
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
 where [(); (W*H+127)/128]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -523,7 +559,7 @@ where [(); (W*H+127)/128]: Sized {
                         }
                     }
                 }
-                f.write_str(if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s.0 } else { "." })?;
+                f.write_str(if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s.0 } else if self.hazards.get_bit((W*(H-1-i))+j) { "+" } else { "." })?;
                 f.write_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s.0 } else { "." })?;
                 f.write_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x " } else if let Some(s) = head_str { s.1 } else { ". " })?;
             }
@@ -539,6 +575,7 @@ where [(); (W*H+127)/128]: Sized {
                 + "\n"
             ))?;
         }
+        f.write_str(&("turn: ".to_string() + &self.turn.to_string() + "\n"));
         Ok(())
     }
 }
