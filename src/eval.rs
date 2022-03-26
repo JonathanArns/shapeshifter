@@ -19,8 +19,8 @@ lazy_static! {
         // 7 distance to closest food
         // 8 difference in close reach
         [
-            -10, 1, -1, 2, 1, 3, 0, 0, 0, // early game
-            -10, 2, -2, 2, 1, 3, 0, 0, 0, // late game
+            0, 1, -1, 2, 1, 3, 0, 2, 0, // early game
+            0, 2, -2, 2, 1, 3, 0, 2, 1, // late game
         ]
     };
 }
@@ -28,10 +28,9 @@ lazy_static! {
 
 fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>
-) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
+) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
 where [(); (W*H+127)/128]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
-    let mut reachable3 = state;
     let mut reachable5 = state;
     let mut b = !board.bodies[0];
     for snake in &board.snakes[1..] {
@@ -61,17 +60,14 @@ where [(); (W*H+127)/128]: Sized {
         if closest_food_distance == None && (state.0 & board.food).any() {
             closest_food_distance = Some(turn_counter);
         }
-        if turn_counter == 3 {
-            reachable3 = state;
-        }
         if turn_counter == 5 {
             reachable5 = state;
         }
         if state == old_state {
             if let Some(dist) = closest_food_distance {
-                return (state, reachable3, reachable5, dist as Score)
+                return (state, reachable5, dist as Score)
             } else {
-                return (state, reachable3, reachable5, W as Score)
+                return (state, reachable5, W as Score)
             }
         } else {
             old_state = state;
@@ -99,12 +95,10 @@ where [(); (W*H+127)/128]: Sized {
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
     let mut largest_enemy_length = 0;
-    let mut tail_mask = Bitset::<{W*H}>::with_bit_set(board.snakes[0].tail as usize);
 
     for i in 1..S {
         if board.snakes[i].is_alive() {
             enemies_alive += 1;
-            tail_mask.set_bit(board.snakes[i].tail as usize);
             let len = board.snakes[i].length;
             if len > largest_enemy_length {
                 largest_enemy_length = len;
@@ -114,7 +108,7 @@ where [(); (W*H+127)/128]: Sized {
             }
         }
     }
-    let ((my_area, enemy_area), (my_reach3, enemy_reach3), (my_reach5, enemy_reach5), closest_food_distance) = area_control(board);
+    let ((my_area, enemy_area), (my_reach5, enemy_reach5), closest_food_distance) = area_control(board);
 
     let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / (W-1 * H-1) as f64).min(1.0);
 
@@ -127,11 +121,10 @@ where [(); (W*H+127)/128]: Sized {
     // difference in controlled food
     let food_control_diff = (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
     // difference in controlled area
-    let area_diff = my_area.count_ones() as Score - enemy_area.count_ones() as Score;
+    // let area_diff = my_area.count_ones() as Score - enemy_area.count_ones() as Score;
     // distance to closest food
     let food_dist = W as Score - closest_food_distance;
     // reach difference
-    // let reach_diff = my_reach3.count_ones() as Score - enemy_reach3.count_ones() as Score + my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score;
     let reach_diff = my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score;
     // let reach_diff = my_reach3.count_ones() as Score - enemy_reach3.count_ones() as Score;
 
@@ -142,7 +135,7 @@ where [(); (W*H+127)/128]: Sized {
     early_score += WEIGHTS[3] * size_diff;
     early_score += WEIGHTS[4] * non_hazard_area_diff;
     early_score += WEIGHTS[5] * food_control_diff;
-    early_score += WEIGHTS[6] * area_diff;
+    // early_score += WEIGHTS[6] * area_diff;
     early_score += WEIGHTS[7] * food_dist;
     early_score += WEIGHTS[8] * reach_diff;
 
@@ -153,7 +146,7 @@ where [(); (W*H+127)/128]: Sized {
     late_score += WEIGHTS[12] * size_diff;
     late_score += WEIGHTS[13] * non_hazard_area_diff;
     late_score += WEIGHTS[14] * food_control_diff;
-    late_score += WEIGHTS[15] * area_diff;
+    // late_score += WEIGHTS[15] * area_diff;
     late_score += WEIGHTS[16] * food_dist;
     late_score += WEIGHTS[17] * reach_diff;
 
