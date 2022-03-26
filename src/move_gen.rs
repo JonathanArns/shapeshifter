@@ -145,8 +145,13 @@ where [(); (W*H+127)/128]: Sized {
         if snake.is_alive() {
             i += 1;
             let mut moves = allowed_moves(board, snake.head);
-            moves.sort_by_key(|x| {
-                (!board.is_in_direction(snake.head, board.snakes[0].head, *x)) as u8
+            moves.sort_by_key(|mv| {
+                let dest = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].unwrap();
+                let mut dist = board.distance(board.snakes[0].head, dest);
+                if dist == 1 && snake.length <= board.snakes[0].length {
+                    return dist + 10
+                }
+                dist
             });
             moves_per_snake.push(moves);
         } else {

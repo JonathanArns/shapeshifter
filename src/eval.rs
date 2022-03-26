@@ -6,17 +6,33 @@ use std::env;
 
 lazy_static! {
     /// Weights for eval function can be loaded from environment.
-    static ref WEIGHTS: [Score; 7] = if let Ok(var) = env::var("WEIGHTS") {
+    static ref WEIGHTS: [Score; 18] = if let Ok(var) = env::var("WEIGHTS") {
         serde_json::from_str(&var).unwrap()
     } else {
-       [-10, 1, 2, 1, 3, 5, 1]
+        // 0 number of enemies alive
+        // 1 my health
+        // 2 lowest enemy healt
+        // 3 difference in length to longest enemy
+        // 4 difference in controlled non-hazard area
+        // 5 difference in controlled food
+        // 6 difference in controlled area
+        // 7 distance to closest food
+        // 8 difference in close reach
+        [
+            -10, 1, -1, 2, 1, 3, 0, 0, 0, // early game
+            -10, 2, -2, 2, 1, 3, 0, 0, 0, // late game
+        ]
     };
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
 
-fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> (Bitset<{W*H}>, Bitset<{W*H}>)
+fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>
+) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
 where [(); (W*H+127)/128]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
+    let mut reachable3 = state;
+    let mut reachable5 = state;
     let mut b = !board.bodies[0];
     for snake in &board.snakes[1..] {
         if snake.is_alive() {
@@ -25,6 +41,7 @@ where [(); (W*H+127)/128]: Sized {
     }
     let mut old_state = state; // state at n-1
     let mut turn_counter = 0;
+    let mut closest_food_distance = None;
     loop {
         turn_counter += 1;
         debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
@@ -41,8 +58,21 @@ where [(); (W*H+127)/128]: Sized {
                 | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
         }
         state = (state.0 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (me & !enemies)), state.1 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (enemies & !me)));
+        if closest_food_distance == None && (state.0 & board.food).any() {
+            closest_food_distance = Some(turn_counter);
+        }
+        if turn_counter == 3 {
+            reachable3 = state;
+        }
+        if turn_counter == 5 {
+            reachable5 = state;
+        }
         if state == old_state {
-            return state
+            if let Some(dist) = closest_food_distance {
+                return (state, reachable3, reachable5, dist as Score)
+            } else {
+                return (state, reachable3, reachable5, W as Score)
+            }
         } else {
             old_state = state;
         }
@@ -84,30 +114,53 @@ where [(); (W*H+127)/128]: Sized {
             }
         }
     }
-    let (my_area, enemy_area) = area_control(board);
+    let ((my_area, enemy_area), (my_reach3, enemy_reach3), (my_reach5, enemy_reach5), closest_food_distance) = area_control(board);
 
-    let mut score: Score = 0;
-    // number of enemies alive
-    score += WEIGHTS[0] * enemies_alive as Score;
-    // difference in health to lowest enemy
-    score += WEIGHTS[1] * me.health as Score - lowest_enemy_health as Score;
+    let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / (W-1 * H-1) as f64).min(1.0);
+
+    // features
+    let health_diff = me.health as Score - lowest_enemy_health as Score;
     // difference in length to longest enemy
-    score += WEIGHTS[2] *  W as Score * me.length as Score - largest_enemy_length as Score;
+    let size_diff = W as Score * (me.length as Score - largest_enemy_length as Score);
     // difference in controlled non-hazard area
-    score += WEIGHTS[3] * (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score;
+    let non_hazard_area_diff = (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score;
     // difference in controlled food
-    score += WEIGHTS[4] * (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
-    // difference in controlled tails
-    score += WEIGHTS[5] * (my_area & tail_mask).count_ones() as Score - (enemy_area & tail_mask).count_ones() as Score;
+    let food_control_diff = (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
+    // difference in controlled area
+    let area_diff = my_area.count_ones() as Score - enemy_area.count_ones() as Score;
+    // distance to closest food
+    let food_dist = W as Score - closest_food_distance;
+    // reach difference
+    // let reach_diff = my_reach3.count_ones() as Score - enemy_reach3.count_ones() as Score + my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score;
+    let reach_diff = my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score;
+    // let reach_diff = my_reach3.count_ones() as Score - enemy_reach3.count_ones() as Score;
 
-    // TODO: features to try: my health, distance to closest food, distance to non hazard area
-    // distance out of hazard is greater than 1 -> food reachable in time
-    // TODO: quiescence search
+    let mut early_score: Score = 0;
+    early_score += WEIGHTS[0] * enemies_alive;
+    early_score += WEIGHTS[1] * me.health as Score;
+    early_score += WEIGHTS[2] * lowest_enemy_health as Score;
+    early_score += WEIGHTS[3] * size_diff;
+    early_score += WEIGHTS[4] * non_hazard_area_diff;
+    early_score += WEIGHTS[5] * food_control_diff;
+    early_score += WEIGHTS[6] * area_diff;
+    early_score += WEIGHTS[7] * food_dist;
+    early_score += WEIGHTS[8] * reach_diff;
+
+    let mut late_score: Score = 0;
+    late_score += WEIGHTS[9] * enemies_alive;
+    late_score += WEIGHTS[10] * me.health as Score;
+    late_score += WEIGHTS[11] * lowest_enemy_health as Score;
+    late_score += WEIGHTS[12] * size_diff;
+    late_score += WEIGHTS[13] * non_hazard_area_diff;
+    late_score += WEIGHTS[14] * food_control_diff;
+    late_score += WEIGHTS[15] * area_diff;
+    late_score += WEIGHTS[16] * food_dist;
+    late_score += WEIGHTS[17] * reach_diff;
+
+    // TODO: features to try: distance to non hazard area, distance out of hazard is greater than 1 -> food reachable in time
     // TODO: spiral code
-    
-    // TODO: idea: percentage of completely empty board positions as gradual measurement for transition to lategame eval
 
-    score
+    (early_score as f64 * (1.0 - game_progression) + late_score as f64 * game_progression).floor() as Score
 }
 
 pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
