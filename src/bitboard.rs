@@ -575,7 +575,7 @@ where [(); (W*H+127)/128]: Sized {
                 + "\n"
             ))?;
         }
-        f.write_str(&("turn: ".to_string() + &self.turn.to_string() + "\n"));
+        f.write_str(&("turn: ".to_string() + &self.turn.to_string() + "\n"))?;
         Ok(())
     }
 }
