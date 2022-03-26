@@ -7,9 +7,9 @@ use fxhash::FxHasher64;
 #[cfg(feature = "debug_tt")]
 use std::collections::hash_map::HashMap;
 
-const TT_LENGTH: usize = 0b_1000000000000000000000;
-const TT_MASK: u64 =     0b__111111111111111111111;
-const MAX_SIMUL_GAMES: usize = 10;
+const TT_LENGTH: usize = 0b_1000000000000000000000000000000;
+const TT_MASK: u64 =     0b__111111111111111111111111111111;
+const MAX_SIMUL_GAMES: usize = 3;
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.
@@ -90,6 +90,10 @@ pub fn insert<const S: usize>(
     unsafe {
         if let Some(tables) = &mut TABLES {
             let index = key & TT_MASK;
+            let entry = tables[tt_id as usize][index as usize];
+            if entry.matches_key(key) && entry.get_depth() > depth {
+                return
+            }
             tables[tt_id as usize][index as usize] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
         }
     }
