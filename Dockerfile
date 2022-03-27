@@ -5,4 +5,4 @@ RUN ["cargo", "build", "--release"]
 
 EXPOSE 8080
 
-ENTRYPOINT ["./rustputin"]
+ENTRYPOINT ["./shapeshifter"]
