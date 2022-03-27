@@ -1,6 +1,5 @@
-use crate::types::*;
 use crate::bitboard::*;
-use crate::bitboard::Bitset;
+use crate::minimax::Score;
 
 use std::env;
 
@@ -32,7 +31,7 @@ fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool
 where [(); (W*H+127)/128]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
     let mut reachable5 = state;
-    let mut b = !board.bodies[0];
+    let b = !board.bodies[0];
     for snake in &board.snakes[1..] {
         if snake.is_alive() {
             state.1.set_bit(snake.head as usize);
@@ -112,8 +111,6 @@ where [(); (W*H+127)/128]: Sized {
 
     let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / (W-1 * H-1) as f64).min(1.0);
 
-    // features
-    let health_diff = me.health as Score - lowest_enemy_health as Score;
     // difference in length to longest enemy
     let size_diff = W as Score * (me.length as Score - largest_enemy_length as Score);
     // difference in controlled non-hazard area
@@ -150,9 +147,6 @@ where [(); (W*H+127)/128]: Sized {
     late_score += WEIGHTS[16] * food_dist;
     late_score += WEIGHTS[17] * reach_diff;
 
-    // TODO: features to try: distance to non hazard area, distance out of hazard is greater than 1 -> food reachable in time
-    // TODO: spiral code
-
     (early_score as f64 * (1.0 - game_progression) + late_score as f64 * game_progression).floor() as Score
 }
 
@@ -165,7 +159,6 @@ where [(); (W*H+127)/128]: Sized {
             }
         }
         return 0
-        // return Score::MIN - board.snakes[0].health as Score
     } else {
         return Score::MAX - board.turn as i16
     }

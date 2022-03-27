@@ -1,8 +1,5 @@
-use crate::types::*;
 use crate::bitboard::*;
-use crate::move_gen::*;
-use crate::eval::*;
-use crate::ttable;
+use crate::bitboard::move_gen::*;
 
 use std::env;
 use std::time;
@@ -10,6 +7,11 @@ use std::thread;
 use crossbeam_channel::{unbounded, Sender, Receiver};
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
+
+mod eval;
+mod ttable;
+
+pub use ttable::{init, get_tt_id};
 
 const QUIESCENCE_DEPTH: u8 = 3;
 
@@ -21,12 +23,13 @@ lazy_static! {
     };
 }
 
+pub type Score = i16;
+
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
-        // iterative_deepening_search(board, deadline)
         best_node_search(board, deadline)
     }
 }
@@ -54,7 +57,7 @@ where [(); (W*H+127)/128]: Sized {
     (best_move, best_score, depth)
 }
 
-fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score, subtree_count: usize) -> Score {
+fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     if prev_guess > alpha && prev_guess < beta {
         return prev_guess
     }
@@ -93,7 +96,7 @@ where [(); (W*H+127)/128]: Sized {
             let mut beta = Score::MAX;
             let best_move;
             loop {
-                let test = next_bns_guess(last_test, alpha, beta, my_moves.len());
+                let test = next_bns_guess(last_test, alpha, beta);
                 let mut better_moves = ArrayVec::<Move, 4>::new();
                 for mv in &my_moves {
                     if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
@@ -121,63 +124,6 @@ where [(); (W*H+127)/128]: Sized {
             result_sender.try_send((best_move, best_score, depth)).ok();
             if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX {
                 break // Our last best move resulted in a terminal state, so we don't need to search deeper
-            }
-            depth += 1;
-        }
-        #[cfg(not(feature = "detect_hash_collisions"))]
-        println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
-    });
-
-    // receive results
-    while time::Instant::now() < deadline {
-        if let Ok(msg) = result_receiver.try_recv() {
-            best_move = msg.0;
-            best_score = msg.1;
-            best_depth = msg.2
-        } else {
-            thread::sleep(time::Duration::from_millis(1));
-        }
-    }
-    stop_sender.send(1).ok(); // Channel might be broken, if search returned early. We don't care.
-
-    #[cfg(not(feature = "detect_hash_collisions"))]
-    println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
-    (best_move, best_score, best_depth)
-}
-
-pub fn iterative_deepening_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
-where [(); (W*H+127)/128]: Sized {
-    let mut best_move = Move::Up;
-    let mut best_score = Score::MIN+1;
-    let mut best_depth = 1;
-    let start_time = time::Instant::now();
-
-    let (stop_sender, stop_receiver) = unbounded();
-    let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
-
-    let board = board.clone();
-    thread::spawn(move || {
-        let mut node_counter = 0;
-        let start_time = time::Instant::now(); // only used to calculate nodes / second
-        let mut best_move = Move::Up;
-        let mut depth = 1;
-        let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
-        let my_moves = allowed_moves(&board, board.snakes[0].head);
-        'outer_loop: loop {
-            let mut best = Score::MIN+1;
-            for mv in &my_moves {
-                if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX) {
-                    if score > best {
-                        best = score;
-                        best_move = *mv;
-                    }
-                } else {
-                    break 'outer_loop
-                }
-            }
-            result_sender.try_send((best_move, best, depth)).ok();
-            if best > Score::MAX-1000 || best < Score::MIN+1000 {
-                break
             }
             depth += 1;
         }
@@ -253,10 +199,10 @@ where [(); (W*H+127)/128]: Sized {  // min call
 
             // search stops
             if child.is_terminal() {
-                break 'max_call eval_terminal(&child);
+                break 'max_call eval::eval_terminal(&child);
             } else if depth == 1 && is_stable(&child) {
                 // TODO: insert into TT and move TT check to before?
-                break 'max_call eval(&child);
+                break 'max_call eval::eval(&child);
             }
             // check TT
             let itt_key = ttable::hash(&child);
@@ -350,43 +296,20 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     depth: u8,
-    mut alpha: Score,
+    alpha: Score,
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+127)/128]: Sized {  // min call
     if let Ok(_) = stop_receiver.try_recv() {
         return None
     }
-    // let tt_key = ttable::hash(&(board, mv));
-    // let tt_entry = ttable::get(tt_key, board.tt_id);
-    // let mut tt_move = None;
-    // if let Some(entry) = tt_entry {
-    //     if entry.get_depth() >= depth {
-    //         let tt_score = entry.get_score();
-    //         if entry.is_lower_bound() {
-    //             alpha = alpha.max(tt_score);
-    //         } else if entry.is_upper_bound() {
-    //             beta = beta.min(tt_score);
-    //         } else {
-    //             return Some(tt_score) // got exact score
-    //         }
-    //         if alpha >= beta {
-    //             return Some(tt_score);
-    //         }
-    //     }
-    //     tt_move = entry.get_best_moves::<S>();
-    // }
 
-    // search
     let mut best_score = Score::MAX;
-    let mut best_moves = [Move::Up; S];
-    // for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
     for mvs in enemy_moves.iter_mut() {
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
-            let mut ibeta = beta;
+            let ibeta = beta;
             let mut ibest_score = Score::MIN;
-            let mut ibest_move = Move::Up;
             mvs[0] = mv;
             let mut child = board.clone();
             child.apply_moves(&mvs);
@@ -394,67 +317,38 @@ where [(); (W*H+127)/128]: Sized {  // min call
 
             // search stops
             if child.is_terminal() {
-                break 'max_call eval_terminal(&child);
+                break 'max_call eval::eval_terminal(&child);
             } else if depth == 1 || is_stable(&child) {
-                break 'max_call eval(&child);
+                break 'max_call eval::eval(&child);
             }
-            // check TT
-            // let itt_key = ttable::hash(&child);
-            // let itt_entry = ttable::get(itt_key, child.tt_id);
-            // let mut itt_move = None;
-            // if let Some(entry) = itt_entry {
-            //     if entry.get_depth() >= depth {
-            //         let tt_score = entry.get_score();
-            //         if entry.is_lower_bound() {
-            //             ialpha = ialpha.max(tt_score);
-            //         } else if entry.is_upper_bound() {
-            //             ibeta = ibeta.min(tt_score);
-            //         } else {
-            //             break 'max_call tt_score; // got exact score
-            //         }
-            //         if ialpha >= ibeta {
-            //             break 'max_call tt_score;
-            //         }
-            //     }
-            //     if let Some(x) = entry.get_best_moves::<1>() {
-            //         itt_move = Some(x[0]);
-            //     }
-            // }
 
             // continue search
             let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1); // No idea why, but using unordered movegen here is a big improvement
-            // for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) { // TODO: apply move ordering
             for mv in &allowed_moves(&child, child.snakes[0].head) {
                 let iscore = quiescence(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
-                    ibest_move = *mv;
                     break;
                 }
                 if iscore > ibest_score {
                     ibest_score = iscore;
-                    ibest_move = *mv;
                     if iscore > ialpha {
                         ialpha = iscore;
                     }
                 }
             }
-            // ttable::insert(itt_key, child.tt_id, ibest_score, ibest_score >= ibeta, ibest_score <= ialpha, depth, [ibest_move; 1]);
             ibest_score
         };
         if score < alpha {
             best_score = score;
-            best_moves = *mvs;
             break;
         }
         if score < best_score {
             best_score = score;
-            best_moves = *mvs;
             if score < beta {
                 beta = score;
             }
         }
     }
-    // ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
     Some(best_score)
 }

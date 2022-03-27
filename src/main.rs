@@ -1,5 +1,8 @@
 #![feature(proc_macro_hygiene, decl_macro, test, generic_const_exprs, label_break_value, stmt_expr_attributes)]
 
+#![allow(incomplete_features)]
+
+
 #[macro_use]
 extern crate rocket;
 #[macro_use]
@@ -8,22 +11,20 @@ extern crate rocket_contrib;
 extern crate lazy_static;
 extern crate test;
 
-mod types;
-mod bitboard;
-mod minimax;
 mod api;
-mod move_gen;
+mod bitboard;
+
+#[cfg(not(feature = "mcts"))]
+mod minimax;
+#[cfg(feature = "mcts")]
 mod uct;
-mod eval;
-mod ttable;
 
 use rocket::config::{Config, Environment};
 use std::env;
 
 fn main() {
-    if cfg!(feature = "tt") {
-        ttable::init();
-    }
+    #[cfg(all(feature = "tt", not(feature = "mcts")))]
+    minimax::init();
     let address = "0.0.0.0";
     let env_port = env::var("PORT").ok();
     let env_port = env_port

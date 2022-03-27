@@ -4,11 +4,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time;
-use crate::types;
+
 use crate::bitboard;
+#[cfg(not(feature = "mcts"))]
 use crate::minimax;
+#[cfg(feature = "mcts")]
 use crate::uct;
-use crate::ttable;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Game {
@@ -85,14 +86,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
-        Some("wrapped") => types::Ruleset::Wrapped,
-        Some("royale") => types::Ruleset::Royale,
-        Some("constrictor") => types::Ruleset::Constrictor,
-        _ => types::Ruleset::Standard,
+        Some("wrapped") => bitboard::Ruleset::Wrapped,
+        Some("royale") => bitboard::Ruleset::Royale,
+        Some("constrictor") => bitboard::Ruleset::Constrictor,
+        _ => bitboard::Ruleset::Standard,
     };
 
     #[cfg(not(feature = "spl"))]
-    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, types::Ruleset::Wrapped)) {
+    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
         (1, 11, 11, true) => uct::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline),
         (2, 11, 11, true) => uct::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline),
         (3, 11, 11, true) => uct::search(&bitboard::Bitboard::<3, 11, 11, true>::from_gamestate(state), deadline),
@@ -106,7 +107,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
     };
 
     #[cfg(feature = "spl")]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, types::Ruleset::Wrapped)) {
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
         (1, 7, 7, true) => uct::search(&bitboard::Bitboard::<1, 7, 7, true>::from_gamestate(state), deadline),
         (2, 7, 7, true) => uct::search(&bitboard::Bitboard::<2, 7, 7, true>::from_gamestate(state), deadline),
         (3, 7, 7, true) => uct::search(&bitboard::Bitboard::<3, 7, 7, true>::from_gamestate(state), deadline),
@@ -221,14 +222,14 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
     let state = req.into_inner();
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
-        Some("wrapped") => types::Ruleset::Wrapped,
-        Some("royale") => types::Ruleset::Royale,
-        Some("constrictor") => types::Ruleset::Constrictor,
-        _ => types::Ruleset::Standard,
+        Some("wrapped") => bitboard::Ruleset::Wrapped,
+        Some("royale") => bitboard::Ruleset::Royale,
+        Some("constrictor") => bitboard::Ruleset::Constrictor,
+        _ => bitboard::Ruleset::Standard,
     };
 
     #[cfg(not(feature = "spl"))]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, types::Ruleset::Wrapped)) {
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
         (1, 11, 11, true) => minimax::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline),
         (2, 11, 11, true) => minimax::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline),
         (3, 11, 11, true) => minimax::search(&bitboard::Bitboard::<3, 11, 11, true>::from_gamestate(state), deadline),
@@ -242,7 +243,7 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
     };
 
     #[cfg(feature = "spl")]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, types::Ruleset::Wrapped)) {
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
         (1, 7, 7, true) => minimax::search(&bitboard::Bitboard::<1, 7, 7, true>::from_gamestate(state), deadline),
         (2, 7, 7, true) => minimax::search(&bitboard::Bitboard::<2, 7, 7, true>::from_gamestate(state), deadline),
         (3, 7, 7, true) => minimax::search(&bitboard::Bitboard::<3, 7, 7, true>::from_gamestate(state), deadline),

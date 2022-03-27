@@ -92,11 +92,6 @@ where [(); (N+127)/128]: Sized {
         false
     }
 
-    /// Returns `true` if all the bits are set to `false`
-    pub fn none(&self) -> bool {
-        !self.any()
-    }
-
     /// Returns the number of ones in the Bitset
     pub fn count_ones(&self) -> u32 {
         let mut ones = 0;

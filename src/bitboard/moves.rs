@@ -1,8 +1,6 @@
 use rocket_contrib::json::JsonValue;
 use rand::Rng;
 
-pub type Score = i16;
-
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Move {
@@ -17,10 +15,12 @@ impl Move {
         *self as u8
     }
 
+    #[allow(unused)]
     pub const fn to_index(&self, width: usize) -> i16 {
         Self::int_to_index(self.to_int(), width)
     }
 
+    #[allow(unused)]
     pub const fn to_index_wrapping(&self, width: usize, height: usize, from: u16) -> i16 {
         Self::int_to_index_wrapping(self.to_int(), width, height, from)
     }
@@ -81,27 +81,5 @@ impl Move {
 
     pub fn random() -> Self {
         Move::from_int(rand::thread_rng().gen_range(0..4))
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
-pub enum Ruleset {
-    Standard,
-    Royale,
-    Wrapped,
-    WrappedSpiral(u16),
-    Constrictor,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_move_int_conversions() {
-        assert!(Move::Up == Move::from_int(Move::Up.to_int()));
-        assert!(Move::Down == Move::from_int(Move::Down.to_int()));
-        assert!(Move::Left == Move::from_int(Move::Left.to_int()));
-        assert!(Move::Right == Move::from_int(Move::Right.to_int()));
     }
 }

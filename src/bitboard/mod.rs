@@ -1,19 +1,30 @@
-use crate::types::*;
 use crate::api::GameState;
-use crate::ttable;
 use std::hash::{Hash, Hasher};
-
 use arrayvec::ArrayVec;
+#[cfg(not(feature = "mcts"))]
+use crate::minimax;
 
 mod bitset;
 mod constants;
+pub mod moves;
+pub mod move_gen;
 
 pub use bitset::Bitset;
+pub use moves::Move;
 
 const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
 const HEAD_COLLISION: i8 = -3;
 const EVEN_HEAD_COLLISION: i8 = -4;
+
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
+pub enum Ruleset {
+    Standard,
+    Royale,
+    Wrapped,
+    WrappedSpiral(u16),
+    Constrictor,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Snake {
@@ -102,7 +113,10 @@ where [(); (W*H+127)/128]: Sized {
             ruleset = Ruleset::WrappedSpiral(state.board.hazards[0].x as u16 + state.board.hazards[0].y as u16 * W as u16);
         }
         let mut board = Self::new();
-        board.tt_id = ttable::get_tt_id(state.game.id);
+        #[cfg(not(feature = "mcts"))]
+        {
+            board.tt_id = minimax::get_tt_id(state.game.id);
+        }
         board.ruleset = ruleset;
         board.turn = state.turn as u16;
         if let Some(settings) = state.game.ruleset.get("settings") {
@@ -169,21 +183,6 @@ where [(); (W*H+127)/128]: Sized {
         true
     }
 
-    /// Returns wether the game is over and the winner id, if there is a winner
-    pub fn is_over(&self) -> (bool, Option<usize>) {
-        let mut winner = None;
-        for i in 0..S {
-            if self.snakes[i].is_alive() {
-                if winner == None {
-                    winner = Some(i);
-                } else {
-                    return (false, None)
-                }
-            }
-        }
-        (true, winner)
-    }
-
     pub fn distance(&self, from: u16, to: u16) -> u16 {
         let w = W as u16;
         let dist_x = (from%w).max(to%w) - (from%w).min(to%w);
@@ -192,63 +191,6 @@ where [(); (W*H+127)/128]: Sized {
             dist_x.min(w - dist_x) + dist_y.min(H as u16 - dist_y)
         } else {
             dist_x + dist_y
-        }
-    }
-
-    pub fn is_in_direction(&self, from: u16, to: u16, mv: Move) -> bool {
-        let w = W as u16;
-        if WRAP {
-            let f;
-            let t;
-            match mv {
-                Move::Left => {
-                    f = from % w;
-                    t = to % w;
-                    (f > t && f - t < w / 2) || (f < t && t - f > w - 2)
-                },
-                Move::Right => {
-                    f = from % w;
-                    t = to % w;
-                    (f > t && f - t > w / 2) || (f < t && t - f < w - 2)
-                },
-                Move::Down => {
-                    f = from / w;
-                    t = to / w;
-                    (f > t && f - t < w / 2) || (f < t && t - f > w - 2)
-                },
-                Move::Up => {
-                    f = from / w;
-                    t = to / w;
-                    (f > t && f - t > w / 2) || (f < t && t - f < w - 2)
-                },
-            }
-        } else {
-            match mv {
-                Move::Left => from % w > to % w,
-                Move::Right => from % w < to % w,
-                Move::Down => from / w > to / w,
-                Move::Up => from / w < to / w,
-            }
-        }
-    }
-
-    /// Returns the last move that was made by a snake.
-    /// None is returned if the snake has not made a move yet.
-    pub fn get_previous_move(&self, snake_index: usize) -> Option<Move> {
-        if WRAP {
-            todo!("not implemented for wrapped boards")
-        }
-        let head = self.snakes[snake_index].head as usize;
-        if head == self.snakes[snake_index].tail as usize {
-            None
-        } else if head % W > 0 && !self.bodies[1].get_bit(head-1) && self.bodies[2].get_bit(head-1) {
-            Some(Move::Right)
-        } else if head % W < W-1 && self.bodies[1].get_bit(head+1) && self.bodies[2].get_bit(head+1) {
-            Some(Move::Left)
-        } else if head >= W && !self.bodies[1].get_bit(head-W) && !self.bodies[2].get_bit(head-W) {
-            Some(Move::Up)
-        } else {
-            Some(Move::Down)
         }
     }
 
@@ -462,7 +404,6 @@ where [(); (W*H+127)/128]: Sized {
 mod tests {
     use super::*;
     use crate::api;
-    use crate::move_gen;
     use test::Bencher;
 
     fn c(x: usize, y: usize) -> api::Coord {

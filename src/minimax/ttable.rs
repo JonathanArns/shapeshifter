@@ -1,5 +1,5 @@
-use crate::types::*;
-
+use super::Score;
+use super::Move;
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use fxhash::FxHasher64;
@@ -223,6 +223,7 @@ impl Entry {
         (self.data >> Self::UPPER_BOUND_SHIFT) & 1 != 0
     }
 
+    #[allow(unused)]
     pub fn is_exact(&self) -> bool {
         (self.data >> Self::LOWER_BOUND_SHIFT) & 0b_11 == 0
     }

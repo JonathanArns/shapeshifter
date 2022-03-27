@@ -1,6 +1,5 @@
-use crate::types::*;
 use crate::bitboard::*;
-use crate::move_gen::*;
+use crate::bitboard::move_gen::*;
 
 use arrayvec::ArrayVec;
 use rand::Rng;
@@ -183,22 +182,20 @@ where [(); (W*H+127)/128]: Sized {
             tmp
         },
     };
-    let mut result = board.is_over();
-    while !result.0 { // is_over
+    while !board.is_terminal() {
         *node_counter += 1;
         board.apply_moves(&moves);
         moves = random_move_combination(&board, rng);
-        result = board.is_over();
     }
-    if let Some(winner) = result.1 {
-        if winner == 0 {
-            1
-        } else {
-            -1
+    if board.snakes[0].is_alive() {
+        return 1
+    }
+    for snake in board.snakes[1..].iter() {
+        if snake.is_alive() {
+            return -1
         }
-    } else {
-        0
     }
+    return 0
 }
 
 fn select_child<const S: usize, const W: usize, const H: usize, const WRAP: bool>(node: Rc<RefCell<Node<S, W, H, WRAP>>>) -> usize

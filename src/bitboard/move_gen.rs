@@ -1,7 +1,7 @@
-use crate::types::*;
-use crate::bitboard::*;
-
+use super::*;
 use arrayvec::ArrayVec;
+
+#[cfg(feature = "mcts")]
 use rand::Rng;
 
 pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, pos: u16) -> ArrayVec<Move, 4>
@@ -212,6 +212,7 @@ where [(); (W*H+127)/128]: Sized {
     moves
 }
 
+#[cfg(feature = "mcts")]
 pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, rng: &mut impl Rng) -> [Move; S]
 where [(); (W*H+127)/128]: Sized {
     let moves = limited_move_combinations(board, 0);
