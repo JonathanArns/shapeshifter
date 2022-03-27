@@ -13,7 +13,6 @@ mod bitboard;
 mod minimax;
 mod api;
 mod move_gen;
-mod mcts;
 mod uct;
 mod eval;
 mod bitset;
