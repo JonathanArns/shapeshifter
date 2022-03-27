@@ -1,6 +1,6 @@
 use crate::types::*;
 use crate::bitboard::*;
-use crate::bitset::Bitset;
+use crate::bitboard::Bitset;
 
 use std::env;
 

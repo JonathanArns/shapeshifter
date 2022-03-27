@@ -1,10 +1,14 @@
 use crate::types::*;
 use crate::api::GameState;
-use crate::bitset::Bitset;
 use crate::ttable;
 use std::hash::{Hash, Hasher};
 
 use arrayvec::ArrayVec;
+
+mod bitset;
+mod constants;
+
+pub use bitset::Bitset;
 
 const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
@@ -64,15 +68,15 @@ where [(); (W*H+127)/128]: Sized {
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Bitboard<S, W, H, WRAP>
 where [(); (W*H+127)/128]: Sized {
-    pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = border_mask::<W, H>(true);
-    pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = border_mask::<W, H>(false);
-    pub const TOP_EDGE_MASK: Bitset<{W*H}> = horizontal_edge_mask::<W, H>(true);
-    pub const BOTTOM_EDGE_MASK: Bitset<{W*H}> = horizontal_edge_mask::<W, H>(false);
-    pub const LEFT_EDGE_MASK: Bitset<{W*H}> = vertical_edge_mask::<W, H>(false);
-    pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = vertical_edge_mask::<W, H>(true);
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
-    pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = precompute_moves::<S, W, H, WRAP>();
-    pub const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = precompute_hazard_spiral();
+    pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(true);
+    pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(false);
+    pub const TOP_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(true);
+    pub const BOTTOM_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(false);
+    pub const LEFT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(false);
+    pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(true);
+    pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = constants::precompute_moves::<S, W, H, WRAP>();
+    pub const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = constants::precompute_hazard_spiral();
 
     pub fn new() -> Self {
         Bitboard{
@@ -416,132 +420,6 @@ where [(); (W*H+127)/128]: Sized {
         let y = idx / W as u16;
         "(".to_string() + &x.to_string() + " " + &y.to_string() + ")"
     }
-}
-
-/// Computes ALL_BUT_LEFT_EDGE_MASK and ALL_BUT_RIGHT_EDGE_MASK
-const fn border_mask<const W: usize, const H: usize>(left: bool) -> Bitset<{W*H}>
-where [(); (W*H+127)/128]: Sized {
-    let mut arr = [0_u128; (W*H+127)/128];
-    let mut i = 0;
-    let mut j;
-    loop {
-        if i == H {
-            break
-        }
-        if left {
-            j = 0;
-        } else {
-            j = 1;
-        }
-        loop {
-            if left && j == W-1 {
-                break
-            } else if !left && j == W {
-                break
-            }
-            let idx = (i*W+j)>>7;
-            let offset = (i*W+j) % 128;
-            arr[idx] |= 1_u128<<offset;
-
-            j += 1;
-        }
-        i += 1;
-    }
-    Bitset::<{W*H}>::from_array(arr)
-}
-
-/// Computes LEFT_EDGE_MASK and RIGHT_EDGE_MASK
-const fn vertical_edge_mask<const W: usize, const H: usize>(right: bool) -> Bitset<{W*H}>
-where [(); (W*H+127)/128]: Sized {
-    let mut arr = [0_u128; (W*H+127)/128];
-    let mut i = 0;
-    let j = if right { W-1 } else { 0 };
-    loop {
-        if i == W {
-            break
-        }
-        let idx = (i*W+j) >>7;
-        let offset = (i*W+j) % 128;
-        arr[idx] |= 1_u128<<offset;
-        i += 1;
-    }
-    Bitset::<{W*H}>::from_array(arr)
-}
-
-/// Computes TOP_EDGE_MASK and BOTTOM_EDGE_MASK
-const fn horizontal_edge_mask<const W: usize, const H: usize>(top: bool) -> Bitset<{W*H}>
-where [(); (W*H+127)/128]: Sized {
-    let mut arr = [0_u128; (W*H+127)/128];
-    let i = if top { H-1 } else { 0 };
-    let mut j = 0;
-    loop {
-        if j == W {
-            break
-        }
-        let idx = (i*W+j) >>7;
-        let offset = (i*W+j) % 128;
-        arr[idx] |= 1_u128<<offset;
-        j += 1;
-    }
-    Bitset::<{W*H}>::from_array(arr)
-}
-
-/// Computes possible moves from every position at compile time
-const fn precompute_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>
-() -> [[Option<u16>; 4]; W*H]
-where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
-    let mut result = [[None; 4]; {W*H}];
-    let mut pos = 0;
-    loop {
-        if pos == W*H {
-            break
-        }
-        if WRAP {
-            // up
-            let move_to = (pos + W) % (W*H);
-            result[pos][0] = Some(move_to as u16);
-            
-            // down
-            let move_to = if W > pos { W*(H-1) + pos } else { pos - W };
-            result[pos][1] = Some(move_to as u16);
-            
-            // right
-            let move_to = if pos % W == W-1 { pos - (W-1) } else { pos + 1};
-            result[pos][2] = Some(move_to as u16);
-            
-            // left
-            let move_to = if pos % W == 0 { pos + (W-1) } else { pos - 1 };
-            result[pos][3] = Some(move_to as u16);
-        } else {
-            // up
-            if pos < W * (H-1) {
-                let move_to = pos + W;
-                result[pos][0] = Some(move_to as u16);
-            }
-            // down
-            if pos >= W {
-                let move_to = pos - W;
-                result[pos][1] = Some(move_to as u16);
-            }
-            // right
-            if pos % W < W - 1 {
-                let move_to = pos + 1;
-                result[pos][2] = Some(move_to as u16);
-            }
-            // left
-            if pos % W > 0 {
-                let move_to = pos - 1;
-                result[pos][3] = Some(move_to as u16);
-            }
-        }
-
-        pos += 1;
-    }
-    result
-}
-
-const fn precompute_hazard_spiral() -> [(i8, i8); 144] {
-    [ (0,0), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, 2), (1, 2), (2, 2), (2, 1), (2, 0), (2, -1), (2, -2), (1, -2), (0, -2), (-1, -2), (-2, -2), (-2, -1), (-2, 0), (-2, 1), (-2, 2), (-2, 3), (-1, 3), (0, 3), (1, 3), (2, 3), (3, 3), (3, 2), (3, 1), (3, 0), (3, -1), (3, -2), (3, -3), (2, -3), (1, -3), (0, -3), (-1, -3), (-2, -3), (-3, -3), (-3, -2), (-3, -1), (-3, 0), (-3, 1), (-3, 2), (-3, 3), (-3, 4), (-2, 4), (-1, 4), (0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (4, 1), (4, 0), (4, -1), (4, -2), (4, -3), (4, -4), (3, -4), (2, -4), (1, -4), (0, -4), (-1, -4), (-2, -4), (-3, -4), (-4, -4), (-4, -3), (-4, -2), (-4, -1), (-4, 0), (-4, 1), (-4, 2), (-4, 3), (-4, 4), (-4, 5), (-3, 5), (-2, 5), (-1, 5), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (5, 4), (5, 3), (5, 2), (5, 1), (5, 0), (5, -1), (5, -2), (5, -3), (5, -4), (5, -5), (4, -5), (3, -5), (2, -5), (1, -5), (0, -5), (-1, -5), (-2, -5), (-3, -5), (-4, -5), (-5, -5), (-5, -4), (-5, -3), (-5, -2), (-5, -1), (-5, 0), (-5, 1), (-5, 2), (-5, 3), (-5, 4), (-5, 5), (-5, 6), (-4, 6), (-3, 6), (-2, 6), (-1, 6), (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (6, 5), (6, 4), (6, 3), (6, 2), (6, 1), (6, 0), (6, -1), (6, -2), (6, -3), (6, -4), (6, -5) ]
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>

@@ -697,24 +697,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shapeshifter"
-version = "0.1.0"
-dependencies = [
- "arrayvec",
- "crossbeam-channel",
- "env_logger",
- "fxhash",
- "lazy_static",
- "log 0.4.14",
- "rand",
- "rand_pcg",
- "rocket",
- "rocket_contrib",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -764,6 +746,24 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "shapeshifter"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "crossbeam-channel",
+ "env_logger",
+ "fxhash",
+ "lazy_static",
+ "log 0.4.14",
+ "rand",
+ "rand_pcg",
+ "rocket",
+ "rocket_contrib",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

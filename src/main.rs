@@ -15,7 +15,6 @@ mod api;
 mod move_gen;
 mod uct;
 mod eval;
-mod bitset;
 mod ttable;
 
 use rocket::config::{Config, Environment};
