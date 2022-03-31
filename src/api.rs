@@ -62,7 +62,7 @@ pub fn handle_index() -> JsonValue {
         "apiversion": "1",
         "author": "JonathanArns",
         "color": "#900050",
-        "head": "all-seeing",
+        "head": "trans-rights-scarf",
         "tail": "skinny",
     })
 }
