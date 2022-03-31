@@ -10,7 +10,7 @@ lazy_static! {
     } else {
         // 0 number of enemies alive
         // 1 my health
-        // 2 lowest enemy healt
+        // 2 lowest enemy health
         // 3 difference in length to longest enemy
         // 4 difference in controlled non-hazard area
         // 5 difference in controlled food

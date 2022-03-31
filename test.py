@@ -5,6 +5,8 @@ import requests
 import sys
 
 
+repeat = 1
+host = "localhost"
 port = "8080"
 print_success = True
 command = "run"
@@ -22,7 +24,7 @@ def blue(str):
 
 def run_test(idx, test):
     try: 
-        resp = requests.post(f"http://localhost:{port}/move", json=test["payload"])
+        resp = requests.post(f"http://{host}:{port}/move", json=test["payload"])
         move = resp.json()["move"]
         if move in test["allowed_moves"]:
             if print_success:
@@ -36,12 +38,12 @@ def run_tests(test_id):
     with open("./tests.json", "r") as f:
         tests = json.load(f)
 
-    if test_id != -1:
-        run_test(test_id, tests[test_id])
-        return
-
-    for i, test in enumerate(tests):
-        run_test(i, test)
+    for _ in range(repeat):
+        if test_id != -1:
+            run_test(test_id, tests[test_id])
+        else:
+            for i, test in enumerate(tests):
+                run_test(i, test)
 
 def show_test(idx):
     pass
@@ -58,6 +60,12 @@ while i < len(sys.argv):
     if arg == "-p" or arg == "--port":
         i += 1
         port = sys.argv[i]
+    elif arg == "--host":
+        i += 1
+        host = sys.argv[i]
+    elif arg == "--repeat":
+        i += 1
+        repeat = int(sys.argv[i])
     elif arg == "-f" or arg == "--fail-only":
         print_success = False
     elif arg == "-x" or arg == "--number":
