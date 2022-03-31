@@ -73,7 +73,9 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
-    let mut best_move = Move::random();
+    let mut my_allowed_moves = allowed_moves(&board, board.snakes[0].head);
+    my_allowed_moves.shuffle(&mut rng);
+    let mut best_move = my_allowed_moves[0];
     let mut best_score = Score::MIN+1;
     let mut best_depth = 1;
     let start_time = time::Instant::now();
@@ -90,8 +92,7 @@ where [(); (W*H+127)/128]: Sized {
         let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
         let mut last_test = 0;
         'outer_loop: loop {
-            let mut my_moves = allowed_moves(&board, board.snakes[0].head);
-            my_moves.shuffle(&mut rng);
+            let mut my_moves = my_allowed_moves;
             let mut alpha = Score::MIN;
             let mut beta = Score::MAX;
             let best_move;
