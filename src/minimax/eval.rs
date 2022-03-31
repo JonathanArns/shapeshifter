@@ -109,7 +109,7 @@ where [(); (W*H+127)/128]: Sized {
     }
     let ((my_area, enemy_area), (my_reach5, enemy_reach5), closest_food_distance) = area_control(board);
 
-    let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / (W-1 * H-1) as f64).min(1.0);
+    let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / ((W-1) * (H-1)) as f64).min(1.0);
 
     // difference in length to longest enemy
     let size_diff = W as Score * (me.length as Score - largest_enemy_length as Score);
@@ -168,7 +168,7 @@ where [(); (W*H+127)/128]: Sized {
 mod tests {
     use super::*;
     use crate::api;
-    use crate::move_gen;
+    use crate::bitboard::move_gen;
     use test::Bencher;
 
     fn c(x: usize, y: usize) -> api::Coord {
