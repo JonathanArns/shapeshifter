@@ -78,8 +78,4 @@ impl Move {
             }
         }
     }
-
-    pub fn random() -> Self {
-        Move::from_int(rand::thread_rng().gen_range(0..4))
-    }
 }
