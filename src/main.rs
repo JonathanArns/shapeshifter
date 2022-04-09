@@ -13,6 +13,7 @@ extern crate test;
 
 mod api;
 mod bitboard;
+mod nnue;
 
 #[cfg(not(feature = "mcts"))]
 mod minimax;

@@ -25,7 +25,7 @@ lazy_static! {
 }
 // pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
 
-fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+pub fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>
 ) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
 where [(); (W*H+127)/128]: Sized {

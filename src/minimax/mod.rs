@@ -1,5 +1,6 @@
 use crate::bitboard::*;
 use crate::bitboard::move_gen::*;
+use crate::nnue;
 
 use std::env;
 use std::time;
@@ -8,7 +9,7 @@ use crossbeam_channel::{unbounded, Sender, Receiver};
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
 
-mod eval;
+pub mod eval;
 mod ttable;
 
 pub use ttable::{init, get_tt_id};
@@ -28,33 +29,40 @@ pub type Score = i16;
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
     if *FIXED_DEPTH > 0 {
-        fixed_depth_search(board, *FIXED_DEPTH as u8)
+        fixed_depth_mtdf(board, *FIXED_DEPTH as u8)
     } else {
         best_node_search(board, deadline)
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> (Move, Score, u8)
+pub fn fixed_depth_mtdf<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, target_depth: u8) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized {
+    let start_time = time::Instant::now();
     let mut node_counter = 0;
-    let start_time = time::Instant::now(); // only used to calculate nodes / second
     let (_, stop_receiver) = unbounded(); // only used for alphabeta type signature
-    let mut best_move = Move::Up;
+    let mut my_moves = allowed_moves(&board, board.snakes[0].head);
+    let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
+    let mut best_move = my_moves[0];
     let mut best_score = Score::MIN+1;
-    let mut enemy_moves = ordered_limited_move_combinations(board, 1);
-    let my_moves = allowed_moves(board, board.snakes[0].head);
-    let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let score = alphabeta(board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
-        if score > best {
-            best = score;
+        let mut guess = 0;
+        for depth in 1..target_depth {
+            let mut bounds = [Score::MIN, Score::MAX];
+            while bounds[0] < bounds[1] {
+                let beta = guess + (guess == bounds[0]) as Score;
+                guess = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, beta-1, beta).unwrap();
+                bounds[(guess < beta) as usize] = guess;
+            }
+        }
+        if guess > best_score {
+            best_score = guess;
             best_move = *mv;
-            best_score = best;
         }
     }
-    println!("Move: {:?}, Score: {}", best_move, best_score);
     println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
-    (best_move, best_score, depth)
+    println!("Move: {:?}, Score: {}, Time: {}", best_move, best_score, time::Instant::now().duration_since(start_time).as_millis());
+    nnue::data::write_datapoint(board, best_score);
+    (best_move, best_score, target_depth)
 }
 
 fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
