@@ -27,7 +27,7 @@ lazy_static! {
 pub type Score = i16;
 
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_mtdf(board, *FIXED_DEPTH as u8)
     } else {
@@ -40,7 +40,7 @@ where [(); (W*H+127)/128]: Sized {
     let start_time = time::Instant::now();
     let mut node_counter = 0;
     let (_, stop_receiver) = unbounded(); // only used for alphabeta type signature
-    let mut my_moves = allowed_moves(&board, board.snakes[0].head);
+    let my_moves = allowed_moves(&board, board.snakes[0].head);
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
     let mut best_move = my_moves[0];
     let mut best_score = Score::MIN+1;
@@ -80,7 +80,9 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 }
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
+    nnue::eval_jit(board);
+
     let mut rng = rand::thread_rng();
     let mut my_allowed_moves = allowed_moves(&board, board.snakes[0].head);
     my_allowed_moves.shuffle(&mut rng);
