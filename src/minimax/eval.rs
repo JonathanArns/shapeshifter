@@ -155,12 +155,12 @@ where [(); (W*H+127)/128]: Sized {
     if board.snakes[0].is_dead() {
         for snake in board.snakes[1..].iter() {
             if snake.is_alive() {
-                return Score::MIN + board.turn as i16
+                return Score::MIN + board.turn as Score
             }
         }
-        return 0
+        return -5000 + board.turn as Score
     } else {
-        return Score::MAX - board.turn as i16
+        return Score::MAX - board.turn as Score
     }
 }
 
