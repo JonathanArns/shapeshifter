@@ -81,7 +81,7 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
-    nnue::eval_jit(board);
+    nnue::eval(board);
 
     let mut rng = rand::thread_rng();
     let mut my_allowed_moves = allowed_moves(&board, board.snakes[0].head);

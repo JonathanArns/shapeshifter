@@ -24,7 +24,7 @@ arrayvec = "0.7.2"
 crossbeam-channel = "0.5.1"
 lazy_static = "1.4.0"
 fxhash = "0.2.1"
-tch = "0.7.0"
+packed_simd = { version = "0.3.6", package = "packed_simd_2" }
 
 [dependencies.rocket_contrib]
 version = "0.4.10"
