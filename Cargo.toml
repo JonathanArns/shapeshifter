@@ -9,6 +9,7 @@ edition = "2021"
 default = ["tt"]
 spl = []
 mcts = []
+nnue = []
 tt = []
 debug_tt = ["tt"]
 

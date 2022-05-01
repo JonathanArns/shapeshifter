@@ -5,7 +5,6 @@ use crate::minimax::Score;
 use crate::bitboard::Bitboard;
 
 use packed_simd::*;
-use core::arch::x86_64::*;
 
 pub mod data;
 
@@ -123,12 +122,15 @@ fn linear<const I: usize, const O: usize>(input: &[i8; I], output: &mut [i16; O]
             output[j] = output[j].saturating_add(input[i] as i16 * LAYERS[layer_id].weight[j][i] as i16);
         }
     }
+
+    for i in 0..O {
+        output[i] /= 64;
+    }
 }
 
 fn linear_simd<const I: usize, const O: usize>(input: &[i8; I], output: &mut [i16; O], layer_id: usize) {
     let num_in_chunks = I / 16;
     let num_out_chunks = O / 4;
-    println!("In {} Out {}", I, O);
 
     for i in 0..num_out_chunks {
         let mut sum0 = i16x16::splat(0);
@@ -150,6 +152,7 @@ fn linear_simd<const I: usize, const O: usize>(input: &[i8; I], output: &mut [i1
         
         let mut sums = i16x4::from_slice_unaligned(&[sum0.wrapping_sum(), sum1.wrapping_sum(), sum2.wrapping_sum(), sum3.wrapping_sum()]);
         sums = sums + bias;
+        sums = sums >> 6;
         sums.write_to_slice_unaligned(&mut output[(i*4)..]);
     }
 }
@@ -163,9 +166,8 @@ fn clipped_relu<const I: usize>(input: &[i16; I], output: &mut [i8; I]) {
 fn clipped_relu_simd<const I: usize>(input: &[i16; I], output: &mut [i8; I]) {
     let out_chunks = I / 32;
     let zero = i8x32::splat(0);
-    let upper = i8x32::splat(127);
     for i in 0..out_chunks {
-        let mut in0 = i16x32::from_slice_unaligned(&input[(i*32)..(i*32+32)]);
+        let in0 = i16x32::from_slice_unaligned(&input[(i*32)..(i*32+32)]);
         let mut out: Simd<[i8; 32]> = in0.cast();
         out = out.max(zero);
         out.write_to_slice_unaligned(&mut output[(i*32)..]);
@@ -173,9 +175,9 @@ fn clipped_relu_simd<const I: usize>(input: &[i16; I], output: &mut [i8; I]) {
 }
 
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
-where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
-    let mut active_features = data::bitboard_to_active_features(board);
-    let mut accum: Accumulator = fresh_accumulator(&active_features);
+where [(); (W*H+127)/128]: Sized {
+    let active_features = data::bitboard_to_active_features(board);
+    let accum: Accumulator = fresh_accumulator(&active_features);
     let mut t1: [i8; M] = [0; M];
     clipped_relu(&accum, &mut t1);
     let mut t2: [i16; K] = [0; K];
@@ -184,13 +186,15 @@ where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
     clipped_relu(&t2, &mut t3);
     let mut out: [i16; 1] = [0];
     linear(&t3, &mut out, 2);
-    return out[0] / 64 as Score
+    let model_output = out[0] as f32 / 64.0;
+    let score = (model_output / (1.0 - model_output)).ln() * 1.0;
+    return score as Score;
 }
 
 pub fn eval_simd<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
-where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
-    let mut active_features = data::bitboard_to_active_features(board);
-    let mut accum: Accumulator = fresh_accumulator_simd(&active_features);
+where [(); (W*H+127)/128]: Sized {
+    let active_features = data::bitboard_to_active_features(board);
+    let accum: Accumulator = fresh_accumulator_simd(&active_features);
     let mut t1: [i8; M] = [0; M];
     clipped_relu_simd(&accum, &mut t1);
     let mut t2: [i16; K] = [0; K];
@@ -199,14 +203,18 @@ where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
     clipped_relu_simd(&t2, &mut t3);
     let mut out: [i16; 1] = [0];
     linear(&t3, &mut out, 2);
-    return out[0] / 64 as Score
+    let model_output = out[0] as f32 / 64.0;
+    let score = (model_output / (1.0 - model_output)).ln() * 1.0;
+    if score as Score != 0 {
+        println!("{}", score);
+    }
+    return score as Score;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::api;
-    use crate::bitboard::move_gen;
     use test::Bencher;
 
     fn c(x: usize, y: usize) -> api::Coord {

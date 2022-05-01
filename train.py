@@ -1,60 +1,10 @@
-import torch
 from torch import nn
-from torch.utils.data import Dataset, DataLoader
-import pandas as pd
+from torch.utils.data import DataLoader
+import torch
 import json
 
-
-
-class FeatureDataset(Dataset):
-    def __init__(self, filename) -> None:
-        df = pd.read_csv(filename)
-        x = df.iloc[0:, 1:].values
-        y = df.iloc[0:, 0:1].values
-        self.x_train = torch.tensor(x, dtype=torch.float32)
-        self.y_train = torch.tensor(y, dtype=torch.float32)
-        scaling_factor = 20
-        self.y_train = torch.sigmoid(self.y_train / scaling_factor)
-
-    def __len__(self):
-        return len(self.y_train)
-
-    def __getitem__(self, idx):
-        return self.x_train[idx], self.y_train[idx]
-
-
-class Model(nn.Module):
-    def __init__(self):
-        super(Model, self).__init__()
-        self.l0 = nn.Linear(121+121+121+121, 256)
-        self.l1 = nn.Linear(256, 32)
-        self.l2 = nn.Linear(32, 1)
-
-        # for quantization aware training
-        self.weight_clipping = [
-            {'params' : [self.l0.weight], 'min_weight' : -127/64, 'max_weight' : 127/64 },
-            {'params' : [self.l1.weight], 'min_weight' : -127/64, 'max_weight' : 127/64 },
-            {'params' : [self.l2.weight], 'min_weight' : -127/64, 'max_weight' : 127/64 },
-            # {'params' : [self.output.weight], 'min_weight' : -127*127/9600, 'max_weight' : 127*127/9600 },
-        ]
-
-    def forward(self, x):
-        x = self.l0(x) # accum
-        x = torch.clamp(x, 0.0, 1.0)
-        x = self.l1(x)
-        x = torch.clamp(x, 0.0, 1.0)
-        x = self.l2(x)
-        return x
-
-    # for quantization aware training
-    def _clip_weights(self):
-        for group in self.weight_clipping:
-            for p in group['params']:
-                p_data_fp32 = p.data
-                min_weight = group['min_weight']
-                max_weight = group['max_weight']
-                p_data_fp32.clamp_(min_weight, max_weight)
-                p.data.copy_(p_data_fp32)
+from nnue.dataset import FeatureDataset
+from nnue.model import Model
 
 
 def train_loop(dataloader, model, loss_fn, optimizer):
@@ -129,7 +79,7 @@ def write_model_params(model):
 train_set = FeatureDataset("nnue-data.csv")
 train_loader = DataLoader(train_set, batch_size=10, shuffle=False)
 test_set = FeatureDataset("nnue-data-test.csv")
-test_loader = DataLoader(train_set, batch_size=10, shuffle=False)
+test_loader = DataLoader(test_set, batch_size=10, shuffle=False)
 
 model = Model()
 model.train()
@@ -137,7 +87,7 @@ model.train()
 # training
 learning_rate = 1e-3
 batch_size = 10
-epochs = 2
+epochs = 20
 
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)

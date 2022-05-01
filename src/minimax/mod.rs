@@ -81,8 +81,6 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
-    nnue::eval(board);
-
     let mut rng = rand::thread_rng();
     let mut my_allowed_moves = allowed_moves(&board, board.snakes[0].head);
     my_allowed_moves.shuffle(&mut rng);
@@ -212,8 +210,10 @@ where [(); (W*H+127)/128]: Sized {  // min call
             if child.is_terminal() {
                 break 'max_call eval::eval_terminal(&child);
             } else if depth == 1 && is_stable(&child) {
-                // TODO: insert into TT and move TT check to before?
+                #[cfg(not(feature = "nnue"))]
                 break 'max_call eval::eval(&child);
+                #[cfg(feature = "nnue")]
+                break 'max_call nnue::eval_simd(&child);
             }
             // check TT
             let itt_key = ttable::hash(&child);
@@ -330,7 +330,10 @@ where [(); (W*H+127)/128]: Sized {  // min call
             if child.is_terminal() {
                 break 'max_call eval::eval_terminal(&child);
             } else if depth == 1 || is_stable(&child) {
+                #[cfg(not(feature = "nnue"))]
                 break 'max_call eval::eval(&child);
+                #[cfg(feature = "nnue")]
+                break 'max_call nnue::eval_simd(&child);
             }
 
             // continue search
