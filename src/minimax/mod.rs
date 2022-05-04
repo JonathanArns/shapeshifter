@@ -4,8 +4,6 @@ use crate::nnue;
 
 use std::env;
 use std::time;
-use std::thread;
-use crossbeam_channel::{unbounded, Sender, Receiver};
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
 
@@ -39,10 +37,11 @@ pub fn fixed_depth_mtdf<const S: usize, const W: usize, const H: usize, const WR
 where [(); (W*H+127)/128]: Sized {
     let start_time = time::Instant::now();
     let mut node_counter = 0;
-    let (_, stop_receiver) = unbounded(); // only used for alphabeta type signature
     let my_moves = allowed_moves(&board, board.snakes[0].head);
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
     let mut best_move = my_moves[0];
+    let start_time = time::Instant::now(); // only used to calculate nodes / second
+    let deadline = start_time + time::Duration::from_secs(5);
     let mut best_score = Score::MIN+1;
     for mv in &my_moves {
         let mut guess = 0;
@@ -50,7 +49,7 @@ where [(); (W*H+127)/128]: Sized {
             let mut bounds = [Score::MIN, Score::MAX];
             while bounds[0] < bounds[1] {
                 let beta = guess + (guess == bounds[0]) as Score;
-                guess = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, beta-1, beta).unwrap();
+                guess = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, depth, beta-1, beta).unwrap();
                 bounds[(guess < beta) as usize] = guess;
             }
         }
@@ -82,86 +81,65 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
 where [(); (W*H+127)/128]: Sized, [(); W*H*4]: Sized {
     let mut rng = rand::thread_rng();
+    let start_time = time::Instant::now();
+    let mut node_counter = 0;
+
+    let board = board.clone();
+    let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
     let mut my_allowed_moves = allowed_moves(&board, board.snakes[0].head);
     my_allowed_moves.shuffle(&mut rng);
     let mut best_move = my_allowed_moves[0];
     let mut best_score = Score::MIN+1;
-    let mut best_depth = 1;
-    let start_time = time::Instant::now();
+    let mut depth = 1;
 
-    let (stop_sender, stop_receiver) = unbounded();
-    let (result_sender, result_receiver) : (Sender<(Move, Score, u8)>, Receiver<(Move, Score, u8)>) = unbounded();
-
-    let board = board.clone();
-    thread::spawn(move || {
-        let mut node_counter = 0;
-        let start_time = time::Instant::now(); // only used to calculate nodes / second
-        let mut depth = 1;
-        let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
-        let mut last_test = 0;
-        'outer_loop: loop {
-            let mut my_moves = my_allowed_moves.clone();
-            let mut alpha = Score::MIN;
-            let mut beta = Score::MAX;
-            let best_move;
-            loop {
-                let test = next_bns_guess(last_test, alpha, beta);
-                let mut better_moves = ArrayVec::<Move, 4>::new();
-                for mv in &my_moves {
-                    if let Some(score) = alphabeta(&board, &mut node_counter, &stop_receiver, *mv, &mut enemy_moves, depth, test-1, test) {
-                        // println!("test: {}, score: {}, move: {:?}, alpha: {}, beta: {}", test, score, *mv, alpha, beta);
-                        if score >= test {
-                            better_moves.push(*mv);
-                            best_score = score;
-                        }
-                    } else {
-                        break 'outer_loop // stop thread because time is out and response has been sent
+    let mut last_test = 0;
+    'outer_loop: loop {
+        let mut my_moves = my_allowed_moves.clone();
+        let mut alpha = Score::MIN;
+        let mut beta = Score::MAX;
+        loop {
+            let test = next_bns_guess(last_test, alpha, beta);
+            let mut better_moves = ArrayVec::<Move, 4>::new();
+            for mv in &my_moves {
+                if let Some(score) = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, depth, test-1, test) {
+                    if score >= test {
+                        better_moves.push(*mv);
                     }
-                }
-                if better_moves.len() == 0 {
-                    beta = test; // update beta
                 } else {
-                    alpha = test; // update alpha
-                    my_moves = better_moves; // update subtrees left to search
-                }
-                if (beta as i32 - alpha as i32) < 2 || my_moves.len() == 1 {
-                    last_test = test;
-                    best_move = my_moves[0];
-                    break
+                    depth -= 1;
+                    break 'outer_loop // time has run out
                 }
             }
-            result_sender.try_send((best_move, best_score, depth)).ok();
-            if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX {
-                break // Our last best move resulted in a terminal state, so we don't need to search deeper
+            if better_moves.len() == 0 {
+                beta = test; // update beta
+            } else {
+                alpha = test; // update alpha
+                my_moves = better_moves; // update subtrees left to search
             }
-            depth += 1;
+            if (beta as i32 - alpha as i32) < 2 || my_moves.len() == 1 {
+                last_test = test;
+                best_score = test;
+                best_move = my_moves[0];
+                break
+            }
         }
-        #[cfg(not(feature = "detect_hash_collisions"))]
-        println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
-    });
-
-    // receive results
-    while time::Instant::now() < deadline {
-        if let Ok(msg) = result_receiver.try_recv() {
-            best_move = msg.0;
-            best_score = msg.1;
-            best_depth = msg.2
-        } else {
-            thread::sleep(time::Duration::from_millis(1));
+        if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX {
+            break // Our last best move resulted in a terminal state, so we don't need to search deeper
         }
+        depth += 1;
     }
-    stop_sender.send(1).ok(); // Channel might be broken, if search returned early. We don't care.
-
     #[cfg(not(feature = "detect_hash_collisions"))]
-    println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, best_depth, time::Instant::now().duration_since(start_time).as_millis());
-    (best_move, best_score, best_depth)
+    println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
+    #[cfg(not(feature = "detect_hash_collisions"))]
+    println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, depth, time::Instant::now().duration_since(start_time).as_millis());
+    (best_move, best_score, depth)
 }
 
 /// Returns None if it received a timeout from stop_receiver.
 pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
-    stop_receiver: &Receiver<u8>,
+    deadline: time::Instant,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     depth: u8,
@@ -169,7 +147,7 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+127)/128]: Sized {  // min call
-    if let Ok(_) = stop_receiver.try_recv() {
+    if time::Instant::now() > deadline {
         return None
     }
     let tt_key = ttable::hash(&(board, mv));
@@ -242,9 +220,9 @@ where [(); (W*H+127)/128]: Sized {  // min call
             let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1);
             for mv in itt_move.iter().chain(allowed_moves(&child, child.snakes[0].head).iter()) {
                 let iscore = if depth == 1 {
-                    quiescence(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, ialpha, ibeta)?
+                    quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, ialpha, ibeta)?
                 } else {
-                    alphabeta(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?
+                    alphabeta(&child, node_counter, deadline, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?
                 };
                 if iscore > ibeta {
                     ibest_score = iscore;
@@ -303,7 +281,7 @@ where [(); (W*H+127)/128]: Sized {
 pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
-    stop_receiver: &Receiver<u8>,
+    deadline: time::Instant,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     depth: u8,
@@ -311,7 +289,7 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+127)/128]: Sized {  // min call
-    if let Ok(_) = stop_receiver.try_recv() {
+    if time::Instant::now() > deadline {
         return None
     }
 
@@ -339,7 +317,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
             // continue search
             let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1); // No idea why, but using unordered movegen here is a big improvement
             for mv in &allowed_moves(&child, child.snakes[0].head) {
-                let iscore = quiescence(&child, node_counter, stop_receiver, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
+                let iscore = quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
                     break;
