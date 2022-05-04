@@ -93,13 +93,12 @@ where [(); (W*H+127)/128]: Sized {
             let mut better_moves = ArrayVec::<Move, 4>::new();
             for mv in &my_moves {
                 if let Some(score) = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, depth, test-1, test) {
-                    // println!("test: {}, score: {}, move: {:?}, alpha: {}, beta: {}", test, score, *mv, alpha, beta);
                     if score >= test {
                         better_moves.push(*mv);
                     }
                 } else {
                     depth -= 1;
-                    break 'outer_loop // stop thread because time is out and response has been sent
+                    break 'outer_loop // time has run out
                 }
             }
             if better_moves.len() == 0 {
