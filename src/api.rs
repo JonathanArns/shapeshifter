@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use axum::extract::Json;
+use tokio::task;
 use std::collections::HashMap;
 use std::time;
 
@@ -220,15 +221,15 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
-        (1, 11, 11, true) => minimax::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline),
-        (2, 11, 11, true) => minimax::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline),
-        (3, 11, 11, true) => minimax::search(&bitboard::Bitboard::<3, 11, 11, true>::from_gamestate(state), deadline),
-        (4, 11, 11, true) => minimax::search(&bitboard::Bitboard::<4, 11, 11, true>::from_gamestate(state), deadline),
+        (1, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
 
-        (1, 11, 11, false) => minimax::search(&bitboard::Bitboard::<1, 11, 11, false>::from_gamestate(state), deadline),
-        (2, 11, 11, false) => minimax::search(&bitboard::Bitboard::<2, 11, 11, false>::from_gamestate(state), deadline),
-        (3, 11, 11, false) => minimax::search(&bitboard::Bitboard::<3, 11, 11, false>::from_gamestate(state), deadline),
-        (4, 11, 11, false) => minimax::search(&bitboard::Bitboard::<4, 11, 11, false>::from_gamestate(state), deadline),
+        (1, 11, 11, false) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, false) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, false) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, false) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height),
     };
 
