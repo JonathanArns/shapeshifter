@@ -1,5 +1,4 @@
-use rocket_contrib::json::JsonValue;
-use rand::Rng;
+use serde_json::{Value, json};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -25,7 +24,7 @@ impl Move {
         Self::int_to_index_wrapping(self.to_int(), width, height, from)
     }
 
-    pub fn to_json(&self) -> JsonValue {
+    pub fn to_json(&self) -> Value {
         match self {
             Move::Up => json!({ "move": "up" }),
             Move::Down => json!({ "move": "down" }),

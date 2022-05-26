@@ -1,7 +1,6 @@
-use rocket::http::Status;
-use rocket_contrib::json::{Json, JsonValue};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
+use axum::extract::Json;
 use std::collections::HashMap;
 use std::time;
 
@@ -56,34 +55,26 @@ pub struct GameState {
     pub you: Battlesnake,
 }
 
-#[get("/")]
-pub fn handle_index() -> JsonValue {
-    json!({
+pub async fn handle_index() -> Json<Value> {
+    Json(json!({
         "apiversion": "1",
         "author": "JonathanArns",
         "color": "#900050",
         "head": "trans-rights-scarf",
         "tail": "skinny",
-    })
+    }))
 }
 
-#[post("/start", format = "json", data = "<_req>")]
-pub fn handle_start(_req: Json<GameState>) -> Status {
-    Status::Ok
-}
+pub async fn handle_start(Json(_req): Json<GameState>) { }
 
-#[post("/end")]
-pub fn handle_end() -> Status {
+pub async fn handle_end() {
     #[cfg(feature = "debug_tt")]
     ttable::write_debug_info();
-
-    Status::Ok
 }
 
 #[cfg(feature = "mcts")]
-#[post("/move", format = "json", data = "<req>")]
-pub fn handle_move(req: Json<GameState>) -> JsonValue {
-    let state = req.into_inner();
+pub async fn handle_move(state: Json<GameState>) -> Json<Value> {
+    // let state = req.into_inner();
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => bitboard::Ruleset::Wrapped,
@@ -213,13 +204,12 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (16, 25, 25, false) => uct::search(&bitboard::Bitboard::<16, 25, 25, false>::from_gamestate(state), deadline),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}", state.board.snakes.len(), state.board.width, state.board.height),
     };
-    mv.to_json()
+    Json(mv.to_json())
 }
 
 #[cfg(not(feature = "mcts"))]
-#[post("/move", format = "json", data = "<req>")]
-pub fn handle_move(req: Json<GameState>) -> JsonValue {
-    let state = req.into_inner();
+pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
+    // let state = req.into_inner();
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => bitboard::Ruleset::Wrapped,
@@ -349,5 +339,5 @@ pub fn handle_move(req: Json<GameState>) -> JsonValue {
         (16, 25, 25, false) => minimax::search(&bitboard::Bitboard::<16, 25, 25, false>::from_gamestate(state), deadline),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}", state.board.snakes.len(), state.board.width, state.board.height),
     };
-    mv.to_json()
+    Json(mv.to_json())
 }
