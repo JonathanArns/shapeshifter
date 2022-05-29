@@ -210,7 +210,7 @@ where [(); (W*H+127)/128]: Sized {
             self.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
             self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
             // set new head
-            snake.head = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect(&format!("move out of bounds: {:?} from {:?}", mv, snake.head)) as u16;
+            snake.head = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
 
             // move old tail if necessary
             if self.ruleset != Ruleset::Constrictor {
