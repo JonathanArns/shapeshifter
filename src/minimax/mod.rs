@@ -24,7 +24,7 @@ lazy_static! {
 pub type Score = i16;
 
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
@@ -33,7 +33,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> (Move, Score, u8)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now(); // only used to calculate nodes / second
     let deadline = start_time + time::Duration::from_secs(5);
@@ -70,7 +70,7 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 }
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
@@ -137,7 +137,7 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     mut alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+127)/128]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized {  // min call
     if time::Instant::now() > deadline {
         return None
     }
@@ -249,7 +249,7 @@ where [(); (W*H+127)/128]: Sized {  // min call
 /// Used for quiescence search, to determine, if the position is stable and can be evaluated, or if
 /// search must continue.
 fn is_stable<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> bool
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     for snake in board.snakes {
         if snake.curled_bodyparts != 0 {
             return false
@@ -277,7 +277,7 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+127)/128]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized {  // min call
     if time::Instant::now() > deadline {
         return None
     }

@@ -74,8 +74,7 @@ pub async fn handle_end() {
 }
 
 #[cfg(feature = "mcts")]
-pub async fn handle_move(state: Json<GameState>) -> Json<Value> {
-    // let state = req.into_inner();
+pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => bitboard::Ruleset::Wrapped,
@@ -210,7 +209,6 @@ pub async fn handle_move(state: Json<GameState>) -> Json<Value> {
 
 #[cfg(not(feature = "mcts"))]
 pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
-    // let state = req.into_inner();
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
     let ruleset = match state.game.ruleset["name"].as_str() {
         Some("wrapped") => bitboard::Ruleset::Wrapped,

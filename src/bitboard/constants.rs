@@ -2,8 +2,8 @@ use super::bitset::Bitset;
 
 /// Computes ALL_BUT_LEFT_EDGE_MASK and ALL_BUT_RIGHT_EDGE_MASK
 pub const fn border_mask<const W: usize, const H: usize>(left: bool) -> Bitset<{W*H}>
-where [(); (W*H+127)/128]: Sized {
-    let mut arr = [0_u128; (W*H+127)/128];
+where [(); (W*H+63)/64]: Sized {
+    let mut arr = [0_u64; (W*H+63)/64];
     let mut i = 0;
     let mut j;
     loop {
@@ -21,9 +21,9 @@ where [(); (W*H+127)/128]: Sized {
             } else if !left && j == W {
                 break
             }
-            let idx = (i*W+j)>>7;
-            let offset = (i*W+j) % 128;
-            arr[idx] |= 1_u128<<offset;
+            let idx = (i*W+j)>>6;
+            let offset = (i*W+j) % 64;
+            arr[idx] |= 1_u64<<offset;
 
             j += 1;
         }
@@ -34,17 +34,17 @@ where [(); (W*H+127)/128]: Sized {
 
 /// Computes LEFT_EDGE_MASK and RIGHT_EDGE_MASK
 pub const fn vertical_edge_mask<const W: usize, const H: usize>(right: bool) -> Bitset<{W*H}>
-where [(); (W*H+127)/128]: Sized {
-    let mut arr = [0_u128; (W*H+127)/128];
+where [(); (W*H+63)/64]: Sized {
+    let mut arr = [0_u64; (W*H+63)/64];
     let mut i = 0;
     let j = if right { W-1 } else { 0 };
     loop {
         if i == W {
             break
         }
-        let idx = (i*W+j) >>7;
-        let offset = (i*W+j) % 128;
-        arr[idx] |= 1_u128<<offset;
+        let idx = (i*W+j)>>6;
+        let offset = (i*W+j) % 64;
+        arr[idx] |= 1_u64<<offset;
         i += 1;
     }
     Bitset::<{W*H}>::from_array(arr)
@@ -52,17 +52,17 @@ where [(); (W*H+127)/128]: Sized {
 
 /// Computes TOP_EDGE_MASK and BOTTOM_EDGE_MASK
 pub const fn horizontal_edge_mask<const W: usize, const H: usize>(top: bool) -> Bitset<{W*H}>
-where [(); (W*H+127)/128]: Sized {
-    let mut arr = [0_u128; (W*H+127)/128];
+where [(); (W*H+63)/64]: Sized {
+    let mut arr = [0_u64; (W*H+63)/64];
     let i = if top { H-1 } else { 0 };
     let mut j = 0;
     loop {
         if j == W {
             break
         }
-        let idx = (i*W+j) >>7;
-        let offset = (i*W+j) % 128;
-        arr[idx] |= 1_u128<<offset;
+        let idx = (i*W+j)>>6;
+        let offset = (i*W+j) % 64;
+        arr[idx] |= 1_u64<<offset;
         j += 1;
     }
     Bitset::<{W*H}>::from_array(arr)
@@ -71,7 +71,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Computes possible moves from every position at compile time
 pub const fn precompute_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>
 () -> [[Option<u16>; 4]; W*H]
-where [(); (W*H+127)/128]: Sized, [(); W*H]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {
     let mut result = [[None; 4]; {W*H}];
     let mut pos = 0;
     loop {

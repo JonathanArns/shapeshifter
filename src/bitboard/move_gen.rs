@@ -5,7 +5,7 @@ use arrayvec::ArrayVec;
 use rand::Rng;
 
 pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, pos: u16) -> ArrayVec<Move, 4>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
 
@@ -44,7 +44,7 @@ where [(); (W*H+127)/128]: Sized {
 /// because that would cause a panic elsewhere.
 #[allow(unused)]
 pub fn slow_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, pos: u16) -> ArrayVec<Move, 4>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Left;
 
@@ -102,7 +102,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
 pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     // only generate enough move combinations so that every enemy move appears at least once
     let mut moves = ArrayVec::<[Move; S], 4>::new();
     moves.push([Move::Up; S]);
@@ -137,7 +137,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Applies move ordering to the individual moves of each enemy.
 #[allow(unused)]
 pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     let mut i = 0;
@@ -179,7 +179,7 @@ where [(); (W*H+127)/128]: Sized {
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
 pub fn move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> Vec<[Move; S]>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     for snake in board.snakes[0+skip..].iter() {
@@ -214,7 +214,7 @@ where [(); (W*H+127)/128]: Sized {
 
 #[cfg(feature = "mcts")]
 pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, rng: &mut impl Rng) -> [Move; S]
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let moves = limited_move_combinations(board, 0);
     moves[rng.gen_range(0..moves.len())]
 }

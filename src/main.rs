@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, test, generic_const_exprs, label_break_value, stmt_expr_attributes)]
+#![feature(proc_macro_hygiene, decl_macro, test, generic_const_exprs, label_break_value, stmt_expr_attributes, stdsimd)]
 
 #![allow(incomplete_features)]
 

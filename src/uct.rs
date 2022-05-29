@@ -29,7 +29,7 @@ impl<const S: usize> Moves<S> {
 }
 
 struct Node<const S: usize, const W: usize, const H: usize, const WRAP: bool>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     max: bool,
     board: Bitboard<S, W, H, WRAP>,
     parent: Option<Weak<RefCell<Node<S, W, H, WRAP>>>>,
@@ -42,7 +42,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Node<S, W, H, WRAP> 
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     fn new(board: Bitboard<S, W, H, WRAP>, moves_idx: usize, parent: Option<Weak<RefCell<Self>>>, max: bool) -> Self {
         // this is effectively the move generation for the in memory tree
         let moves = if max {
@@ -66,7 +66,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 fn expand<const S: usize, const W: usize, const H: usize, const WRAP: bool>(node: Rc<RefCell<Node<S, W, H, WRAP>>>, moves_idx: usize) -> Rc<RefCell<Node<S, W, H, WRAP>>>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut board = node.borrow().board.clone();
     if !node.borrow().max {
         // get enemy moves from node
@@ -93,7 +93,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, f64)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut node_counter = 0;
     let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
     let start_time = time::Instant::now();
@@ -123,7 +123,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 fn once<const S: usize, const W: usize, const H: usize, const WRAP: bool>(root: Rc<RefCell<Node<S, W, H, WRAP>>>, rng: &mut impl Rng, node_counter: &mut u64)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     // select
     let mut node = root;
     let mut moves_idx = select_child(Rc::clone(&node));
@@ -164,7 +164,7 @@ where [(); (W*H+127)/128]: Sized {
 
 // returns the winner's snake index
 fn playout<const S: usize, const W: usize, const H:usize, const WRAP: bool>(node: Rc<RefCell<Node<S, W, H, WRAP>>>, moves_idx: usize, rng: &mut impl Rng, node_counter: &mut u64) -> i8
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut board = node.borrow().board.clone();
     let mut moves = match &node.borrow().moves {
         Moves::Me(mvs) => {
@@ -199,7 +199,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 fn select_child<const S: usize, const W: usize, const H: usize, const WRAP: bool>(node: Rc<RefCell<Node<S, W, H, WRAP>>>) -> usize
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let parent_visits = node.borrow().visits;
     let mut best_val = 0_f64;
     let mut best_moves_idx = 0;

@@ -28,7 +28,7 @@ lazy_static! {
 fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>
 ) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
     let mut reachable5 = state;
     let b = !board.bodies[0];
@@ -76,7 +76,7 @@ where [(); (W*H+127)/128]: Sized {
 
 #[allow(unused)]
 fn print_area_control<const W: usize, const H: usize>(me: Bitset<{W*H}>, enemies: Bitset<{W*H}>)
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let mut debug = "".to_string();
     for i in 0..H {
         for j in 0..W {
@@ -89,7 +89,7 @@ where [(); (W*H+127)/128]: Sized {
 
 
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     let me = board.snakes[0];
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
@@ -151,7 +151,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     if board.snakes[0].is_dead() {
         for snake in board.snakes[1..].iter() {
             if snake.is_alive() {

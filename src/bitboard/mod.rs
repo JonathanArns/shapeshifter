@@ -50,7 +50,7 @@ impl Snake {
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool> 
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
     pub snakes: [Snake; S],
     pub food: Bitset<{W*H}>,
@@ -62,7 +62,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Hash for Bitboard<S, W, H, WRAP>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     fn hash<T: Hasher>(&self, state: &mut T) {
         self.bodies.hash(state);
         self.food.hash(state);
@@ -78,7 +78,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Bitboard<S, W, H, WRAP>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
     pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(true);
     pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(false);
@@ -365,7 +365,7 @@ where [(); (W*H+127)/128]: Sized {
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
-where [(); (W*H+127)/128]: Sized {
+where [(); (W*H+63)/64]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..H {
             for j in 0..W {
