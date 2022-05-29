@@ -183,6 +183,30 @@ where [(); (W*H+63)/64]: Sized {
         true
     }
 
+    /// Returns the wdl value of the position, if it is terminal
+    pub fn win_draw_loss(&self) -> Option<i8> {
+        let me_alive = self.snakes[0].is_alive();
+        let mut enemies_alive = 0;
+        for i in 1..S {
+            if self.snakes[i].is_alive() {
+                enemies_alive += 1;
+            }
+        }
+        if me_alive {
+            if enemies_alive == 0 {
+                Some(1)
+            } else {
+                None
+            }
+        } else {
+            if enemies_alive != 0 {
+                Some(-1)
+            } else {
+                Some(0)
+            }
+        }
+    }
+
     pub fn distance(&self, from: u16, to: u16) -> u16 {
         let w = W as u16;
         let dist_x = (from%w).max(to%w) - (from%w).min(to%w);

@@ -37,7 +37,8 @@ where [(); (W*H+63)/64]: Sized {
     children: Vec<Option<usize>>,
     visits: u32,
     wins: u32,
-    value: f64,
+    lower_bound: i8,
+    upper_bound: i8,
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Node<S, W, H, WRAP> 
@@ -60,7 +61,8 @@ where [(); (W*H+63)/64]: Sized {
             moves,
             visits: 0,
             wins: 0,
-            value: 0.0,
+            lower_bound: -1,
+            upper_bound: 1,
         }
     }
 }
@@ -101,10 +103,14 @@ where [(); (W*H+63)/64]: Sized {
     let mut node_counter = 0;
     let start_time = time::Instant::now();
 
-    let root = Node::<S, W, H, WRAP>::new(board.clone(), 0, 0, None, true);
-    tree.push(root);
+    // create root
+    tree.push(Node::<S, W, H, WRAP>::new(board.clone(), 0, 0, None, true));
+
     while time::Instant::now() < deadline {
         once(&mut tree, &mut rng, &mut node_counter);
+        if tree[0].lower_bound == tree[0].upper_bound {
+            break
+        }
     }
     let moves = if let Moves::Me(mvs) = &tree[0].moves {
         mvs.clone()
@@ -115,7 +121,13 @@ where [(); (W*H+63)/64]: Sized {
     let mut best_move = Move::Up;
     for (i, child) in tree[0].children.iter().enumerate() {
         if let Some(node_idx) = child {
-            let winrate = tree[*node_idx].wins as f64 / tree[*node_idx].visits as f64;
+            let mut winrate = 0.0_f64;
+            if tree[*node_idx].lower_bound == 0 {
+                winrate = 0.5;
+            } else if tree[*node_idx].lower_bound == 1 {
+                winrate = 1.0;
+            }
+            winrate = winrate.max(tree[*node_idx].wins as f64 / tree[*node_idx].visits as f64);
             if winrate > best_winrate {
                 best_winrate = winrate;
                 best_move = moves[i];
@@ -125,6 +137,58 @@ where [(); (W*H+63)/64]: Sized {
     }
     println!("\n{:?} nodes total, {:?} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
     (best_move, best_winrate)
+}
+
+fn update_bounds<const S: usize, const W: usize, const H: usize, const WRAP: bool>(tree: &mut Vec<Node<S, W, H, WRAP>>, node_idx: usize, mut lower: Option<i8>, mut upper: Option<i8>)
+where [(); (W*H+63)/64]: Sized {
+    if let Some(x) = lower {
+        if tree[node_idx].lower_bound < x {
+            if tree[node_idx].max {
+                tree[node_idx].lower_bound = x;
+            } else {
+                let mut new_lower = x;
+                for child in &tree[node_idx].children {
+                    if let Some(child_idx) = child {
+                        if tree[*child_idx].lower_bound < new_lower {
+                            new_lower = tree[*child_idx].lower_bound;
+                        }
+                    }
+                }
+                if tree[node_idx].lower_bound != new_lower {
+                    tree[node_idx].lower_bound = new_lower;
+                    lower = Some(new_lower);
+                } else {
+                    lower = None; // don't propagate further
+                }
+            }
+        }
+    }
+    if let Some(x) = upper {
+        if tree[node_idx].upper_bound > x {
+            if !tree[node_idx].max {
+                tree[node_idx].upper_bound = x;
+            } else {
+                let mut new_upper = x;
+                for child in &tree[node_idx].children {
+                    if let Some(child_idx) = child {
+                        if tree[*child_idx].upper_bound > new_upper {
+                            new_upper = tree[*child_idx].upper_bound;
+                        }
+                    }
+                }
+                if tree[node_idx].upper_bound != new_upper {
+                    tree[node_idx].upper_bound = new_upper;
+                    upper = Some(new_upper);
+                } else {
+                    upper = None; // don't propagate further
+                }
+            }
+        }
+    }
+    if node_idx == 0 {
+        return
+    }
+    update_bounds(tree, tree[node_idx].parent.unwrap(), lower, upper);
 }
 
 fn once<const S: usize, const W: usize, const H: usize, const WRAP: bool>(tree: &mut Vec<Node<S, W, H, WRAP>>, rng: &mut impl Rng, node_counter: &mut u64)
@@ -142,10 +206,14 @@ where [(); (W*H+63)/64]: Sized {
     }
 
     node_idx = expand(tree, node_idx, moves_idx);
-    moves_idx = select_child(tree, node_idx);
-
-    // simulate
-    let result = playout(tree, node_idx, moves_idx, rng, node_counter);
+    let result = if let Some(value) = tree[node_idx].board.win_draw_loss() {
+        update_bounds(tree, node_idx, Some(value), Some(value));
+        value
+    } else {
+        // simulate
+        moves_idx = select_child(tree, node_idx);
+        playout(tree, node_idx, moves_idx, rng, node_counter)
+    };
     
     // propagate
     loop {
@@ -155,8 +223,8 @@ where [(); (W*H+63)/64]: Sized {
         if (result == 1 && !tree[node_idx].max) || (result == -1 && tree[node_idx].max) {
             tree[node_idx].wins += 1;
         }
-        if let Some(idx) = tree[node_idx].parent {
-            node_idx = idx;
+        if let Some(parent_idx) = tree[node_idx].parent {
+            node_idx = parent_idx;
         } else {
             break
         };
@@ -202,11 +270,21 @@ where [(); (W*H+63)/64]: Sized {
 fn select_child<const S: usize, const W: usize, const H: usize, const WRAP: bool>(tree: &Vec<Node<S, W, H, WRAP>>, node: usize) -> usize
 where [(); (W*H+63)/64]: Sized {
     let parent_visits = tree[node].visits;
+    let parent_lower = tree[node].lower_bound;
+    let parent_upper = tree[node].upper_bound;
+    let parent_max = tree[node].max;
+
     let mut best_val = 0_f64;
     let mut best_moves_idx = 0;
     for (i, x) in tree[node].children.iter().enumerate() {
         if let Some(child_idx) = x {
             let child = &tree[*child_idx];
+
+            // this is basically alpha beta pruning
+            if (parent_max && parent_lower >= child.upper_bound) || (!parent_max && parent_upper <= child.lower_bound) {
+                continue
+            }
+
             let val = ucb1(parent_visits.into(), child.visits.into(), child.wins.into());
             if best_val < val {
                 best_val = val;
