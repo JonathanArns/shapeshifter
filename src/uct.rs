@@ -152,6 +152,10 @@ where [(); (W*H+63)/64]: Sized {
                         if tree[*child_idx].lower_bound < new_lower {
                             new_lower = tree[*child_idx].lower_bound;
                         }
+                    } else {
+                        // child has not been expanded yet, so it has default bounds
+                        new_lower = -1;
+                        break
                     }
                 }
                 if tree[node_idx].lower_bound != new_lower {
@@ -174,6 +178,10 @@ where [(); (W*H+63)/64]: Sized {
                         if tree[*child_idx].upper_bound > new_upper {
                             new_upper = tree[*child_idx].upper_bound;
                         }
+                    } else {
+                        // child has not been expanded yet, so it has default bounds
+                        new_upper = 1;
+                        break
                     }
                 }
                 if tree[node_idx].upper_bound != new_upper {
