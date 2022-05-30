@@ -1,6 +1,8 @@
 use crate::api::GameState;
 use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
 use arrayvec::ArrayVec;
+use colored::{Colorize, Color};
 #[cfg(not(feature = "mcts"))]
 use crate::minimax;
 
@@ -391,24 +393,55 @@ where [(); (W*H+63)/64]: Sized {
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
 where [(); (W*H+63)/64]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // decide on colors for the individual snakes
+        let colors = [Color::Red, Color::Green, Color::Cyan, Color::Yellow, Color::Blue, Color::Magenta];
+        let mut snake_colors: HashMap<usize, Color> = HashMap::default();
+        for (i, snake) in self.snakes.iter().enumerate() {
+            let mut tail_pos = snake.tail;
+            while snake.head != tail_pos {
+                snake_colors.insert(tail_pos as usize, colors[i % colors.len()]);
+                let move_int = self.bodies[1].get_bit(tail_pos as usize) as u8 | (self.bodies[2].get_bit(tail_pos as usize) as u8) << 1;
+                tail_pos = if WRAP {
+                    tail_pos as i16 + Move::int_to_index_wrapping(move_int, W, H, tail_pos)
+                } else {
+                    tail_pos as i16 + Move::int_to_index(move_int, W)
+                } as u16;
+            }
+            snake_colors.insert(tail_pos as usize, colors[i % colors.len()]);
+        }
+
+        // draw the board
         for i in 0..H {
             for j in 0..W {
                 let mut head_str = None;
                 if self.snakes[0].head as usize == (W*(H-1-i))+j {
-                    head_str = Some(("@", "@ "));
+                    head_str = Some("@");
                 } else {
                     for snake in self.snakes[1..].iter() {
                         if snake.head as usize == (W*(H-1-i))+j {
-                            head_str = Some(("E", "E "));
+                            head_str = Some("E");
                         }
                     }
                 }
-                f.write_str(if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s.0 } else if self.hazards.get_bit((W*(H-1-i))+j) { "+" } else { "." })?;
-                f.write_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s.0 } else { "." })?;
-                f.write_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x " } else if let Some(s) = head_str { s.1 } else { ". " })?;
+                let mut tile = if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." }.to_string();
+                tile.push_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                tile.push_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                let mut colored_tile = tile.color(Color::BrightWhite);
+                if self.hazards.get_bit((W*(H-1-i))+j) {
+                    colored_tile = tile.on_color(Color::White);
+                }
+                if self.food.get_bit((W*(H-1-i))+j) {
+                    colored_tile = tile.on_color(Color::Magenta);
+                }
+                if let Some(c) = snake_colors.get(&((W*(H-1-i))+j)) {
+                    colored_tile = colored_tile.color(*c);
+                }
+                f.write_str(&format!("{} ", colored_tile))?;
             }
             f.write_str("\n")?;
         }
+
+        // print metadata
         for snake in self.snakes {
             f.write_str(&(
                 "head: ".to_string() + &self.coord_string_from_index(snake.head)
