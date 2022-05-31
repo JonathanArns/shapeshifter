@@ -106,12 +106,15 @@ where [(); (W*H+63)/64]: Sized {
     // create root
     tree.push(Node::<S, W, H, WRAP>::new(board.clone(), 0, 0, None, true));
 
+    // compute
     while time::Instant::now() < deadline {
         once(&mut tree, &mut rng, &mut node_counter);
         if tree[0].lower_bound == tree[0].upper_bound {
             break
         }
     }
+
+    // extract the result from the tree
     let moves = if let Moves::Me(mvs) = &tree[0].moves {
         mvs.clone()
     } else {
@@ -128,14 +131,20 @@ where [(); (W*H+63)/64]: Sized {
                 winrate = 1.0;
             }
             winrate = winrate.max(tree[*node_idx].wins as f64 / tree[*node_idx].visits as f64);
+            if tree[*node_idx].upper_bound == -1 {
+                winrate = 0.0;
+            } else if tree[*node_idx].upper_bound == 0 {
+                winrate = winrate.min(0.5);
+            }
             if winrate > best_winrate {
                 best_winrate = winrate;
                 best_move = moves[i];
             }
-            print!("({:?}:{}:{})", tree[0].moves.get_my_move(tree[*node_idx].moves_idx), tree[*node_idx].wins, tree[*node_idx].visits);
+            print!("({:?}:{}:{} {} to {})", tree[0].moves.get_my_move(tree[*node_idx].moves_idx), tree[*node_idx].wins, tree[*node_idx].visits, tree[*node_idx].lower_bound,  tree[*node_idx].upper_bound);
         }
     }
     println!("\n{:?} nodes total, {:?} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
+    println!("{:?} with wr {}\n", best_move, best_winrate);
     (best_move, best_winrate)
 }
 
@@ -206,6 +215,11 @@ where [(); (W*H+63)/64]: Sized {
     let mut moves_idx = select_child(tree, node_idx);
     loop {
         if let Some(idx) = tree[node_idx].children[moves_idx] {
+            // return early, if the node has been solved
+            if tree[node_idx].lower_bound == tree[node_idx].upper_bound {
+                propagate(tree, node_idx, tree[node_idx].lower_bound);
+                return
+            }
             node_idx = idx;
         } else {
             break
@@ -222,7 +236,11 @@ where [(); (W*H+63)/64]: Sized {
         moves_idx = select_child(tree, node_idx);
         playout(tree, node_idx, moves_idx, rng, node_counter)
     };
-    
+    propagate(tree, node_idx, result);
+}
+
+fn propagate<const S: usize, const W: usize, const H:usize, const WRAP: bool>(tree: &mut Vec<Node<S, W, H, WRAP>>, mut node_idx: usize, result: i8)
+where [(); (W*H+63)/64]: Sized {
     // propagate
     loop {
         // TODO: deal with terminal nodes in the tree somehow somewhere
@@ -288,10 +306,10 @@ where [(); (W*H+63)/64]: Sized {
         if let Some(child_idx) = x {
             let child = &tree[*child_idx];
 
-            // this is basically alpha beta pruning
-            if (parent_max && parent_lower >= child.upper_bound) || (!parent_max && parent_upper <= child.lower_bound) {
-                continue
-            }
+            // // this is basically alpha beta pruning
+            // if (parent_max && parent_lower >= child.upper_bound) || (!parent_max && parent_upper <= child.lower_bound) {
+            //     continue
+            // }
 
             let val = ucb1(parent_visits.into(), child.visits.into(), child.wins.into());
             if best_val < val {
