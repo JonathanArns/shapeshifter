@@ -3,27 +3,33 @@ use crate::minimax::Score;
 
 use std::env;
 
-lazy_static! {
-    /// Weights for eval function can be loaded from environment.
-    static ref WEIGHTS: [Score; 18] = if let Ok(var) = env::var("WEIGHTS") {
-        serde_json::from_str(&var).unwrap()
-    } else {
-        // 0 number of enemies alive
-        // 1 my health
-        // 2 lowest enemy health
-        // 3 difference in length to longest enemy
-        // 4 difference in controlled non-hazard area
-        // 5 difference in controlled food
-        // 6 difference in controlled area
-        // 7 distance to closest food
-        // 8 difference in close reach
-        [
+// feature weight indices
+const ENEMIES_ALIVE: usize = 0;
+const MY_HEALTH: usize = 1;
+const LOWEST_ENEMY_HEALTH: usize = 2;
+const LENGTH_DIFF: usize = 3;
+const NON_HAZARD_AREA_DIFF: usize = 4;
+const CONTROLLED_FOOD_DIFF: usize = 5;
+const AREA_DIFF: usize = 6;
+const CLOSEST_FOOD_DIST: usize = 7;
+const CLOSE_AREA_DIFF: usize = 8;
+
+fn get_weights(ruleset: Ruleset) -> [Score; 18] {
+    match ruleset {
+        // Ruleset::Constrictor => [
+        //     0, 0, 0, 0, 0, 0, 1, 0, 1, // early game
+        //     0, 0, 0, 0, 0, 0, 1, 0, 1, // late game
+        // ],
+        Ruleset::WrappedSpiral(_) => [
             0, 1, -1, 2, 1, 3, 0, 2, 0, // early game
             0, 2, -2, 2, 1, 3, 0, 2, 1, // late game
-        ]
-    };
+        ],
+        _ => [
+            0, 1, -1, 2, 1, 3, 0, 2, 0, // early game
+            0, 2, -2, 2, 1, 3, 0, 2, 1, // late game
+        ],
+    }
 }
-// pub static mut WEIGHTS: [Score; 5] = [-10, 1, 3, 1, 3];
 
 fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>
@@ -90,6 +96,8 @@ where [(); (W*H+63)/64]: Sized {
 
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+63)/64]: Sized {
+    let weights = get_weights(board.ruleset);
+
     let me = board.snakes[0];
     let mut enemies_alive = 0;
     let mut lowest_enemy_health = 100;
@@ -112,40 +120,65 @@ where [(); (W*H+63)/64]: Sized {
     let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / ((W-1) * (H-1)) as f64).min(1.0);
 
     // difference in length to longest enemy
-    let size_diff = W as Score * (me.length as Score - largest_enemy_length as Score);
+    let size_diff = if weights[LENGTH_DIFF] != 0 {
+        W as Score * (me.length as Score - largest_enemy_length as Score)
+    } else {
+        0
+    };
     // difference in controlled non-hazard area
-    let non_hazard_area_diff = (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score;
+    let non_hazard_area_diff = if weights[NON_HAZARD_AREA_DIFF] != 0 {
+        (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score
+    } else {
+        0
+    };
     // difference in controlled food
-    let food_control_diff = (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score;
+    let food_control_diff = if weights[CONTROLLED_FOOD_DIFF] != 0 {
+        (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score
+    } else {
+        0
+    };
     // difference in controlled area
-    // let area_diff = my_area.count_ones() as Score - enemy_area.count_ones() as Score;
+    let area_diff = if weights[AREA_DIFF] != 0 {
+        my_area.count_ones() as Score - enemy_area.count_ones() as Score
+    } else {
+        0
+    };
     // distance to closest food
-    let food_dist = W as Score - closest_food_distance;
+    let food_dist = if weights[CLOSEST_FOOD_DIST] != 0 {
+        W as Score - closest_food_distance
+    } else {
+        0
+    };
     // reach difference
-    let reach_diff = my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score;
-    // let reach_diff = my_reach3.count_ones() as Score - enemy_reach3.count_ones() as Score;
+    let reach_diff = if weights[CLOSE_AREA_DIFF] != 0 {
+        my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score
+        // my_reach3.count_ones() as Score - enemy_reach3.count_ones() as Score
+    } else {
+        0
+    };
+    // let reach_diff = 
 
     let mut early_score: Score = 0;
-    early_score += WEIGHTS[0] * enemies_alive;
-    early_score += WEIGHTS[1] * me.health as Score;
-    early_score += WEIGHTS[2] * lowest_enemy_health as Score;
-    early_score += WEIGHTS[3] * size_diff;
-    early_score += WEIGHTS[4] * non_hazard_area_diff;
-    early_score += WEIGHTS[5] * food_control_diff;
-    // early_score += WEIGHTS[6] * area_diff;
-    early_score += WEIGHTS[7] * food_dist;
-    early_score += WEIGHTS[8] * reach_diff;
+    early_score += weights[0] * enemies_alive;
+    early_score += weights[1] * me.health as Score;
+    early_score += weights[2] * lowest_enemy_health as Score;
+    early_score += weights[3] * size_diff;
+    early_score += weights[4] * non_hazard_area_diff;
+    early_score += weights[5] * food_control_diff;
+    early_score += weights[6] * area_diff;
+    early_score += weights[7] * food_dist;
+    early_score += weights[8] * reach_diff;
 
     let mut late_score: Score = 0;
-    late_score += WEIGHTS[9] * enemies_alive;
-    late_score += WEIGHTS[10] * me.health as Score;
-    late_score += WEIGHTS[11] * lowest_enemy_health as Score;
-    late_score += WEIGHTS[12] * size_diff;
-    late_score += WEIGHTS[13] * non_hazard_area_diff;
-    late_score += WEIGHTS[14] * food_control_diff;
-    // late_score += WEIGHTS[15] * area_diff;
-    late_score += WEIGHTS[16] * food_dist;
-    late_score += WEIGHTS[17] * reach_diff;
+    late_score += weights[9] * enemies_alive;
+    late_score += weights[10] * me.health as Score;
+    late_score += weights[11] * lowest_enemy_health as Score;
+    late_score += weights[12] * size_diff;
+    late_score += weights[13] * non_hazard_area_diff;
+    late_score += weights[14] * food_control_diff;
+    late_score += weights[15] * area_diff;
+    late_score += weights[16] * food_dist;
+    late_score += weights[17] * reach_diff;
 
     (early_score as f64 * (1.0 - game_progression) + late_score as f64 * game_progression).floor() as Score
 }
