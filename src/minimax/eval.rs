@@ -16,10 +16,10 @@ const CLOSE_AREA_DIFF: usize = 8;
 
 fn get_weights(ruleset: Ruleset) -> [Score; 18] {
     match ruleset {
-        // Ruleset::Constrictor => [
-        //     0, 0, 0, 0, 0, 0, 1, 0, 1, // early game
-        //     0, 0, 0, 0, 0, 0, 1, 0, 1, // late game
-        // ],
+        Ruleset::Constrictor => [
+            0, 0, 0, 0, 0, 0, 1, 0, 0, // early game
+            0, 0, 0, 0, 0, 0, 1, 0, 0, // late game
+        ],
         Ruleset::WrappedSpiral(_) => [
             0, 1, -1, 2, 1, 3, 0, 2, 0, // early game
             0, 2, -2, 2, 1, 3, 0, 2, 1, // late game
@@ -191,7 +191,11 @@ where [(); (W*H+63)/64]: Sized {
                 return Score::MIN + board.turn as Score
             }
         }
-        return -5000 + board.turn as Score
+        // draw value is different depending on gamemode
+        return match board.ruleset {
+            Ruleset::Constrictor => 0,
+            _ => -5000 + board.turn as Score,
+        }
     } else {
         return Score::MAX - board.turn as Score
     }
