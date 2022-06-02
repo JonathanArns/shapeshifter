@@ -11,6 +11,7 @@ spl = []
 mcts = []
 tt = []
 debug_tt = ["tt"]
+quiet = []
 
 [dependencies]
 axum ="0.5.6" 

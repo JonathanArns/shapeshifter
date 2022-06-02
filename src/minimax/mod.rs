@@ -119,9 +119,9 @@ where [(); (W*H+63)/64]: Sized {
         }
         depth += 1;
     }
-    #[cfg(not(feature = "detect_hash_collisions"))]
+    #[cfg(not(feature = "quiet"))]
     println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
-    #[cfg(not(feature = "detect_hash_collisions"))]
+    #[cfg(not(feature = "quiet"))]
     println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, depth, time::Instant::now().duration_since(start_time).as_millis());
     (best_move, best_score, depth)
 }
@@ -158,7 +158,12 @@ where [(); (W*H+63)/64]: Sized {  // min call
                 return Some(tt_score);
             }
         }
-        tt_move = entry.get_best_moves::<S>();
+        if let Some(x) = entry.get_best_moves::<S>() {
+            // sanity check for tt_move
+            if board.is_legal_enemy_moves(x) {
+                tt_move = Some(x);
+            }
+        }
     }
 
     // search
@@ -201,7 +206,10 @@ where [(); (W*H+63)/64]: Sized {  // min call
                     }
                 }
                 if let Some(x) = entry.get_best_moves::<1>() {
-                    itt_move = Some(x[0]);
+                    // sanity check for itt_move
+                    if board.is_legal_move(board.snakes[0].head, x[0]) {
+                        itt_move = Some(x[0]);
+                    }
                 }
             }
 

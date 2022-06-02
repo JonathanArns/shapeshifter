@@ -220,6 +220,28 @@ where [(); (W*H+63)/64]: Sized {
         }
     }
 
+    pub fn is_legal_move(&self, from: u16, mv: Move) -> bool {
+        if WRAP {
+            true
+        } else {
+            match mv {
+                Move::Up => from < W as u16 * (H as u16 - 1),
+                Move::Down => from >= W as u16,
+                Move::Left => from % (W as u16) != 0,
+                Move::Right => from % (W as u16) < W as u16 - 1,
+            }
+        }
+    }
+
+    pub fn is_legal_enemy_moves(&self, mvs: [Move; S]) -> bool {
+        for i in 1..S {
+            if !self.is_legal_move(self.snakes[i].head, mvs[i]) {
+                return false
+            }
+        }
+        true
+    }
+
     pub fn apply_moves(&mut self, moves: &[Move; S]) {
         self.turn += 1;
         let mut eaten = ArrayVec::<u16, S>::new();
