@@ -284,11 +284,10 @@ where [(); (W*H+63)/64]: Sized {
             snake.health -= 1 + self.hazard_dmg * is_on_hazard;
 
             // feed snake
-            let is_on_food = self.food.get_bit(snake.head as usize);
-            snake.health += (100 - snake.health) * is_on_food as i8;
-            snake.curled_bodyparts += is_on_food as u8;
-            snake.length += is_on_food as u8;
-            if is_on_food {
+            if self.food.get_bit(snake.head as usize) {
+                snake.health = 100;
+                snake.curled_bodyparts += 1;
+                snake.length += 1;
                 eaten.push(snake.head); // remember which food has been eaten
             }
 
