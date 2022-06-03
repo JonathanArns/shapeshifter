@@ -44,7 +44,11 @@ fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool
 where [(); (W*H+63)/64]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
     let mut reachable5 = state;
-    let b = !board.bodies[0];
+    let mut walkable = if board.hazard_dmg > 95 {
+        !board.hazards & !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
+    } else {
+        !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
+    };
     for snake in &board.snakes[1..] {
         if snake.is_alive() {
             state.1.set_bit(snake.head as usize);
@@ -56,8 +60,8 @@ where [(); (W*H+63)/64]: Sized {
     loop {
         turn_counter += 1;
         debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
-        let mut me = b & (state.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W);
-        let mut enemies = b & (state.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W);
+        let mut me = state.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W;
+        let mut enemies = state.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W;
         if WRAP {
             me |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.0) >> (W-1)
                 | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.0) << (W-1)
@@ -68,7 +72,7 @@ where [(); (W*H+63)/64]: Sized {
                 | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W) // debug changes
                 | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
         }
-        state = (state.0 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (me & !enemies)), state.1 | (Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK & (enemies & !me)));
+        state = (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me)));
         if closest_food_distance == None && (state.0 & board.food).any() {
             closest_food_distance = Some(turn_counter);
         }
@@ -93,7 +97,7 @@ where [(); (W*H+63)/64]: Sized {
     let mut debug = "".to_string();
     for i in 0..H {
         for j in 0..W {
-            debug.push_str(if me.get_bit(W*(W-1-i)+j) { "x " } else if enemies.get_bit(W*(W-1-i)+j) { "o " } else { ". " });
+            debug.push_str(if me.get_bit(W*(H-1-i)+j) { "x " } else if enemies.get_bit(W*(H-1-i)+j) { "o " } else { ". " });
         }
         debug.push_str("\n");
     }
