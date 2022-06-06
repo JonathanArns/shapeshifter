@@ -17,19 +17,19 @@ const BEING_LONGER: usize = 9;
 
 const NUM_FEATURES: usize = 10;
 
-fn get_weights(ruleset: Ruleset) -> [Score; 20] {
-    match ruleset {
-        Ruleset::Constrictor => [
+fn get_weights(gamemode: Gamemode) -> [Score; 20] {
+    match gamemode {
+        Gamemode::Constrictor => [
             0, 0, -0, 0, 0, 0, 1, 0, 0, 0, // early game
             0, 0, -0, 0, 0, 0, 1, 0, 0, 0, // late game
         ],
-        Ruleset::WrappedSpiral(_) | Ruleset::Royale => [
-            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, // early game
-            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, // late game
-        ],
-        Ruleset::Standard => [
+        Gamemode::Standard => [
             0, 1, -1, 0, 0, 1, 1, 0, 1, 5, // early game
             0, 1, -1, 0, 0, 1, 1, 0, 1, 5, // late game
+        ],
+        Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => [
+            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, // early game
+            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, // late game
         ],
         _ => [
             0, 1, -1, 2, 1, 3, 0, 2, 0, 0, // early game
@@ -107,7 +107,7 @@ where [(); (W*H+63)/64]: Sized {
 
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+63)/64]: Sized {
-    let weights = get_weights(board.ruleset);
+    let weights = get_weights(board.gamemode);
 
     let me = board.snakes[0];
     let mut enemies_alive = 0;
@@ -212,8 +212,8 @@ where [(); (W*H+63)/64]: Sized {
             }
         }
         // draw value is different depending on gamemode
-        return match board.ruleset {
-            Ruleset::Constrictor => 0,
+        return match board.gamemode {
+            Gamemode::Constrictor => 0,
             _ => -5000 + board.turn as Score,
         }
     } else {

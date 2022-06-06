@@ -87,7 +87,7 @@ where [(); (W*H+63)/64]: Sized {
         } else {
             panic!("Min node does not have parent");
         };
-        board.apply_moves(&moves);
+        (board.apply_moves.clone())(&mut board, &moves);
     }
     let idx = tree.len();
     let new = Node::<S, W, H, WRAP>::new(board, idx, moves_idx, Some(tree[node_idx].idx), !tree[node_idx].max);
@@ -279,7 +279,7 @@ where [(); (W*H+63)/64]: Sized {
     };
     while !board.is_terminal() {
         *node_counter += 1;
-        board.apply_moves(&moves);
+        (board.apply_moves.clone())(&mut board, &moves);
         moves = random_move_combination(&board, rng);
     }
     if board.snakes[0].is_alive() {

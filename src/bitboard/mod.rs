@@ -1,6 +1,7 @@
 use crate::api::GameState;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
+use std::rc::Rc;
 use arrayvec::ArrayVec;
 use colored::{Colorize, Color};
 #[cfg(not(feature = "mcts"))]
@@ -8,25 +9,45 @@ use crate::minimax;
 
 mod bitset;
 mod constants;
+#[macro_use]
+mod rules;
 pub mod moves;
 pub mod move_gen;
 
 pub use bitset::Bitset;
 pub use moves::Move;
 
-const BODY_COLLISION: i8 = -1;
-const OUT_OF_HEALTH: i8 = -2;
-const HEAD_COLLISION: i8 = -3;
-const EVEN_HEAD_COLLISION: i8 = -4;
-
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
-pub enum Ruleset {
+pub enum Gamemode {
     Standard,
-    Royale,
+    StandardWithHazard,
+
     Wrapped,
-    WrappedSpiral(u16),
+    WrappedWithHazard,
+    WrappedSpiral,
+    WrappedArcadeMaze,
+
     Constrictor,
 }
+
+impl Gamemode {
+    fn from_gamestate(state: &GameState) -> Self {
+        match state.game.ruleset["name"].as_str() {
+            Some("constrictor") => Self::Constrictor,
+            Some("wrapped") => match state.game.map.as_str() {
+                "arcade_maze" => Self::WrappedArcadeMaze,
+                "hz_spiral" => Self::WrappedSpiral,
+                _ if state.board.hazards.len() == 0 => Self::Wrapped,
+                _ => Self::WrappedWithHazard,
+            },
+            _ => match state.game.map.as_str() {
+                _ if state.board.hazards.len() == 0 => Self::Standard,
+                _ => Self::StandardWithHazard,
+            },
+        }
+    }
+}
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Snake {
@@ -50,17 +71,18 @@ impl Snake {
 }
 
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool> 
 where [(); (W*H+63)/64]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
     pub snakes: [Snake; S],
     pub food: Bitset<{W*H}>,
     pub hazards: Bitset<{W*H}>,
-    pub ruleset: Ruleset,
     pub hazard_dmg: i8,
     pub tt_id: u8,
     pub turn: u16,
+    pub gamemode: Gamemode,
+    pub apply_moves: Rc<dyn Fn(&mut Self, &[Move; S])>,
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Hash for Bitboard<S, W, H, WRAP>
@@ -69,7 +91,7 @@ where [(); (W*H+63)/64]: Sized {
         self.bodies.hash(state);
         self.food.hash(state);
         self.hazards.hash(state);
-        self.ruleset.hash(state);
+        self.gamemode.hash(state);
         self.hazard_dmg.hash(state);
         for snake in self.snakes {
             if snake.is_alive() {
@@ -89,7 +111,6 @@ where [(); (W*H+63)/64]: Sized {
     pub const LEFT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(false);
     pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(true);
     pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = constants::precompute_moves::<S, W, H, WRAP>();
-    pub const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = constants::precompute_hazard_spiral();
 
     pub fn new() -> Self {
         Bitboard{
@@ -98,28 +119,17 @@ where [(); (W*H+63)/64]: Sized {
             food: Bitset::new(),
             hazards: Bitset::new(),
             hazard_dmg: 14,
-            ruleset: Ruleset::Standard,
+            gamemode: Gamemode::Standard,
             tt_id: 0,
             turn: 0,
+            apply_moves: Rc::new(|board, mvs| {}),
         }
     }
 
     pub fn from_gamestate(state: GameState) -> Self {
-        let mut ruleset = match state.game.ruleset["name"].as_str() {
-            Some("wrapped") => Ruleset::Wrapped,
-            Some("royale") => Ruleset::Royale,
-            Some("constrictor") => Ruleset::Constrictor,
-            _ => Ruleset::Standard,
-        };
-        if ruleset == Ruleset::Wrapped && state.board.hazards.len() != 0 {
-            ruleset = Ruleset::WrappedSpiral(state.board.hazards[0].x as u16 + state.board.hazards[0].y as u16 * W as u16);
-        }
         let mut board = Self::new();
-        #[cfg(not(feature = "mcts"))]
-        {
-            board.tt_id = minimax::get_tt_id(state.game.id);
-        }
-        board.ruleset = ruleset;
+        rules::attach_rules(&mut board, &state);
+        board.gamemode = Gamemode::from_gamestate(&state);
         board.turn = state.turn as u16;
         if let Some(settings) = state.game.ruleset.get("settings") {
             board.hazard_dmg = if let Some(x) = settings["hazardDamagePerTurn"].as_i64() {
@@ -127,6 +137,10 @@ where [(); (W*H+63)/64]: Sized {
             } else {
                 14
             };
+        }
+        #[cfg(not(feature = "mcts"))]
+        {
+            board.tt_id = minimax::get_tt_id(state.game.id);
         }
         for food in state.board.food {
             board.food.set_bit(W*food.y + food.x);
@@ -165,7 +179,7 @@ where [(); (W*H+63)/64]: Sized {
                 }
                 prev_pos = pos;
             }
-            if board.snakes[n].curled_bodyparts == 0 && board.ruleset != Ruleset::Constrictor {
+            if board.snakes[n].curled_bodyparts == 0 && board.gamemode != Gamemode::Constrictor {
                 board.bodies[0].unset_bit(board.snakes[n].tail as usize);
             }
         }
@@ -240,146 +254,6 @@ where [(); (W*H+63)/64]: Sized {
             }
         }
         true
-    }
-
-    pub fn apply_moves(&mut self, moves: &[Move; S]) {
-        self.turn += 1;
-        let mut eaten = ArrayVec::<u16, S>::new();
-        for i in 0..S {
-            let snake = &mut self.snakes[i];
-            if snake.is_dead() {
-                continue
-            }
-
-            // move snake
-            let mv = moves[i];
-            let mv_int = mv.to_int();
-            // set direction of new body part
-            self.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
-            self.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
-            // set new head
-            snake.head = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
-
-            // move old tail if necessary
-            if self.ruleset != Ruleset::Constrictor {
-                if snake.curled_bodyparts == 0 {
-                    let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
-                    let tail_move_int = (self.bodies[1] & tail_mask).any() as u8 | ((self.bodies[2] & tail_mask).any() as u8) << 1;
-                    snake.tail = if WRAP {
-                        snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
-                    } else {
-                            snake.tail as i16 + Move::int_to_index(tail_move_int, W)
-                        } as u16;
-                    tail_mask = !tail_mask;
-                    self.bodies[0] &= tail_mask;
-                    self.bodies[1] &= tail_mask;
-                    self.bodies[2] &= tail_mask;
-                } else {
-                    snake.curled_bodyparts -= 1;
-                }
-            }
-
-            // reduce health
-            let is_on_hazard = self.hazards.get_bit(snake.head as usize) as i8;
-            snake.health -= 1 + self.hazard_dmg * is_on_hazard;
-
-            // feed snake
-            if self.food.get_bit(snake.head as usize) {
-                snake.health = 100;
-                snake.curled_bodyparts += 1;
-                snake.length += 1;
-                eaten.push(snake.head); // remember which food has been eaten
-            }
-
-            // starvation
-            if snake.is_dead() {
-                snake.health = OUT_OF_HEALTH;
-                self.remove_snake_body(i);
-            }
-        }
-
-        // sanity checks for snake movement
-        #[cfg(debug_assertions)]
-        for snake in self.snakes {
-            if snake.is_dead() {
-                continue
-            }
-            debug_assert!(self.bodies[0].get_bit(snake.tail as usize), "snake tail is not set in bodies bitmap, before it should be removed\n{:?}", self);
-        }
-
-        // a 2nd iteration is needed to deal with collisions, since starved snakes cannot collide
-        for i in 0..S {
-            if self.snakes[i].is_dead() {
-                continue
-            }
-            // body collisions
-            if self.bodies[0].get_bit(self.snakes[i].head as usize) {
-                self.snakes[i].curled_bodyparts = 100; // marked for removal
-                continue
-            }
-            // head to head collisions
-            for j in 0..S {
-                if i != j
-                && self.snakes[j].is_alive()
-                && self.snakes[i].head == self.snakes[j].head {
-                    if self.snakes[i].length < self.snakes[j].length {
-                        self.snakes[i].curled_bodyparts = 101; // marked for removal
-                    } else if self.snakes[i].length == self.snakes[j].length {
-                        self.snakes[i].curled_bodyparts = 102; // marked for removal
-                    }
-                }
-            }
-        }
-
-        // remove collided snakes and mark new heads
-        for i in 0..S {
-            // remove collided snakes
-            if self.snakes[i].curled_bodyparts >= 100 {
-                if self.snakes[i].curled_bodyparts == 100 {
-                    self.snakes[i].health = BODY_COLLISION;
-                } else if self.snakes[i].curled_bodyparts == 101 {
-                    self.snakes[i].health = HEAD_COLLISION;
-                } else if self.snakes[i].curled_bodyparts == 102 {
-                    self.snakes[i].health = EVEN_HEAD_COLLISION;
-                }
-                self.snakes[i].curled_bodyparts = 0;
-                self.remove_snake_body(i);
-            } else if self.snakes[i].is_alive() {
-                // set snake heads in bodies
-                // we do this last, since it would break collision checks earlier, but we want this info
-                // for move gen on the new board, since moving into the current space of a head is illegal
-                self.bodies[0].set_bit(self.snakes[i].head as usize);
-                // unset tail bits for snakes that have no curled bodyparts 
-                // we do this, since it is allowed to move there and we can effectively treat these
-                // spaces as empty for the next move
-                // we also do this last, since we need it earlier for collision checks of this turn
-                if self.snakes[i].curled_bodyparts == 0 && self.ruleset != Ruleset::Constrictor {
-                    self.bodies[0].unset_bit(self.snakes[i].tail as usize);
-                }
-            }
-        }
-
-        // remove eaten food
-        for food in eaten {
-            self.food.unset_bit(food as usize);
-        }
-
-        self.inc_spiral_hazards();
-    }
-
-    fn inc_spiral_hazards(&mut self) {
-        if let Ruleset::WrappedSpiral(center) = self.ruleset {
-            let round = self.turn % 3;
-            if round != 0 || self.turn / 3 > 142 || self.turn == 0 {
-                return
-            }
-            let (x_shift, y_shift) = Self::HAZARD_SPIRAL_SHIFTS[((self.turn/3)-1) as usize];
-            let x = center as i16 % W as i16 + x_shift as i16;
-            let y = center as i16 / W as i16 + y_shift as i16;
-            if x >= 0 && x < W as i16 && y >= 0 && y < H as i16 {
-                self.hazards.set_bit((center as i16 + x_shift as i16 + y_shift as i16 * W as i16) as usize);
-            }
-        }
     }
 
     pub fn remove_snake_body(&mut self, snake_index: usize) {
@@ -561,7 +435,7 @@ mod tests {
         let mut board = create_board();
         b.iter(|| {
             let moves = move_gen::limited_move_combinations(&board, 0);
-            board.apply_moves(&moves[0])
+            (board.apply_moves.clone())(&mut board, &moves[0])
         })
     }
 

@@ -15,6 +15,7 @@ use crate::uct;
 pub struct Game {
     pub id: String,
     pub ruleset: HashMap<String, Value>,
+    pub map: String,
     pub timeout: u32,
 }
 
@@ -73,18 +74,19 @@ pub async fn handle_end() {
     ttable::write_debug_info();
 }
 
+fn is_wrapped(state: &GameState) -> bool {
+    match state.game.ruleset["name"].as_str() {
+        Some("wrapped") => true,
+        _ => false,
+    }
+}
+
 #[cfg(feature = "mcts")]
 pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
-    let ruleset = match state.game.ruleset["name"].as_str() {
-        Some("wrapped") => bitboard::Ruleset::Wrapped,
-        Some("royale") => bitboard::Ruleset::Royale,
-        Some("constrictor") => bitboard::Ruleset::Constrictor,
-        _ => bitboard::Ruleset::Standard,
-    };
 
     #[cfg(not(feature = "spl"))]
-    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
+    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
         (1, 11, 11, true) => task::spawn_blocking(move || uct::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
         (2, 11, 11, true) => task::spawn_blocking(move || uct::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 11, 11, true) => task::spawn_blocking(move || uct::search(&bitboard::Bitboard::<3, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
@@ -104,7 +106,7 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     };
 
     #[cfg(feature = "spl")]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
         (1, 7, 7, true) => task::spawn_blocking(move || uct::search(&bitboard::Bitboard::<1, 7, 7, true>::from_gamestate(state), deadline)).await.unwrap(),
         (2, 7, 7, true) => task::spawn_blocking(move || uct::search(&bitboard::Bitboard::<2, 7, 7, true>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 7, 7, true) => task::spawn_blocking(move || uct::search(&bitboard::Bitboard::<3, 7, 7, true>::from_gamestate(state), deadline)).await.unwrap(),
@@ -222,15 +224,9 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
 #[cfg(not(feature = "mcts"))]
 pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
-    let ruleset = match state.game.ruleset["name"].as_str() {
-        Some("wrapped") => bitboard::Ruleset::Wrapped,
-        Some("royale") => bitboard::Ruleset::Royale,
-        Some("constrictor") => bitboard::Ruleset::Constrictor,
-        _ => bitboard::Ruleset::Standard,
-    };
 
     #[cfg(not(feature = "spl"))]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
         (1, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
         (2, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 11, 11, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, true>::from_gamestate(state), deadline)).await.unwrap(),
@@ -250,7 +246,7 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     };
 
     #[cfg(feature = "spl")]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, matches!(ruleset, bitboard::Ruleset::Wrapped)) {
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
         (1, 7, 7, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<1, 7, 7, true>::from_gamestate(state), deadline)).await.unwrap(),
         (2, 7, 7, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<2, 7, 7, true>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 7, 7, true) => task::spawn_blocking(move || minimax::search(&bitboard::Bitboard::<3, 7, 7, true>::from_gamestate(state), deadline)).await.unwrap(),

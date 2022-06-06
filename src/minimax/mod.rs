@@ -177,7 +177,7 @@ where [(); (W*H+63)/64]: Sized {  // min call
             let mut ibest_move = Move::Up;
             mvs[0] = mv;
             let mut child = board.clone();
-            child.apply_moves(&mvs);
+            (child.apply_moves.clone())(&mut child, &mvs);
             *node_counter += 1;
 
             // search stops
@@ -298,7 +298,7 @@ where [(); (W*H+63)/64]: Sized {  // min call
             let mut ibest_score = Score::MIN;
             mvs[0] = mv;
             let mut child = board.clone();
-            child.apply_moves(&mvs);
+            (child.apply_moves.clone())(&mut child, &mvs);
             *node_counter += 1;
 
             // search stops
