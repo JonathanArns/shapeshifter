@@ -15,6 +15,7 @@ pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: 
 where [(); (W*H+63)/64]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
         Some("constrictor") => Rc::new(|board, moves| {
+            board.turn += 1;
             move_heads::<S, W, H, WRAP>(board, moves);
             perform_collisions::<S, W, H, WRAP>(board);
             finish_head_movement::<S, W, H, WRAP>(board);
@@ -23,6 +24,7 @@ where [(); (W*H+63)/64]: Sized {
             "hz_spiral" if api_state.board.hazards.len() > 0 => {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
                 Rc::new(move |board, moves| {
+                    board.turn += 1;
                     move_heads::<S, W, H, WRAP>(board, moves);
                     move_tails::<S, W, H, WRAP>(board);
                     update_health::<S, W, H, WRAP>(board);
@@ -33,6 +35,7 @@ where [(); (W*H+63)/64]: Sized {
                 })
             },
             _ => Rc::new(|board, moves| {
+                board.turn += 1;
                 move_heads::<S, W, H, WRAP>(board, moves);
                 move_tails::<S, W, H, WRAP>(board);
                 update_health::<S, W, H, WRAP>(board);
