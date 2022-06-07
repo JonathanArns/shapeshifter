@@ -19,6 +19,10 @@ const NUM_FEATURES: usize = 10;
 
 fn get_weights(gamemode: Gamemode) -> [Score; 20] {
     match gamemode {
+        Gamemode::WrappedArcadeMaze => [
+            0, 3, -1, 0, 0, 3, 1, 1, 0, 0, // early game
+            0, 3, -1, 0, 0, 3, 1, 1, 0, 0, // late game
+        ],
         Gamemode::Constrictor => [
             0, 0, -0, 0, 0, 0, 1, 0, 0, 0, // early game
             0, 0, -0, 0, 0, 0, 1, 0, 0, 0, // late game
