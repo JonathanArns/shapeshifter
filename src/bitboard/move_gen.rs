@@ -231,7 +231,7 @@ mod tests {
 
     fn create_board() -> Bitboard<4, 11, 11, true> {
         let state = api::GameState{
-            game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new() },
+            game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new(), map: "standard".to_string() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),

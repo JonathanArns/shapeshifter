@@ -14,100 +14,41 @@ const AREA_DIFF: usize = 6;
 const CLOSEST_FOOD_DIST: usize = 7;
 const CLOSE_AREA_DIFF: usize = 8;
 const BEING_LONGER: usize = 9;
+const CONTROLLED_FOOD_SPAWNS_DIFF: usize = 10;
 
-const NUM_FEATURES: usize = 10;
+const NUM_FEATURES: usize = 11;
 
-fn get_weights(gamemode: Gamemode) -> [Score; 20] {
+fn get_weights(gamemode: Gamemode) -> [Score; 22] {
     match gamemode {
         Gamemode::WrappedArcadeMaze => [
-            0, 3, -1, 0, 0, 3, 1, 1, 0, 0, // early game
-            0, 3, -1, 0, 0, 3, 1, 1, 0, 0, // late game
+            0, 3, -1, 0, 0, 2, 1, 1, 0, 0, 10, // early game
+            0, 3, -1, 0, 0, 2, 1, 1, 0, 0, 10, // late game
         ],
         Gamemode::Constrictor => [
-            0, 0, -0, 0, 0, 0, 1, 0, 0, 0, // early game
-            0, 0, -0, 0, 0, 0, 1, 0, 0, 0, // late game
+            0, 0, -0, 0, 0, 0, 1, 0, 0, 0, 0, // early game
+            0, 0, -0, 0, 0, 0, 1, 0, 0, 0, 0, // late game
         ],
         Gamemode::Standard => [
-            0, 1, -1, 0, 0, 1, 1, 0, 1, 5, // early game
-            0, 1, -1, 0, 0, 1, 1, 0, 1, 5, // late game
+            0, 1, -1, 0, 0, 1, 1, 0, 1, 5, 0, // early game
+            0, 1, -1, 0, 0, 1, 1, 0, 1, 5, 0, // late game
         ],
         Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => [
-            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, // early game
-            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, // late game
+            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, 0, // early game
+            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, 0, // late game
         ],
         _ => [
-            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, // early game
-            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, // late game
+            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, 0, // early game
+            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, 0, // late game
         ],
     }
 }
 
-fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &Bitboard<S, W, H, WRAP>
-) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
-where [(); (W*H+63)/64]: Sized {
-    let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
-    let mut reachable5 = state;
-    let mut walkable = if board.hazard_dmg > 95 {
-        !board.hazards & !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
-    } else {
-        !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
-    };
-    for snake in &board.snakes[1..] {
-        if snake.is_alive() {
-            state.1.set_bit(snake.head as usize);
-        }
-    }
-    let mut old_state = state; // state at n-1
-    let mut turn_counter = 0;
-    let mut closest_food_distance = None;
-    loop {
-        turn_counter += 1;
-        debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
-        let mut me = state.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W;
-        let mut enemies = state.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W;
-        if WRAP {
-            me |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.0) >> (W-1)
-                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.0) << (W-1)
-                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.0) << ((H-1)*W)
-                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
-            enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.1) >> (W-1)
-                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.1) << (W-1)
-                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W) // debug changes
-                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
-        }
-        state = (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me)));
-        if closest_food_distance == None && (state.0 & board.food).any() {
-            closest_food_distance = Some(turn_counter);
-        }
-        if turn_counter == 5 {
-            reachable5 = state;
-        }
-        if state == old_state {
-            if let Some(dist) = closest_food_distance {
-                return (state, reachable5, dist as Score)
-            } else {
-                return (state, reachable5, W as Score)
-            }
-        } else {
-            old_state = state;
-        }
+fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
+    match gamemode {
+        Gamemode::WrappedArcadeMaze => &[212, 218, 224],
+        _ => &[],
     }
 }
-
-#[allow(unused)]
-fn print_area_control<const W: usize, const H: usize>(me: Bitset<{W*H}>, enemies: Bitset<{W*H}>)
-where [(); (W*H+63)/64]: Sized {
-    let mut debug = "".to_string();
-    for i in 0..H {
-        for j in 0..W {
-            debug.push_str(if me.get_bit(W*(H-1-i)+j) { "x " } else if enemies.get_bit(W*(H-1-i)+j) { "o " } else { ". " });
-        }
-        debug.push_str("\n");
-    }
-    println!("{}", debug);
-}
-
 
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
 where [(); (W*H+63)/64]: Sized {
@@ -179,6 +120,19 @@ where [(); (W*H+63)/64]: Sized {
     } else {
         0
     };
+    let controlled_food_spawns_diff = if weights[CONTROLLED_FOOD_SPAWNS_DIFF] != 0 {
+        let mut res = 0;
+        for x in get_food_spawns(board.gamemode) {
+            if my_area.get_bit(*x) {
+                res += 1;
+            } else if enemy_area.get_bit(*x) {
+                res -= 1;
+            }
+        }
+        res
+    } else {
+        0
+    };
 
     let mut early_score: Score = 0;
     early_score += weights[ENEMIES_ALIVE] * enemies_alive;
@@ -191,6 +145,7 @@ where [(); (W*H+63)/64]: Sized {
     early_score += weights[CLOSEST_FOOD_DIST] * food_dist;
     early_score += weights[CLOSE_AREA_DIFF] * reach_diff;
     early_score += weights[BEING_LONGER] * being_longer;
+    early_score += weights[CONTROLLED_FOOD_SPAWNS_DIFF] * controlled_food_spawns_diff;
 
     let mut late_score: Score = 0;
     late_score += weights[NUM_FEATURES+ENEMIES_ALIVE] * enemies_alive;
@@ -203,6 +158,7 @@ where [(); (W*H+63)/64]: Sized {
     late_score += weights[NUM_FEATURES+CLOSEST_FOOD_DIST] * food_dist;
     late_score += weights[NUM_FEATURES+CLOSE_AREA_DIFF] * reach_diff;
     late_score += weights[NUM_FEATURES+BEING_LONGER] * being_longer;
+    late_score += weights[NUM_FEATURES+CONTROLLED_FOOD_SPAWNS_DIFF] * controlled_food_spawns_diff;
 
     (early_score as f64 * (1.0 - game_progression) + late_score as f64 * game_progression).floor() as Score
 }
@@ -225,6 +181,72 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
+fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>
+) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
+where [(); (W*H+63)/64]: Sized {
+    let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
+    let mut reachable5 = state;
+    let mut walkable = if board.hazard_dmg > 95 {
+        !board.hazards & !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
+    } else {
+        !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
+    };
+    for snake in &board.snakes[1..] {
+        if snake.is_alive() {
+            state.1.set_bit(snake.head as usize);
+        }
+    }
+    let mut old_state = state; // state at n-1
+    let mut turn_counter = 0;
+    let mut closest_food_distance = None;
+    loop {
+        turn_counter += 1;
+        debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
+        let mut me = state.0 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W;
+        let mut enemies = state.1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W;
+        if WRAP {
+            me |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.0) >> (W-1)
+                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.0) << (W-1)
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.0) << ((H-1)*W)
+                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
+            enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.1) >> (W-1)
+                | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.1) << (W-1)
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W) // debug changes
+                | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
+        }
+        state = (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me)));
+        if closest_food_distance == None && (state.0 & board.food).any() {
+            closest_food_distance = Some(turn_counter);
+        }
+        if turn_counter == 5 {
+            reachable5 = state;
+        }
+        if state == old_state {
+            if let Some(dist) = closest_food_distance {
+                return (state, reachable5, dist as Score)
+            } else {
+                return (state, reachable5, W as Score)
+            }
+        } else {
+            old_state = state;
+        }
+    }
+}
+
+#[allow(unused)]
+fn print_area_control<const W: usize, const H: usize>(me: Bitset<{W*H}>, enemies: Bitset<{W*H}>)
+where [(); (W*H+63)/64]: Sized {
+    let mut debug = "".to_string();
+    for i in 0..H {
+        for j in 0..W {
+            debug.push_str(if me.get_bit(W*(H-1-i)+j) { "x " } else if enemies.get_bit(W*(H-1-i)+j) { "o " } else { ". " });
+        }
+        debug.push_str("\n");
+    }
+    println!("{}", debug);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,7 +262,7 @@ mod tests {
         let mut ruleset = std::collections::HashMap::new();
         ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
         let state = api::GameState{
-            game: api::Game{ id: "".to_string(), timeout: 100, ruleset },
+            game: api::Game{ id: "".to_string(), timeout: 100, ruleset, map: "standard".to_string() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),
