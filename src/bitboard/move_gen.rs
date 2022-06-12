@@ -4,39 +4,40 @@ use arrayvec::ArrayVec;
 #[cfg(feature = "mcts")]
 use rand::Rng;
 
-pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, pos: u16) -> ArrayVec<Move, 4>
+pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, snake_index: usize) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
+    let pos = board.snakes[snake_index].head;
+    let survives_hazard = board.snakes[snake_index].health > board.hazard_dmg;
 
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][0] {
         some_legal_move = Move::Up;
-        if !board.bodies[0].get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Up);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][1] {
         some_legal_move = Move::Down;
-        if !board.bodies[0].get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Down);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][2] {
         some_legal_move = Move::Right;
-        if !board.bodies[0].get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Right);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][3] {
         some_legal_move = Move::Left;
-        if !board.bodies[0].get_bit(dest as usize) {
+        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Left);
         }
     }
     if moves.len() == 0 {
         moves.push(some_legal_move);
     }
-    debug_assert!(moves == slow_allowed_moves(board, pos), "got {:?}, should get {:?}", moves, slow_allowed_moves(board, pos));
     moves
 }
 
@@ -141,10 +142,10 @@ where [(); (W*H+63)/64]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     let mut i = 0;
-    for snake in board.snakes[0+skip..].iter() {
+    for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
         if snake.is_alive() {
             i += 1;
-            let mut moves = allowed_moves(board, snake.head);
+            let mut moves = allowed_moves(board, j+skip);
             moves.sort_by_key(|mv| {
                 let dest = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].unwrap();
                 let mut dist = board.distance(board.snakes[0].head, dest);
@@ -182,9 +183,9 @@ pub fn move_combinations<const S: usize, const W: usize, const H: usize, const W
 where [(); (W*H+63)/64]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
-    for snake in board.snakes[0+skip..].iter() {
+    for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
         if snake.is_alive() {
-            moves_per_snake.push(allowed_moves(board, snake.head));
+            moves_per_snake.push(allowed_moves(board, j+skip));
         } else {
             let mut none_move = ArrayVec::<_, 4>::new();
             none_move.insert(0, Move::Up);

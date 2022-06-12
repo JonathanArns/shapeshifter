@@ -46,7 +46,7 @@ where [(); (W*H+63)/64]: Sized {
     fn new(board: Bitboard<S, W, H, WRAP>, idx: usize, moves_idx: usize, parent: Option<usize>, max: bool) -> Self {
         // this is effectively the move generation for the in memory tree
         let moves = if max {
-            Moves::Me(allowed_moves(&board, board.snakes[0].head))
+            Moves::Me(allowed_moves(&board, 0))
         } else {
             Moves::Enemies(move_combinations(&board, 1))
         };
