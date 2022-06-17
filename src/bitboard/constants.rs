@@ -39,7 +39,7 @@ where [(); (W*H+63)/64]: Sized {
     let mut i = 0;
     let j = if right { W-1 } else { 0 };
     loop {
-        if i == W {
+        if i == H {
             break
         }
         let idx = (i*W+j)>>6;

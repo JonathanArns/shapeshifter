@@ -171,10 +171,10 @@ where [(); (W*H+63)/64]: Sized {
                     continue
                 }    
                 board.bodies[0].set_bit(pos as usize);
-                if pos == prev_pos + 1 || pos == prev_pos + W as u16 || prev_pos == pos + W as u16 - 1 || prev_pos == pos + (H as u16 - 1) * W as u16 {
+                if pos == prev_pos + 1 || pos == prev_pos + W as u16 || WRAP && prev_pos == pos + W as u16 - 1 || WRAP && prev_pos == pos + (H as u16 - 1) * W as u16 {
                     board.bodies[1].set_bit(pos as usize);
                 }
-                if  prev_pos == pos + 1 || prev_pos + 1 == pos || prev_pos == pos + W as u16 - 1 || prev_pos + W as u16 - 1 == pos {
+                if  prev_pos == pos + 1 || prev_pos + 1 == pos || WRAP && prev_pos == pos + W as u16 - 1 || WRAP && prev_pos + W as u16 - 1 == pos {
                     board.bodies[2].set_bit(pos as usize);
                 }
                 prev_pos = pos;

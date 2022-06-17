@@ -72,17 +72,15 @@ where [(); (W*H+63)/64]: Sized {
             continue
         }
         if snake.curled_bodyparts == 0 {
-            let mut tail_mask = Bitset::<{W*H}>::with_bit_set(snake.tail as usize);
-            let tail_move_int = (board.bodies[1] & tail_mask).any() as u8 | ((board.bodies[2] & tail_mask).any() as u8) << 1;
+            let tail_move_int = board.bodies[1].get_bit(snake.tail as usize) as u8 | (board.bodies[2].get_bit(snake.tail as usize) as u8) << 1;
+            board.bodies[0].unset_bit(snake.tail as usize);
+            board.bodies[1].unset_bit(snake.tail as usize);
+            board.bodies[2].unset_bit(snake.tail as usize);
             snake.tail = if WRAP {
                 snake.tail as i16 + Move::int_to_index_wrapping(tail_move_int, W, H, snake.tail)
             } else {
-                    snake.tail as i16 + Move::int_to_index(tail_move_int, W)
-                } as u16;
-            tail_mask = !tail_mask;
-            board.bodies[0] &= tail_mask;
-            board.bodies[1] &= tail_mask;
-            board.bodies[2] &= tail_mask;
+                snake.tail as i16 + Move::int_to_index(tail_move_int, W)
+            } as u16;
         } else {
             snake.curled_bodyparts -= 1;
         }

@@ -79,6 +79,10 @@ where [(); (W*H+63)/64]: Sized {
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
     let mut my_allowed_moves = allowed_moves(&board, 0);
     my_allowed_moves.shuffle(&mut rng);
+    if my_allowed_moves.len() == 1 {
+        return (my_allowed_moves[0], 0, 0)
+    }
+
     let mut best_move = my_allowed_moves[0];
     let mut best_score = Score::MIN+1;
     let mut depth = 1;
@@ -126,7 +130,7 @@ where [(); (W*H+63)/64]: Sized {
     (best_move, best_score, depth)
 }
 
-pub fn rps<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
     deadline: time::Instant,
@@ -168,13 +172,19 @@ where [(); (W*H+63)/64]: Sized {  // min call
     // search
     let mut best_score = Score::MAX;
     let mut best_moves = [Move::Up; S];
+    let mut seen_moves = ArrayVec::<[Move; S], 4>::default();
     for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
+        mvs[0] = mv;
+        if seen_moves.contains(&mvs) {
+            continue
+        } else {
+            seen_moves.push(mvs.clone());
+        }
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
             let mut ibeta = beta;
             let mut ibest_score = Score::MIN;
             let mut ibest_move = Move::Up;
-            mvs[0] = mv;
             let mut child = board.clone();
             (child.apply_moves.clone())(&mut child, &mvs);
             *node_counter += 1;
@@ -213,8 +223,14 @@ where [(); (W*H+63)/64]: Sized {  // min call
             }
 
             // continue search
+            let mut iseen_moves = ArrayVec::<Move, 4>::default();
             let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1);
             for mv in itt_move.iter().chain(allowed_moves(&child, 0).iter()) {
+                if iseen_moves.contains(mv) {
+                    continue
+                } else {
+                    iseen_moves.push(*mv);
+                }
                 let iscore = if depth == 1 {
                     quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, ialpha, ibeta)?
                 } else {
@@ -254,7 +270,7 @@ where [(); (W*H+63)/64]: Sized {  // min call
 }
 
 /// Returns None if it received a timeout from stop_receiver.
-pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+pub fn rps<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
     deadline: time::Instant,
