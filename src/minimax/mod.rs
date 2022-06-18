@@ -80,6 +80,7 @@ where [(); (W*H+63)/64]: Sized {
     let mut my_allowed_moves = allowed_moves(&board, 0);
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
+        println!("{:?} is the only move -> return early", my_allowed_moves[0]);
         return (my_allowed_moves[0], 0, 0)
     }
 

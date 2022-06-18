@@ -1,166 +1,89 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
 
-use std::env;
-
-// feature weight indices
-const ENEMIES_ALIVE: usize = 0;
-const MY_HEALTH: usize = 1;
-const LOWEST_ENEMY_HEALTH: usize = 2;
-const LENGTH_DIFF: usize = 3;
-const NON_HAZARD_AREA_DIFF: usize = 4;
-const CONTROLLED_FOOD_DIFF: usize = 5;
-const AREA_DIFF: usize = 6;
-const CLOSEST_FOOD_DIST: usize = 7;
-const CLOSE_AREA_DIFF: usize = 8;
-const BEING_LONGER: usize = 9;
-const CONTROLLED_FOOD_SPAWNS_DIFF: usize = 10;
-
-const NUM_FEATURES: usize = 11;
-
-fn get_weights(gamemode: Gamemode) -> [Score; 22] {
-    match gamemode {
-        Gamemode::WrappedArcadeMaze => [
-            0, 3, -1, 0, 0, 2, 1, 1, 0, 0, 10, // early game
-            0, 3, -1, 0, 0, 2, 1, 1, 0, 0, 10, // late game
-        ],
-        Gamemode::Constrictor => [
-            0, 0, -0, 0, 0, 0, 1, 0, 0, 0, 0, // early game
-            0, 0, -0, 0, 0, 0, 1, 0, 0, 0, 0, // late game
-        ],
-        Gamemode::Standard => [
-            0, 1, -1, 0, 0, 1, 1, 0, 1, 5, 0, // early game
-            0, 1, -1, 0, 0, 1, 1, 0, 1, 5, 0, // late game
-        ],
-        Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => [
-            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, 0, // early game
-            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, 0, // late game
-        ],
-        _ => [
-            0, 1, -1, 2, 1, 3, 0, 2, 0, 0, 0, // early game
-            0, 2, -2, 2, 1, 3, 0, 2, 1, 0, 0, // late game
-        ],
-    }
+macro_rules! score {
+    ($progress:expr , $( $w0:literal $w1:literal $feat:expr ),* $(,)?) => {
+        {
+            let mut early_score: Score = 0;
+            let mut late_score: Score = 0;
+            $(
+                early_score += $w0 * $feat;
+                late_score += $w1 * $feat;
+            )*
+            (early_score as f64 * (1.0 - $progress) + late_score as f64 * $progress).floor() as Score
+        }
+    };
 }
 
-fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
-    match gamemode {
-        Gamemode::WrappedArcadeMaze => &[212, 218, 224],
-        _ => &[],
-    }
-}
-
-pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+   board: &Bitboard<S, W, H, WRAP> 
+) -> Score
 where [(); (W*H+63)/64]: Sized {
-    let weights = get_weights(board.gamemode);
-
-    let me = board.snakes[0];
-    let mut enemies_alive = 0;
-    let mut lowest_enemy_health = 100;
-    let mut largest_enemy_length = 0;
-
-    for i in 1..S {
-        if board.snakes[i].is_alive() {
-            enemies_alive += 1;
-            let len = board.snakes[i].length;
-            if len > largest_enemy_length {
-                largest_enemy_length = len;
-            }
-            if board.snakes[i].health < lowest_enemy_health {
-                lowest_enemy_health = board.snakes[i].health;
-            }
+    match board.gamemode {
+        Gamemode::WrappedArcadeMaze => {
+            let me = board.snakes[0];
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+            score!(
+                turn_progression(board.turn, 500),
+                1 1 me.health as Score,
+                // -1 -1 lowest_enemy_health(board),
+                2 0 length_diff(board),
+                2 0 controlled_food_diff(board, &my_area, &enemy_area),
+                1 2 area_diff(&my_area, &enemy_area),
+                0 2 area_diff(&my_close_area, &enemy_close_area),
+                // 3 3 controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
+                // 5 5 controlled_tail_diff(board, &my_area, &enemy_area),
+            )
+        },
+        Gamemode::Standard => {
+            let me = board.snakes[0];
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
+            score!(
+                turn_progression(board.turn, 1),
+                1 1 me.health as Score,
+                -1 -1 lowest_enemy_health(board),
+                1 1 controlled_food_diff(board, &my_area, &enemy_area),
+                1 1 area_diff(&my_area, &enemy_area),
+                1 1 area_diff(&my_close_area, &enemy_close_area),
+                5 5 being_longer(board),
+            )
+        },
+        Gamemode::Constrictor => {
+            let ((my_area, enemy_area), (_, _), _) = area_control(board);
+            score!(
+                turn_progression(board.turn, 1),
+                1 1 area_diff(&my_area, &enemy_area),
+            )
         }
+        Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => {
+            let me = board.snakes[0];
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+            score!(
+                fill_progression(board),
+                1 2 me.health as Score,
+                -1 -2 lowest_enemy_health(board),
+                2 2 length_diff(board),
+                1 1 non_hazard_area_diff(board, &my_area, &enemy_area),
+                3 3 controlled_food_diff(board, &my_area, &enemy_area),
+                2 2 (W as Score - closest_food_distance),
+                0 1 area_diff(&my_close_area, &enemy_close_area),
+            )
+        }
+        _ => {
+            let me = board.snakes[0];
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+            score!(
+                fill_progression(board),
+                1 2 me.health as Score,
+                -1 -2 lowest_enemy_health(board),
+                2 2 length_diff(board),
+                1 1 non_hazard_area_diff(board, &my_area, &enemy_area),
+                3 3 controlled_food_diff(board, &my_area, &enemy_area),
+                2 2 (W as Score - closest_food_distance),
+                0 1 area_diff(&my_close_area, &enemy_close_area),
+            )
+        },
     }
-    let ((my_area, enemy_area), (my_reach5, enemy_reach5), closest_food_distance) = area_control(board);
-
-    let game_progression = ((board.hazards & board.bodies[0]).count_zeros() as f64 / ((W-1) * (H-1)) as f64).min(1.0);
-
-    // difference in length to longest enemy
-    let size_diff = if weights[LENGTH_DIFF] != 0 {
-        W as Score * (me.length as Score - largest_enemy_length as Score)
-    } else {
-        0
-    };
-    // difference in controlled non-hazard area
-    let non_hazard_area_diff = if weights[NON_HAZARD_AREA_DIFF] != 0 {
-        (my_area & !board.hazards).count_ones() as Score - (enemy_area & !board.hazards).count_ones() as Score
-    } else {
-        0
-    };
-    // difference in controlled food
-    let food_control_diff = if weights[CONTROLLED_FOOD_DIFF] != 0 {
-        (my_area & board.food).count_ones() as Score - (enemy_area & board.food).count_ones() as Score
-    } else {
-        0
-    };
-    // difference in controlled area
-    let area_diff = if weights[AREA_DIFF] != 0 {
-        my_area.count_ones() as Score - enemy_area.count_ones() as Score
-    } else {
-        0
-    };
-    // distance to closest food
-    let food_dist = if weights[CLOSEST_FOOD_DIST] != 0 {
-        W as Score - closest_food_distance
-    } else {
-        0
-    };
-    // reach difference
-    let reach_diff = if weights[CLOSE_AREA_DIFF] != 0 {
-        my_reach5.count_ones() as Score - enemy_reach5.count_ones() as Score
-    } else {
-        0
-    };
-    let being_longer = if weights[BEING_LONGER] != 0 {
-        if size_diff > 0 {
-            ((size_diff + 1) as f64).log2() as Score
-        } else {
-            -(((-size_diff + 1) as f64).log2() as Score)
-        }
-    } else {
-        0
-    };
-    let controlled_food_spawns_diff = if weights[CONTROLLED_FOOD_SPAWNS_DIFF] != 0 {
-        let mut res = 0;
-        for x in get_food_spawns(board.gamemode) {
-            if my_area.get_bit(*x) {
-                res += 1;
-            } else if enemy_area.get_bit(*x) {
-                res -= 1;
-            }
-        }
-        res
-    } else {
-        0
-    };
-
-    let mut early_score: Score = 0;
-    early_score += weights[ENEMIES_ALIVE] * enemies_alive;
-    early_score += weights[MY_HEALTH] * me.health as Score;
-    early_score += weights[LOWEST_ENEMY_HEALTH] * lowest_enemy_health as Score;
-    early_score += weights[LENGTH_DIFF] * size_diff;
-    early_score += weights[NON_HAZARD_AREA_DIFF] * non_hazard_area_diff;
-    early_score += weights[CONTROLLED_FOOD_DIFF] * food_control_diff;
-    early_score += weights[AREA_DIFF] * area_diff;
-    early_score += weights[CLOSEST_FOOD_DIST] * food_dist;
-    early_score += weights[CLOSE_AREA_DIFF] * reach_diff;
-    early_score += weights[BEING_LONGER] * being_longer;
-    early_score += weights[CONTROLLED_FOOD_SPAWNS_DIFF] * controlled_food_spawns_diff;
-
-    let mut late_score: Score = 0;
-    late_score += weights[NUM_FEATURES+ENEMIES_ALIVE] * enemies_alive;
-    late_score += weights[NUM_FEATURES+MY_HEALTH] * me.health as Score;
-    late_score += weights[NUM_FEATURES+LOWEST_ENEMY_HEALTH] * lowest_enemy_health as Score;
-    late_score += weights[NUM_FEATURES+LENGTH_DIFF] * size_diff;
-    late_score += weights[NUM_FEATURES+NON_HAZARD_AREA_DIFF] * non_hazard_area_diff;
-    late_score += weights[NUM_FEATURES+CONTROLLED_FOOD_DIFF] * food_control_diff;
-    late_score += weights[NUM_FEATURES+AREA_DIFF] * area_diff;
-    late_score += weights[NUM_FEATURES+CLOSEST_FOOD_DIST] * food_dist;
-    late_score += weights[NUM_FEATURES+CLOSE_AREA_DIFF] * reach_diff;
-    late_score += weights[NUM_FEATURES+BEING_LONGER] * being_longer;
-    late_score += weights[NUM_FEATURES+CONTROLLED_FOOD_SPAWNS_DIFF] * controlled_food_spawns_diff;
-
-    (early_score as f64 * (1.0 - game_progression) + late_score as f64 * game_progression).floor() as Score
 }
 
 pub fn eval_terminal<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
@@ -178,6 +101,116 @@ where [(); (W*H+63)/64]: Sized {
         }
     } else {
         return Score::MAX - board.turn as Score
+    }
+}
+
+
+fn turn_progression(turns: u16, late_game_start: u16) -> f64 {
+    (turns as f64 / late_game_start as f64).min(1.0)
+}
+
+fn fill_progression<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> f64
+where [(); (W*H+63)/64]: Sized {
+    ((board.hazards & board.bodies[0]).count_zeros() as f64 / ((W-1) * (H-1)) as f64).min(1.0)
+}
+
+fn lowest_enemy_health<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+where [(); (W*H+63)/64]: Sized {
+    let mut lowest_enemy_health = 100;
+    for i in 1..S {
+        if board.snakes[i].is_alive() {
+            if board.snakes[i].health < lowest_enemy_health {
+                lowest_enemy_health = board.snakes[i].health;
+            }
+        }
+    }
+    lowest_enemy_health as Score
+}
+
+fn largest_enemy_length<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+where [(); (W*H+63)/64]: Sized {
+    let mut largest_enemy_length = 0;
+    for i in 1..S {
+        if board.snakes[i].is_alive() {
+            if board.snakes[i].length > largest_enemy_length {
+                largest_enemy_length = board.snakes[i].length;
+            }
+        }
+    }
+    largest_enemy_length as Score
+}
+
+fn length_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+where [(); (W*H+63)/64]: Sized {
+    W as Score * (board.snakes[0].length as Score - largest_enemy_length(board))
+}
+
+fn being_longer<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> Score
+where [(); (W*H+63)/64]: Sized {
+    let length_diff = length_diff(board);
+    if length_diff > 0 {
+        ((length_diff + 1) as f64).log2() as Score
+    } else {
+        -(((-length_diff + 1) as f64).log2() as Score)
+    }
+}
+
+fn controlled_food_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
+) -> Score
+where [(); (W*H+63)/64]: Sized {
+    (*my_area & board.food).count_ones() as Score - (*enemy_area & board.food).count_ones() as Score
+}
+
+fn non_hazard_area_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
+) -> Score
+where [(); (W*H+63)/64]: Sized {
+    (*my_area & !board.hazards).count_ones() as Score - (*enemy_area & !board.hazards).count_ones() as Score
+}
+
+fn area_diff<const N: usize>(my_area: &Bitset<N>, enemy_area: &Bitset<N>) -> Score
+where [(); (N+63)/64]: Sized {
+    (*my_area).count_ones() as Score - (*enemy_area).count_ones() as Score
+}
+
+fn controlled_tail_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
+) -> Score
+where [(); (W*H+63)/64]: Sized {
+    let mut res = 0;
+    for snake in board.snakes {
+        if snake.is_dead() {
+            continue
+        }
+        if my_area.get_bit(snake.tail as usize) {
+            res += 1;
+        } else if enemy_area.get_bit(snake.tail as usize) {
+            res -= 1;
+        }
+    }
+    res
+}
+
+fn controlled_arcade_maze_junctions<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
+) -> Score
+where [(); (W*H+63)/64]: Sized {
+    let mut res = 0;
+    for pos in [20, 27, 29, 36, 59, 73, 99, 101, 103, 105, 107, 109, /* 134, 135, */ 137, 139, 145, 147, /* 149, 150, */ 177, 179, 181, 183, 213, 215, 217, 219, 221, 223, 255, 257, 289, 299, 324, 327, 329, 331, 333, 335, 337, 339, 361, 364, 374, 377] {
+        if my_area.get_bit(pos) {
+            res += 1;
+        } else if enemy_area.get_bit(pos) {
+            res -= 1;
+        }
+    }
+    res
+}
+
+fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
+    match gamemode {
+        Gamemode::WrappedArcadeMaze => &[212, 218, 224],
+        _ => &[],
     }
 }
 
