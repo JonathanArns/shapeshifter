@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use axum::extract::Json;
 use tokio::task;
+use tracing::info;
 use std::collections::HashMap;
 use std::time;
 
@@ -69,9 +70,8 @@ pub async fn handle_index() -> Json<Value> {
 
 pub async fn handle_start(Json(_req): Json<GameState>) {}
 
-pub async fn handle_end() {
-    #[cfg(feature = "debug_tt")]
-    ttable::write_debug_info();
+pub async fn handle_end(Json(req): Json<GameState>) {
+    info!("Hello World")
 }
 
 fn is_wrapped(state: &GameState) -> bool {

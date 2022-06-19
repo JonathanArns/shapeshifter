@@ -4,9 +4,6 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use fxhash::FxHasher64;
 
-#[cfg(feature = "debug_tt")]
-use std::collections::hash_map::HashMap;
-
 const TT_LENGTH: usize = 0b_10000000000000000000000000;
 const TT_MASK: u64 =     0b__1111111111111111111111111;
 const MAX_SIMUL_GAMES: usize = 6;
@@ -19,11 +16,6 @@ static mut TABLES: Option<Vec<Vec<Entry>>> = None;
 /// The index of a game ID is the tt_id of that game.
 static mut GAME_IDS: Option<Mutex<(u8, Vec<String>)>> = None;
 
-#[cfg(feature = "debug_tt")]
-static mut DEBUG_TABLE: Option<Mutex<Vec<u64>>> = None;
-#[cfg(feature = "debug_tt")]
-static mut DEBUG_COUNTER: u64 = 0;
-
 /// Initializes an empty transposition table.
 pub fn init() {
     unsafe {
@@ -32,12 +24,6 @@ pub fn init() {
         }
         if let None = GAME_IDS {
             GAME_IDS = Some(Mutex::new((0, vec!["".to_string(); MAX_SIMUL_GAMES])));
-        }
-        #[cfg(feature = "debug_tt")]
-        {
-            if let None = DEBUG_TABLE {
-                DEBUG_TABLE = Some(Mutex::new(vec![0; TT_LENGTH]));
-            }
         }
     }
     println!("TTables initialized")
@@ -105,42 +91,10 @@ pub fn hash(board: &impl Hash) -> u64 {
     {
         let mut hasher = FxHasher64::default();
         board.hash(&mut hasher);
-        let hash = hasher.finish();
-        #[cfg(feature = "debug_tt")]
-        {
-            unsafe {
-                if let Some(tmp) = &mut DEBUG_TABLE {
-                    DEBUG_COUNTER += 1;
-                    let mut table = tmp.lock().unwrap();
-                    let index = hash & TT_MASK;
-                    table[index as usize] += 1;
-                }
-            }
-        }
-        return hash
+        return hasher.finish()
     }
     #[cfg(not(feature = "tt"))]
     0
-}
-
-#[cfg(feature = "debug_tt")]
-pub fn write_debug_info() {
-    let mut agg = HashMap::<u64, u64>::default();
-    unsafe {
-        if let Some(tmp) = &DEBUG_TABLE {
-            let table = tmp.lock().unwrap();
-            for x in table.iter() {
-                if let Some(y) = agg.get_mut(x) {
-                    *y += 1;
-                } else {
-                    agg.insert(*x, 1);
-                }
-            }
-        }
-    }
-    unsafe {
-        println!("total hashes: {}\n{:?}", DEBUG_COUNTER, agg);
-    }
 }
 
 /// A transposition table entry.
