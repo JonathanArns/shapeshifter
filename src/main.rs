@@ -18,37 +18,50 @@ mod uct;
 use axum::{Router, routing::get, routing::post};
 use tracing;
 use tower_http::trace::TraceLayer;
-use tracing_subscriber::prelude::*;
-use tracing_honeycomb;
+use tracing_subscriber::{Registry, layer::SubscriberExt};
+use opentelemetry::sdk::export::trace::stdout;
+use opentelemetry_otlp::WithExportConfig;
+use tonic::metadata::MetadataMap;
 use std::env;
 
 #[tokio::main]
 async fn main() {
-    #[cfg(all(feature = "tt", not(feature = "mcts")))]
-    minimax::init();
-
-    // setup tracing subscriber
-    let subscriber = tracing_subscriber::Registry::default() // provide underlying span data store
-        .with(tracing_subscriber::filter::LevelFilter::DEBUG) // filter out low-level debug tracing (eg tokio executor)
+    // set up tracing subscriber
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::filter::LevelFilter::DEBUG)
         .with(tracing_subscriber::fmt::Layer::default()); // log to stdout
 
     // add honeycomb layer to subscriber if the key is in the environment
     // and set as default tracing subscriber
     if let Ok(key) = env::var("HONEYCOMB_KEY") {
-        let honeycomb_config = libhoney::Config {
-            options: libhoney::client::Options {
-                api_key: key,
-                dataset: "battlesnake".to_string(),
-                ..libhoney::client::Options::default()
-            },
-            transmission_options: libhoney::transmission::Options::default(),
-        };
-        let honeycomb_subscriber = subscriber.with(tracing_honeycomb::new_honeycomb_telemetry_layer("shapeshifter", honeycomb_config));
+        let mut map = MetadataMap::new();
+        map.insert("x-honeycomb-team", key.parse().unwrap());
+        map.insert("x-honeycomb-dataset", "test".parse().unwrap());
+
+        let honeycomb_tracer = opentelemetry_otlp::new_pipeline()
+            .tracing()
+            .with_exporter(opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+                .with_endpoint("https://api.honeycomb.io")
+                .with_metadata(map)
+            )
+            .install_batch(opentelemetry::runtime::Tokio)
+            .expect("setting up honeycomb tracer failed");
+
+        // Create a tracing layer with the configured tracer
+        let honeycomb_telemetry = tracing_opentelemetry::layer().with_tracer(honeycomb_tracer);
+
+        // add to the subscriber and set it as global default
+        let honeycomb_subscriber = subscriber.with(honeycomb_telemetry);
         tracing::subscriber::set_global_default(honeycomb_subscriber).expect("setting global default tracing subscriber failed");
-        println!("Honeycomb subscriber initialized");
+        println!("honeycomb subscriber initialized");
     } else {
         tracing::subscriber::set_global_default(subscriber).expect("setting global default tracing subscriber failed");
     }
+
+    #[cfg(all(feature = "tt", not(feature = "mcts")))]
+    minimax::init();
 
     let router = Router::new()
         .route("/", get(api::handle_index))
