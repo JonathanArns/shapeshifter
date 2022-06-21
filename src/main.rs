@@ -27,9 +27,7 @@ use std::env;
 #[tokio::main]
 async fn main() {
     // set up tracing subscriber
-    let subscriber = Registry::default()
-        .with(tracing_subscriber::filter::LevelFilter::DEBUG)
-        .with(tracing_subscriber::fmt::Layer::default()); // log to stdout
+    let subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::INFO);
 
     // add honeycomb layer to subscriber if the key is in the environment
     // and set as default tracing subscriber
@@ -57,7 +55,8 @@ async fn main() {
         tracing::subscriber::set_global_default(honeycomb_subscriber).expect("setting global default tracing subscriber failed");
         println!("honeycomb subscriber initialized");
     } else {
-        tracing::subscriber::set_global_default(subscriber).expect("setting global default tracing subscriber failed");
+        let stdout_subscriber = subscriber.with(tracing_subscriber::fmt::Layer::default());
+        tracing::subscriber::set_global_default(stdout_subscriber).expect("setting global default tracing subscriber failed");
     }
 
     #[cfg(all(feature = "tt", not(feature = "mcts")))]
@@ -67,8 +66,8 @@ async fn main() {
         .route("/", get(api::handle_index))
         .route("/start", post(api::handle_start))
         .route("/end", post(api::handle_end))
-        .route("/move", post(api::handle_move))
-        .layer(TraceLayer::new_for_http());
+        .route("/move", post(api::handle_move));
+        // .layer(TraceLayer::new_for_http());
 
     let env_port = env::var("PORT").ok();
     let env_port = env_port

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use axum::extract::Json;
 use tokio::task;
-use tracing::info;
+use tracing::{info, info_span};
 use std::collections::HashMap;
 use std::time;
 
@@ -18,6 +18,7 @@ pub struct Game {
     pub ruleset: HashMap<String, Value>,
     pub map: String,
     pub timeout: u32,
+    pub source: String,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -71,7 +72,19 @@ pub async fn handle_index() -> Json<Value> {
 pub async fn handle_start(Json(_req): Json<GameState>) {}
 
 pub async fn handle_end(Json(req): Json<GameState>) {
-    info!("Hello World")
+    let span = info_span!("game_end", game.source = req.game.source.as_str(), game.id = req.game.id.as_str());
+    let _enter = span.enter();
+    let mut win = false;
+    for snake in req.board.snakes {
+        if snake.health > 0 {
+            info!(game.winner.name = snake.name.as_str(), game.winner.id = snake.id.as_str(), "game_winner");
+            if snake.id == req.you.id {
+                info!(game.result = "win", "game_result");
+                return
+            }
+        }
+    }
+    info!(game.result = "loss", "game_result");
 }
 
 fn is_wrapped(state: &GameState) -> bool {
