@@ -1,8 +1,36 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
 
+
+#[cfg(feature = "training")]
+pub fn set_training_weights(weights: [Score; 26]) {
+    
+}
+
+#[cfg(feature = "training")]
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>
+) -> Score
+where [(); (W*H+63)/64]: Sized {
+    // TODO: use tt_id to determine which training weights to use
+    score!(
+        turn_progression(board.turn, 500),
+        1,1,me.health as Score,
+        -1,-1,lowest_enemy_health(board),
+        2,0,length_diff(board),
+        5 5 being_longer(board),
+        2,0,controlled_food_diff(board, &my_area, &enemy_area),
+        1,2,area_diff(&my_area, &enemy_area),
+        0,2,area_diff(&my_close_area, &enemy_close_area),
+        1 1 non_hazard_area_diff(board, &my_area, &enemy_area),
+        2 2 (W as Score - closest_food_distance),
+        3,3,controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
+        5,5,controlled_tail_diff(board, &my_area, &enemy_area),
+    )
+}
+
 macro_rules! score {
-    ($progress:expr , $( $w0:literal $w1:literal $feat:expr ),* $(,)?) => {
+    ($progress:expr , $( $w0:expr, $w1:expr, $feat:expr ),* $(,)?) => {
         {
             let mut early_score: Score = 0;
             let mut late_score: Score = 0;
@@ -15,6 +43,7 @@ macro_rules! score {
     };
 }
 
+#[cfg(not(feature = "training"))]
 pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
    board: &Bitboard<S, W, H, WRAP> 
 ) -> Score
@@ -25,12 +54,12 @@ where [(); (W*H+63)/64]: Sized {
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
                 turn_progression(board.turn, 500),
-                1 1 me.health as Score,
+                1,1,me.health as Score,
                 // -1 -1 lowest_enemy_health(board),
-                2 0 length_diff(board),
-                2 0 controlled_food_diff(board, &my_area, &enemy_area),
-                1 2 area_diff(&my_area, &enemy_area),
-                0 2 area_diff(&my_close_area, &enemy_close_area),
+                2,0,length_diff(board),
+                2,0,controlled_food_diff(board, &my_area, &enemy_area),
+                1,2,area_diff(&my_area, &enemy_area),
+                0,2,area_diff(&my_close_area, &enemy_close_area),
                 // 3 3 controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
                 // 5 5 controlled_tail_diff(board, &my_area, &enemy_area),
             )
@@ -40,19 +69,19 @@ where [(); (W*H+63)/64]: Sized {
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
             score!(
                 turn_progression(board.turn, 1),
-                1 1 me.health as Score,
-                -1 -1 lowest_enemy_health(board),
-                1 1 controlled_food_diff(board, &my_area, &enemy_area),
-                1 1 area_diff(&my_area, &enemy_area),
-                1 1 area_diff(&my_close_area, &enemy_close_area),
-                5 5 being_longer(board),
+                1,1,me.health as Score,
+                -1,-1,lowest_enemy_health(board),
+                1,1,controlled_food_diff(board, &my_area, &enemy_area),
+                1,1,area_diff(&my_area, &enemy_area),
+                1,1,area_diff(&my_close_area, &enemy_close_area),
+                5,5,being_longer(board),
             )
         },
         Gamemode::Constrictor => {
             let ((my_area, enemy_area), (_, _), _) = area_control(board);
             score!(
                 turn_progression(board.turn, 1),
-                1 1 area_diff(&my_area, &enemy_area),
+                1,1,area_diff(&my_area, &enemy_area),
             )
         }
         Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => {
@@ -60,13 +89,13 @@ where [(); (W*H+63)/64]: Sized {
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
                 fill_progression(board),
-                1 2 me.health as Score,
-                -1 -2 lowest_enemy_health(board),
-                2 2 length_diff(board),
-                1 1 non_hazard_area_diff(board, &my_area, &enemy_area),
-                3 3 controlled_food_diff(board, &my_area, &enemy_area),
-                2 2 (W as Score - closest_food_distance),
-                0 1 area_diff(&my_close_area, &enemy_close_area),
+                1,2,me.health as Score,
+                -1,-2,lowest_enemy_health(board),
+                2,2,length_diff(board),
+                1,1,non_hazard_area_diff(board, &my_area, &enemy_area),
+                3,3,controlled_food_diff(board, &my_area, &enemy_area),
+                2,2,(W as Score - closest_food_distance),
+                0,1,area_diff(&my_close_area, &enemy_close_area),
             )
         }
         _ => {
@@ -74,13 +103,13 @@ where [(); (W*H+63)/64]: Sized {
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
                 fill_progression(board),
-                1 2 me.health as Score,
-                -1 -2 lowest_enemy_health(board),
-                2 2 length_diff(board),
-                1 1 non_hazard_area_diff(board, &my_area, &enemy_area),
-                3 3 controlled_food_diff(board, &my_area, &enemy_area),
-                2 2 (W as Score - closest_food_distance),
-                0 1 area_diff(&my_close_area, &enemy_close_area),
+                1,2,me.health as Score,
+                -1,-2,lowest_enemy_health(board),
+                2,2,length_diff(board),
+                1,1,non_hazard_area_diff(board, &my_area, &enemy_area),
+                3,3,controlled_food_diff(board, &my_area, &enemy_area),
+                2,2,(W as Score - closest_food_distance),
+                0,1,area_diff(&my_close_area, &enemy_close_area),
             )
         },
     }

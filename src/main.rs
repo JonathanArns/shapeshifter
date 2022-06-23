@@ -1,19 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, test, generic_const_exprs, label_break_value, stmt_expr_attributes, stdsimd)]
-
-#![allow(incomplete_features)]
-
-
-#[macro_use]
-extern crate lazy_static;
-extern crate test;
-
-mod api;
-mod bitboard;
-
-#[cfg(not(feature = "mcts"))]
-mod minimax;
-#[cfg(feature = "mcts")]
-mod uct;
+#![feature(test, generic_const_exprs, label_break_value)]
 
 use axum::{Router, routing::get, routing::post};
 use tracing;
@@ -23,6 +8,8 @@ use opentelemetry::sdk::export::trace::stdout;
 use opentelemetry_otlp::WithExportConfig;
 use tonic::metadata::MetadataMap;
 use std::env;
+
+use shapeshifter::api;
 
 #[tokio::main]
 async fn main() {
@@ -59,8 +46,7 @@ async fn main() {
         tracing::subscriber::set_global_default(stdout_subscriber).expect("setting global default tracing subscriber failed");
     }
 
-    #[cfg(all(feature = "tt", not(feature = "mcts")))]
-    minimax::init();
+    shapeshifter::init();
 
     let router = Router::new()
         .route("/", get(api::handle_index))
