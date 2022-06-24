@@ -77,9 +77,9 @@ pub async fn handle_end(Json(req): Json<GameState>) {
     let mut win = false;
     for snake in req.board.snakes {
         if snake.health > 0 {
-            info!(game.winner.name = snake.name.as_str(), game.winner.id = snake.id.as_str(), "game_winner");
+            info!(game.winner.name = snake.name.as_str(), game.winner.id = snake.id.as_str(), game.source = req.game.source.as_str(), game.id = req.game.id.as_str(), "game_winner");
             if snake.id == req.you.id {
-                info!(game.result = "win", "game_result");
+                info!(game.result = "win", game.source = req.game.source.as_str(), game.id = req.game.id.as_str(), "game_result");
                 return
             }
         }

@@ -17,6 +17,8 @@ mod uct;
 
 use axum::{Router, routing::get, routing::post};
 use tracing;
+use log_panics;
+use tracing_log::LogTracer;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{Registry, layer::SubscriberExt};
 use opentelemetry::sdk::export::trace::stdout;
@@ -58,6 +60,10 @@ async fn main() {
         let stdout_subscriber = subscriber.with(tracing_subscriber::fmt::Layer::default());
         tracing::subscriber::set_global_default(stdout_subscriber).expect("setting global default tracing subscriber failed");
     }
+
+    // setup so that panics will be recorded
+    LogTracer::init().unwrap();
+    log_panics::init();
 
     #[cfg(all(feature = "tt", not(feature = "mcts")))]
     minimax::init();
