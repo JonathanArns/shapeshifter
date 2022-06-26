@@ -238,7 +238,7 @@ where [(); (W*H+63)/64]: Sized {
 
 fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
     match gamemode {
-        Gamemode::WrappedArcadeMaze => &[212, 218, 224],
+        Gamemode::WrappedArcadeMaze => &[20, 36, 104, 137, 147, 212, 218, 224, 327, 332, 337],
         _ => &[],
     }
 }

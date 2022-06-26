@@ -5,6 +5,7 @@ use std::env;
 use std::time;
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
+use tracing::info;
 
 mod eval;
 mod ttable;
@@ -50,8 +51,17 @@ where [(); (W*H+63)/64]: Sized {
             best_score = best;
         }
     }
-    println!("Move: {:?}, Score: {}", best_move, best_score);
-    println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
+    info!(
+        game.turn = board.turn,
+        game.mode = ?board.gamemode,
+        search.nodes_total = node_counter,
+        search.nodes_per_second = (node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos())) as u64,
+        search.best_move = ?best_move,
+        search.score = best_score,
+        search.depth = depth,
+        search.time_used = time::Instant::now().duration_since(start_time).as_millis() as u64,
+        "fixed_depth_search_finished"
+    );
     (best_move, best_score, depth)
 }
 
@@ -80,7 +90,12 @@ where [(); (W*H+63)/64]: Sized {
     let mut my_allowed_moves = allowed_moves(&board, 0);
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
-        println!("{:?} is the only move -> return early", my_allowed_moves[0]);
+        info!(
+            game.turn = board.turn,
+            game.mode = ?board.gamemode,
+            search.best_move = ?my_allowed_moves[0],
+            "returned_only_move"
+        );
         return (my_allowed_moves[0], 0, 0)
     }
 
@@ -124,10 +139,17 @@ where [(); (W*H+63)/64]: Sized {
         }
         depth += 1;
     }
-    #[cfg(not(feature = "quiet"))]
-    println!("{} nodes total, {} nodes per second", node_counter, node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos()));
-    #[cfg(not(feature = "quiet"))]
-    println!("Move: {:?}, Score: {}, Depth: {}, Time: {}", best_move, best_score, depth, time::Instant::now().duration_since(start_time).as_millis());
+    info!(
+        game.turn = board.turn,
+        game.mode = ?board.gamemode,
+        search.nodes_total = node_counter,
+        search.nodes_per_second = (node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos())) as u64,
+        search.best_move = ?best_move,
+        search.score = best_score,
+        search.depth = depth,
+        search.time_used = time::Instant::now().duration_since(start_time).as_millis() as u64,
+        "search_finished"
+    );
     (best_move, best_score, depth)
 }
 

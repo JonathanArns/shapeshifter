@@ -21,6 +21,18 @@ where [(); (W*H+63)/64]: Sized {
             finish_head_movement::<S, W, H, WRAP>(board);
         }),
         _ => match api_state.game.map.as_str() {
+            "arcade_maze" if api_state.board.hazards.len() > 0 => {
+                let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
+                Rc::new(move |board, moves| {
+                    board.turn += 1;
+                    move_heads::<S, W, H, WRAP>(board, moves);
+                    move_tails::<S, W, H, WRAP>(board);
+                    update_health_with_fixed_spawns::<S, W, H, WRAP>(board);
+                    perform_collisions::<S, W, H, WRAP>(board);
+                    finish_head_movement::<S, W, H, WRAP>(board);
+                    finish_tail_movement::<S, W, H, WRAP>(board);
+                })
+            },
             "hz_spiral" if api_state.board.hazards.len() > 0 => {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
                 Rc::new(move |board, moves| {
@@ -200,5 +212,60 @@ where [(); (W*H+63)/64]: Sized {
     let y = center as i16 / W as i16 + y_shift as i16;
     if x >= 0 && x < W as i16 && y >= 0 && y < H as i16 {
         board.hazards.set_bit((center as i16 + x_shift as i16 + y_shift as i16 * W as i16) as usize);
+    }
+}
+
+fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
+    match gamemode {
+        Gamemode::WrappedArcadeMaze => &[20, 36, 104, 137, 147, 212, 218, 224, 327, 332, 337],
+        _ => &[],
+    }
+}
+
+pub fn simulate_maze_food_spawns<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
+where [(); (W*H+63)/64]: Sized {
+    for i in 0..S {
+        let snake = &mut board.snakes[i];
+        if snake.is_dead() {
+            continue
+        }
+        // kind of feed snake
+        if get_food_spawns(board.gamemode).contains(&(snake.head as usize)) {
+            snake.curled_bodyparts += 1;
+        }
+    }
+}
+
+fn update_health_with_fixed_spawns<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
+where [(); (W*H+63)/64]: Sized {
+    let mut eaten = ArrayVec::<u16, S>::new();
+    for i in 0..S {
+        let snake = &mut board.snakes[i];
+        if snake.is_dead() {
+            continue
+        }
+        // reduce health
+        let is_on_hazard = board.hazards.get_bit(snake.head as usize) as i8;
+        snake.health -= 1 + board.hazard_dmg * is_on_hazard;
+
+        // feed snake
+        if board.food.get_bit(snake.head as usize) {
+            snake.health = 100;
+            snake.curled_bodyparts += 1;
+            snake.length += 1;
+            eaten.push(snake.head); // remember which food has been eaten
+        } else if i != 0 && get_food_spawns(board.gamemode).contains(&(snake.head as usize)) {
+            snake.curled_bodyparts += 1;
+        }
+
+        // starvation
+        if snake.is_dead() {
+            snake.health = OUT_OF_HEALTH;
+            board.remove_snake_body(i);
+        }
+    }
+    // remove eaten food
+    for food in eaten {
+        board.food.unset_bit(food as usize);
     }
 }

@@ -288,6 +288,46 @@ where [(); (W*H+63)/64]: Sized {
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
 where [(); (W*H+63)/64]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // draw the board
+        for i in 0..H {
+            for j in 0..W {
+                let mut head_str = None;
+                if self.snakes[0].head as usize == (W*(H-1-i))+j {
+                    head_str = Some("@");
+                } else {
+                    for snake in self.snakes[1..].iter() {
+                        if snake.head as usize == (W*(H-1-i))+j {
+                            head_str = Some("E");
+                        }
+                    }
+                }
+                let mut tile = if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." }.to_string();
+                tile.push_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                tile.push_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                f.write_str(&format!("{} ", tile))?;
+            }
+            f.write_str("\n")?;
+        }
+
+        // print metadata
+        for snake in self.snakes {
+            f.write_str(&(
+                "head: ".to_string() + &self.coord_string_from_index(snake.head)
+                + " tail: " + &self.coord_string_from_index(snake.tail)
+                + " length: " + &snake.length.to_string()
+                + " health: " + &snake.health.to_string()
+                + " curled: " + &snake.curled_bodyparts.to_string()
+                + "\n"
+            ))?;
+        }
+        f.write_str(&("turn: ".to_string() + &self.turn.to_string() + "\n"))?;
+        Ok(())
+    }
+}
+
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Display for Bitboard<S, W, H, WRAP>
+where [(); (W*H+63)/64]: Sized {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // decide on colors for the individual snakes
         let colors = [Color::Red, Color::Green, Color::Cyan, Color::Yellow, Color::Blue, Color::Magenta];
         let mut snake_colors: HashMap<usize, Color> = HashMap::default();
