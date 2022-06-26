@@ -19,9 +19,8 @@ use axum::{Router, routing::get, routing::post};
 use tracing;
 use log_panics;
 use tracing_log::LogTracer;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::{Registry, layer::SubscriberExt};
-use opentelemetry::sdk::export::trace::stdout;
+use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
 use tonic::metadata::MetadataMap;
 use std::env;
@@ -36,7 +35,6 @@ async fn main() {
     if let Ok(key) = env::var("HONEYCOMB_KEY") {
         let mut map = MetadataMap::new();
         map.insert("x-honeycomb-team", key.parse().unwrap());
-        map.insert("x-honeycomb-dataset", "test".parse().unwrap());
 
         let honeycomb_tracer = opentelemetry_otlp::new_pipeline()
             .tracing()
@@ -45,6 +43,14 @@ async fn main() {
                 .with_protocol(opentelemetry_otlp::Protocol::Grpc)
                 .with_endpoint("https://api.honeycomb.io")
                 .with_metadata(map)
+            )
+            .with_trace_config(
+                opentelemetry::sdk::trace::config().with_resource(
+                    opentelemetry::sdk::Resource::new(vec![KeyValue::new(
+                        "service.name",
+                        "shapeshifter",
+                    )])
+                )
             )
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("setting up honeycomb tracer failed");
@@ -73,7 +79,6 @@ async fn main() {
         .route("/start", post(api::handle_start))
         .route("/end", post(api::handle_end))
         .route("/move", post(api::handle_move));
-        // .layer(TraceLayer::new_for_http());
 
     let env_port = env::var("PORT").ok();
     let env_port = env_port

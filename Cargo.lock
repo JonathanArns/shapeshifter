@@ -1075,7 +1075,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tower",
- "tower-http",
  "tracing",
  "tracing-log",
  "tracing-opentelemetry",
@@ -1361,7 +1360,6 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
- "tracing",
 ]
 
 [[package]]
