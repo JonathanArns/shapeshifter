@@ -7,36 +7,44 @@ use rand::Rng;
 pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, snake_index: usize) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
-    let mut some_legal_move = Move::Up;
+    let mut legal_moves = ArrayVec::<(Move, u16), 4>::new();
     let pos = board.snakes[snake_index].head;
     let survives_hazard = board.snakes[snake_index].health > board.hazard_dmg;
 
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][0] {
-        some_legal_move = Move::Up;
+        legal_moves.push((Move::Up, dest));
         if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Up);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][1] {
-        some_legal_move = Move::Down;
+        legal_moves.push((Move::Down, dest));
         if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Down);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][2] {
-        some_legal_move = Move::Right;
+        legal_moves.push((Move::Right, dest));
         if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Right);
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][3] {
-        some_legal_move = Move::Left;
+        legal_moves.push((Move::Left, dest));
         if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
             moves.push(Move::Left);
         }
     }
     if moves.len() == 0 {
-        moves.push(some_legal_move);
+        for (mv, dest) in &legal_moves {
+            for snake in board.snakes {
+                if snake.head == *dest {
+                    moves.push(*mv);
+                    return moves
+                }
+            }
+        }
+        moves.push(legal_moves[0].0);
     }
     moves
 }
