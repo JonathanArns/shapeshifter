@@ -1,34 +1,6 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
 
-
-#[cfg(feature = "training")]
-pub fn set_training_weights(weights: [Score; 26]) {
-    
-}
-
-#[cfg(feature = "training")]
-pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &Bitboard<S, W, H, WRAP>
-) -> Score
-where [(); (W*H+63)/64]: Sized {
-    // TODO: use tt_id to determine which training weights to use
-    score!(
-        turn_progression(board.turn, 500),
-        1,1,me.health as Score,
-        -1,-1,lowest_enemy_health(board),
-        2,0,length_diff(board),
-        5 5 being_longer(board),
-        2,0,controlled_food_diff(board, &my_area, &enemy_area),
-        1,2,area_diff(&my_area, &enemy_area),
-        0,2,area_diff(&my_close_area, &enemy_close_area),
-        1 1 non_hazard_area_diff(board, &my_area, &enemy_area),
-        2 2 (W as Score - closest_food_distance),
-        3,3,controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
-        5,5,controlled_tail_diff(board, &my_area, &enemy_area),
-    )
-}
-
 macro_rules! score {
     ($progress:expr , $( $w0:expr, $w1:expr, $feat:expr ),* $(,)?) => {
         {
@@ -41,6 +13,42 @@ macro_rules! score {
             (early_score as f64 * (1.0 - $progress) + late_score as f64 * $progress).floor() as Score
         }
     };
+}
+
+#[cfg(feature = "training")]
+static mut TRAINING_WEIGHTS: Option<Vec<Vec<Score>>> = None;
+
+#[cfg(feature = "training")]
+pub unsafe fn set_training_weights(weights: Vec<Vec<Score>>) {
+    TRAINING_WEIGHTS = Some(weights);
+}
+
+#[cfg(feature = "training")]
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>
+) -> Score
+where [(); (W*H+63)/64]: Sized {
+    unsafe {
+        if let Some(weights) = TRAINING_WEIGHTS {
+            let id = board.tt_id as usize;
+            score!(
+                turn_progression(board.turn, weights[id][0]),
+                weights[id][1],weights[id][2],me.health as Score,
+                weights[id][3],weights[id][4],lowest_enemy_health(board),
+                weights[id][5],weights[id][6],length_diff(board),
+                weights[id][7],weights[id][8],being_longer(board),
+                weights[id][9],weights[id][10],controlled_food_diff(board, &my_area, &enemy_area),
+                weights[id][11],weights[id][12],area_diff(&my_area, &enemy_area),
+                weights[id][13],weights[id][14],area_diff(&my_close_area, &enemy_close_area),
+                weights[id][15],weights[id][16],non_hazard_area_diff(board, &my_area, &enemy_area),
+                weights[id][17],weights[id][18],(W as Score - closest_food_distance),
+                weights[id][19],weights[id][20],controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
+                weights[id][21],weights[id][22],controlled_tail_diff(board, &my_area, &enemy_area),
+            )
+        } else {
+            panic!("no training weights set, but using training eval")
+        }
+    }
 }
 
 #[cfg(not(feature = "training"))]

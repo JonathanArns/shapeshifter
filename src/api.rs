@@ -259,6 +259,8 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     Json(mv.to_json())
 }
 
+/// Use the type parameter TT to manually override the tt_id of the created Bitboard in training mode.
+/// This is used in training, since the tt_id is also used to choose eval weights there.
 #[cfg(not(feature = "mcts"))]
 #[tracing::instrument(
     name = "handle_move",
@@ -270,8 +272,14 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
         search.algo = "minimax"
     )
 )]
-pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
+pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>) -> Json<Value> {
     let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
+
+    #[cfg(feature = "training")]
+    {
+        state.game.id = "".to_string();
+        state.you.id = TT.to_string();
+    }
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {

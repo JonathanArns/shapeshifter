@@ -31,6 +31,14 @@ pub fn init() {
 
 pub fn get_tt_id(game_id: String) -> u8 {
     unsafe {
+        #[cfg(feature = "training")]
+        {
+            if game_id.len() == 1 {
+                if let Ok(x) = game_id.parse() {
+                    return x
+                }
+            }
+        }
         if let Some(tmp) = &mut GAME_IDS {
             let mut game_ids = tmp.lock().unwrap();
             for (i, id) in &mut game_ids.1.iter().enumerate() {

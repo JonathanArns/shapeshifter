@@ -64,7 +64,7 @@ async fn main() {
         .route("/", get(api::handle_index))
         .route("/start", post(api::handle_start))
         .route("/end", post(api::handle_end))
-        .route("/move", post(api::handle_move));
+        .route("/move", post(api::handle_move::<0>));
 
     let env_port = env::var("PORT").ok();
     let env_port = env_port
