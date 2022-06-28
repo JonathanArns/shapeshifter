@@ -11,6 +11,8 @@ mod eval;
 mod ttable;
 
 pub use ttable::{init, get_tt_id};
+#[cfg(feature = "training")]
+pub use eval::set_training_weights;
 
 const QUIESCENCE_DEPTH: u8 = 3;
 

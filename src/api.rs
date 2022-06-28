@@ -44,7 +44,7 @@ pub struct Battlesnake {
     pub squad: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct Coord {
     pub x: usize,
     pub y: usize,

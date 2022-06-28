@@ -23,4 +23,4 @@ pub fn init() {
 }
 
 #[cfg(feature = "training")]
-pub use minimax::eval::set_training_weights;
+pub use minimax::set_training_weights;

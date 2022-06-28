@@ -1,11 +1,14 @@
-#![feature(test, generic_const_exprs, label_break_value)]
+#![feature(test, generic_const_exprs, label_break_value, async_closure)]
 
 use axum::{Router, routing::get, routing::post};
+use tokio::task;
 use std::env;
 use rand::Rng;
+use rand::distributions::Distribution;
 use rand::seq::SliceRandom;
 use std::process::Command;
-use tower_http::map_request_body::MapRequestBodyLayer;
+use std::fs::File;
+use std::io::{Write, Error};
 
 use shapeshifter::{api, set_training_weights};
 
@@ -68,21 +71,40 @@ async fn main() {
         .route("/3/move", post(api::handle_move::<3>));
 
     let env_port = env::var("PORT").ok();
-    let env_port = env_port
-        .as_ref()
-        .map(String::as_str)
-        .unwrap_or("8080");
+    let addr = "0.0.0.0:".to_owned() + env_port.as_ref().map(String::as_str).unwrap_or("8080");
 
-    axum::Server::bind(&("0.0.0.0:".to_owned() + env_port).parse().unwrap())
-        .serve(router.into_make_service())
-        .await
-        .unwrap();
+    task::spawn(async move {
+        axum::Server::bind(&addr.parse().unwrap())
+            .serve(router.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    // run genetic algorithm
+    let mut gen = 0;
+    let mut population = new_population();
+    println!("gen {}: running games", gen);
+    run_games(&mut population);
+    population.sort_by(|a, b| { b.wins.partial_cmp(&a.wins).unwrap() });
+    write_generation(&population, gen);
+    loop {
+        gen += 1;
+        population = next_generation(population);
+        println!("gen {}: running games", gen);
+        run_games(&mut population);
+        population.sort_by(|a, b| { b.wins.partial_cmp(&a.wins).unwrap() });
+        write_generation(&population, gen);
+    }
 }
 
-const NUM_WEIGHTS: usize = 24;
 const POPULATION_SIZE: usize = 100;
-const GAMES_PER_GENERATION: usize = 100;
+const GAMES_PER_GENERATION: usize = 20;
 const SNAKES_PER_GAME: usize = 4;
+const MUTATIONS_PER_GENERATION: usize = 20;
+const TOURNAMENT_SIZE: usize = 3;
+
+const NUM_WEIGHTS: usize = 23;
+const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [(0, 2000), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10), (-10, 10)];
 
 struct Entity {
     weights: Vec<i16>,
@@ -98,70 +120,138 @@ fn new_population() -> Vec<Entity> {
             Entity{
                 games: 0,
                 wins: 0,
-                weights: (0..NUM_WEIGHTS).map(|_| rng.gen_range(-5, 5)).collect(),
+                weights: (0..NUM_WEIGHTS).map(|i| rng.gen_range(WEIGHT_RANGES[i].0..=WEIGHT_RANGES[i].1)).collect(),
             }
         )
     }
     population
 }
 
-fn next_generation(population: Vec<Entity>) -> Vec<Entity> {
-    todo!()
+fn tournament_select(population: &Vec<Entity>, rng: &mut impl Rng) -> usize {
+    let mut winner = rng.gen_range(0..population.len());
+    for _ in 1..TOURNAMENT_SIZE {
+        let competitor = rng.gen_range(0..population.len());
+        if population[competitor].wins > population[winner].wins {
+            winner = competitor;
+        }
+    }
+    winner
 }
 
-fn run_games(population: Vec<Entity>) {
+fn crossover(left: &Entity, right: &Entity, rng: &mut impl Rng) -> (Entity, Entity) {
+    let middle = rng.gen_range(1..(NUM_WEIGHTS-1));
+    let mut l = Entity{
+        wins: 0,
+        games: 0,
+        weights: left.weights[0..middle].to_vec(),
+    };
+    l.weights.append(&mut right.weights.to_owned()[middle..NUM_WEIGHTS].to_vec());
+    let mut r = Entity{
+        wins: 0,
+        games: 0,
+        weights: right.weights[0..middle].to_vec(),
+    };
+    r.weights.append(&mut left.weights.to_owned()[middle..NUM_WEIGHTS].to_vec());
+    (l, r)
+}
+
+fn next_generation(mut population: Vec<Entity>) -> Vec<Entity> {
     let mut rng = rand::thread_rng();
-    for i in 0..GAMES_PER_GENERATION {
+    let sum_fitness = population.iter().fold(0, |x, y| x + y.wins) as usize;
+
+    // selection
+    population.sort_by(|a, b| { b.wins.partial_cmp(&a.wins).unwrap() });
+    let mut next_population = vec![];
+    for entity in &population[0..(POPULATION_SIZE/10)] {
+        next_population.push(Entity{
+            wins: 0,
+            games: 0,
+            weights: entity.weights.clone(),
+        })
+    }
+
+    // crossover
+    while next_population.len() < population.len() {
+        let i = tournament_select(&population, &mut rng);
+        let j = tournament_select(&population, &mut rng);
+        let cross = crossover(&population[i], &population[j], &mut rng);
+        next_population.push(cross.0);
+        next_population.push(cross.1);
+    }
+    if next_population.len() > population.len() {
+        next_population.remove(next_population.len()-1);
+    }
+
+    // mutation
+    for _ in 0..MUTATIONS_PER_GENERATION {
+        let i = rng.gen_range(0..population.len());
+        let j = rng.gen_range(0..NUM_WEIGHTS);
+        next_population[i].weights[j] = rng.gen_range(WEIGHT_RANGES[j].0..=WEIGHT_RANGES[j].1); 
+    }
+    next_population
+}
+
+fn write_generation(population: &Vec<Entity>, generation: usize) -> Result<(), std::io::Error> {
+    let mut file = File::create(format!("training-output-{}.txt", generation))?;
+    for entity in population {
+        writeln!(file, "games: {}, wins: {}, weights: {:?}", entity.games, entity.wins, entity.weights)?;
+    };
+    Ok(())
+}
+
+fn run_games(population: &mut Vec<Entity>) {
+    let mut rng = rand::thread_rng();
+    for _ in 0..GAMES_PER_GENERATION {
         population.shuffle(&mut rng);
         for j in 0..(population.len()/4) {
-            let snakes = vec![
-                population[j+0],
-                population[j+1],
-                population[j+2],
-                population[j+3],
-            ];
-            run_game(snakes);
+            run_game(&mut population[(j*4)..(j*4+4)]);
         }
     }
 }
 
-fn run_game(snakes: Vec<Entity>) {
-    let weights = snakes.map(|entity| { return entity.weights.clone() });
+fn run_game(snakes: &mut [Entity]) {
+    let weights = snakes.iter().map(|entity| { return entity.weights.clone() }).collect();
     unsafe {
         set_training_weights(weights);
     }
-    let cli_output = Command::new("battlesnake play")
-        .arg("-t 10")
-        .arg("-n zero")
-        .arg("-u http://localhost:8080/0/")
-        .arg("-n one")
-        .arg("-u http://localhost:8080/1/")
-        .arg("-n two")
-        .arg("-u http://localhost:8080/2/")
-        .arg("-n three")
-        .arg("-u http://localhost:8080/3/")
+    let cli_output = Command::new("battlesnake")
+        .arg("play")
+        // game settings
+        .arg("-t").arg("5")
+        .arg("-m").arg("arcade_maze")
+        .arg("-W").arg("19")
+        .arg("-H").arg("21")
+        .arg("-g").arg("wrapped")
+        .arg("--hazardDamagePerTurn").arg("100")
+        // snakes
+        .arg("-n").arg("zero")
+        .arg("-u").arg("http://localhost:8080/0/")
+        .arg("-n").arg("one")
+        .arg("-u").arg("http://localhost:8080/1/")
+        .arg("-n").arg("two")
+        .arg("-u").arg("http://localhost:8080/2/")
+        .arg("-n").arg("three")
+        .arg("-u").arg("http://localhost:8080/3/")
         .output()
         .expect("failed to run game");
-    let stdout = String::from_utf8_lossy(&cli_output.stdout);
-    let winner = for line in stdout.lines() {
+    let output = String::from_utf8_lossy(&cli_output.stderr);
+    let mut winner = -1;
+    for line in output.lines() {
         if line.contains("Game complete") {
             if line.contains("zero") {
-                break 0;
+                winner = 0;
             } else if line.contains("one") {
-                break 1;
+                winner = 1;
             } else if line.contains("two") {
-                break 2;
+                winner = 2;
             } else if line.contains("three") {
-                break 3;
-            } else if line.contains("draw") {
-                break -1;
+                winner = 3;
             }
         }
-        -1
-    };
-    for (i, entity) in snakes.iter().enumerate() {
+    }
+    for (i, entity) in snakes.iter_mut().enumerate() {
         entity.games += 1;
-        if i == winner {
+        if i as isize == winner {
             entity.wins += 1;
         }
     }

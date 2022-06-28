@@ -29,8 +29,10 @@ pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
 ) -> Score
 where [(); (W*H+63)/64]: Sized {
     unsafe {
-        if let Some(weights) = TRAINING_WEIGHTS {
+        if let Some(weights) = &TRAINING_WEIGHTS {
             let id = board.tt_id as usize;
+            let me = board.snakes[0];
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
                 turn_progression(board.turn, weights[id][0]),
                 weights[id][1],weights[id][2],me.health as Score,
@@ -142,7 +144,7 @@ where [(); (W*H+63)/64]: Sized {
 }
 
 
-fn turn_progression(turns: u16, late_game_start: u16) -> f64 {
+fn turn_progression(turns: u16, late_game_start: i16) -> f64 {
     (turns as f64 / late_game_start as f64).min(1.0)
 }
 

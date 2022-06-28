@@ -151,7 +151,7 @@ where [(); (W*H+63)/64]: Sized {
         let mut m = 0;
         let mut n;
         for snake in state.board.snakes {
-            if snake.id == state.you.id {
+            if snake.head == state.you.head {
                 n = 0;
             } else {
                 m += 1;
