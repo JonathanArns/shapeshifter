@@ -44,8 +44,7 @@ where [(); (W*H+63)/64]: Sized {
                 weights[id][13],weights[id][14],area_diff(&my_close_area, &enemy_close_area),
                 weights[id][15],weights[id][16],non_hazard_area_diff(board, &my_area, &enemy_area),
                 weights[id][17],weights[id][18],(W as Score - closest_food_distance),
-                weights[id][19],weights[id][20],controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
-                weights[id][21],weights[id][22],controlled_tail_diff(board, &my_area, &enemy_area),
+                weights[id][19],weights[id][20],controlled_tail_diff(board, &my_area, &enemy_area),
             )
         } else {
             panic!("no training weights set, but using training eval")
