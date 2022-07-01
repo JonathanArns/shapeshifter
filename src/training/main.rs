@@ -110,8 +110,8 @@ const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
     (0, 5), // me health late
     (-5, 0), // lowest enemy health early
     (-5, 0), // lowest enemy health late
-    (-2, 5), // length diff early
-    (-2, 5), // length diff late
+    (-5, 5), // length diff early
+    (-5, 5), // length diff late
     (0, 10), // being longer early
     (0, 10), // being longer late
     (0, 10), // food control diff early
