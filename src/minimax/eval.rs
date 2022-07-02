@@ -58,37 +58,6 @@ pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
 ) -> Score
 where [(); (W*H+63)/64]: Sized {
     match board.gamemode {
-        // gen 66
-        // Gamemode::WrappedArcadeMaze => {
-        //     let me = board.snakes[0];
-        //     let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
-        //     score!(
-        //         turn_progression(board.turn, 1514),
-        //         1,0,me.health as Score,
-        //         -2,0,length_diff(board),
-        //         0,4,being_longer(board),
-        //         2,6,area_diff(&my_area, &enemy_area),
-        //         6,0,area_diff(&my_close_area, &enemy_close_area),
-        //         3,4,(W as Score - closest_food_distance),
-        //         20,7,controlled_tail_diff(board, &my_area, &enemy_area),
-        //     )
-        // },
-
-        // gen 50
-        // Gamemode::WrappedArcadeMaze => {
-        //     let me = board.snakes[0];
-        //     let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
-        //     score!(
-        //         turn_progression(board.turn, 1056),
-        //         0,-3,lowest_enemy_health(board),
-        //         -2,0,length_diff(board),
-        //         7,0,controlled_food_diff(board, &my_area, &enemy_area),
-        //         7,2,area_diff(&my_area, &enemy_area),
-        //         6,0,area_diff(&my_close_area, &enemy_close_area),
-        //         0,10,controlled_tail_diff(board, &my_area, &enemy_area),
-        //     )
-        // },
-
         Gamemode::WrappedArcadeMaze => {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);

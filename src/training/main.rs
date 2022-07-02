@@ -97,10 +97,10 @@ async fn main() {
     }
 }
 
-const POPULATION_SIZE: usize = 250;
-const GAMES_PER_GENERATION: usize = 50;
-const SNAKES_PER_GAME: usize = 4;
-const MUTATIONS_PER_GENERATION: usize = 20;
+const POPULATION_SIZE: usize = 200;
+const GAMES_PER_GENERATION: usize = 40;
+const SNAKES_PER_GAME: usize = 1;
+const MUTATIONS_PER_GENERATION: usize = 8;
 const TOURNAMENT_SIZE: usize = 2;
 
 const NUM_WEIGHTS: usize = 21;
@@ -110,20 +110,20 @@ const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
     (0, 5), // me health late
     (-5, 0), // lowest enemy health early
     (-5, 0), // lowest enemy health late
-    (-5, 5), // length diff early
-    (-5, 5), // length diff late
+    (-3, 5), // length diff early
+    (-3, 5), // length diff late
     (0, 10), // being longer early
     (0, 10), // being longer late
     (0, 10), // food control diff early
     (0, 10), // food control diff late
-    (0, 4), // area diff early
-    (0, 4), // area diff late
+    (0, 10), // area diff early
+    (0, 10), // area diff late
     (0, 10), // close area diff early
     (0, 10), // close area diff late
-    (0, 4), // non hazard area diff early
-    (0, 4), // non hazard area diff late
-    (0, 4), // food distance early
-    (0, 4), // food distance late
+    (0, 0), // non hazard area diff early
+    (0, 0), // non hazard area diff late
+    (0, 7), // food distance early
+    (0, 7), // food distance late
     (0, 20), // tail control diff early
     (0, 20), // tail control diff late
 ];
@@ -224,7 +224,7 @@ fn next_generation(mut population: Vec<Entity>) -> Vec<Entity> {
 }
 
 fn write_generation(population: &Vec<Entity>, generation: usize) -> Result<(), std::io::Error> {
-    let mut file = File::create(format!("training-output-{}.txt", generation))?;
+    let mut file = File::create(format!("new-training-output-{}.txt", generation))?;
     for entity in population {
         writeln!(file, "games: {}, wins: {}, weights: {:?}", entity.games, entity.wins, entity.weights)?;
     };
@@ -235,14 +235,17 @@ fn run_games(population: &mut Vec<Entity>) {
     let mut rng = rand::thread_rng();
     for _ in 0..GAMES_PER_GENERATION {
         population.shuffle(&mut rng);
-        for j in 0..(population.len()/4) {
-            run_game(&mut population[(j*4)..(j*4+4)]);
+        for j in 0..(population.len()/SNAKES_PER_GAME) {
+            run_game(&mut population[(j*SNAKES_PER_GAME)..(j*SNAKES_PER_GAME+SNAKES_PER_GAME)]);
         }
     }
 }
 
 fn run_game(snakes: &mut [Entity]) {
-    let weights = snakes.iter().map(|entity| { return entity.weights.clone() }).collect();
+    let mut weights: Vec<Vec<i16>> = snakes.iter().map(|entity| { return entity.weights.clone() }).collect();
+    while weights.len() < 4 {
+        weights.push(vec![500, 1, 1, 0, 0, 2, 0, 0, 0, 2, 0, 1, 2, 0, 2, 0, 0, 0, 0, 0, 0])
+    }
     unsafe {
         set_training_weights(weights);
     }
