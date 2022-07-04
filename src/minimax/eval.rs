@@ -62,17 +62,33 @@ where [(); (W*H+63)/64]: Sized {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
-                turn_progression(board.turn, 500),
-                1,1,me.health as Score,
-                // -1 -1 lowest_enemy_health(board),
-                2,0,length_diff(board),
-                2,0,controlled_food_diff(board, &my_area, &enemy_area),
-                1,2,area_diff(&my_area, &enemy_area),
-                0,2,area_diff(&my_close_area, &enemy_close_area),
-                // 3 3 controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
-                // 5 5 controlled_tail_diff(board, &my_area, &enemy_area),
+                turn_progression(board.turn, 1000),
+                2,0,me.health as Score,
+                // 0,0,lowest_enemy_health(board),
+                0,-2,length_diff(board),
+                10,5,being_longer(board),
+                3,6,controlled_food_diff(board, &my_area, &enemy_area),
+                3,6,area_diff(&my_area, &enemy_area),
+                6,0,area_diff(&my_close_area, &enemy_close_area),
+                4,0,(W as Score - closest_food_distance),
+                8,12,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
+        // Gamemode::WrappedArcadeMaze => {
+        //     let me = board.snakes[0];
+        //     let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+        //     score!(
+        //         turn_progression(board.turn, 500),
+        //         1,1,me.health as Score,
+        //         // -1 -1 lowest_enemy_health(board),
+        //         2,0,length_diff(board),
+        //         2,0,controlled_food_diff(board, &my_area, &enemy_area),
+        //         1,2,area_diff(&my_area, &enemy_area),
+        //         0,2,area_diff(&my_close_area, &enemy_close_area),
+        //         // 3 3 controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
+        //         // 5 5 controlled_tail_diff(board, &my_area, &enemy_area),
+        //     )
+        // },
         Gamemode::Standard => {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
