@@ -298,6 +298,16 @@ pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>) -> Json
         (2, 19, 21, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 19, 21, true>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 19, 21, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 19, 21, true>::from_gamestate(state), deadline)).await.unwrap(),
         (4, 19, 21, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 19, 21, true>::from_gamestate(state), deadline)).await.unwrap(),
+
+        // battlegournd
+        (1, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (5, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (6, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (7, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
+        (8, 19, 19, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 19, 19, true>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height),
     };
 
