@@ -99,7 +99,7 @@ async fn main() {
 
 const POPULATION_SIZE: usize = 200;
 const GAMES_PER_GENERATION: usize = 40;
-const SNAKES_PER_GAME: usize = 1;
+const SNAKES_PER_GAME: usize = 4;
 const MUTATIONS_PER_GENERATION: usize = 8;
 const TOURNAMENT_SIZE: usize = 2;
 
