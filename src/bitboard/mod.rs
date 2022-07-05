@@ -81,6 +81,7 @@ where [(); (W*H+63)/64]: Sized {
     pub hazard_dmg: i8,
     pub tt_id: u8,
     pub turn: u16,
+    pub depth: u8,
     pub gamemode: Gamemode,
     pub apply_moves: Rc<dyn Fn(&mut Self, &[Move; S])>,
 }
@@ -122,6 +123,7 @@ where [(); (W*H+63)/64]: Sized {
             gamemode: Gamemode::Standard,
             tt_id: 0,
             turn: 0,
+            depth: 0,
             apply_moves: Rc::new(|board, mvs| {}),
         }
     }

@@ -16,27 +16,30 @@ where [(); (W*H+63)/64]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
         Some("constrictor") => Rc::new(|board, moves| {
             board.turn += 1;
+            board.depth += 1;
             move_heads::<S, W, H, WRAP>(board, moves);
             perform_collisions::<S, W, H, WRAP>(board);
             finish_head_movement::<S, W, H, WRAP>(board);
         }),
         _ => match api_state.game.map.as_str() {
-            "arcade_maze" if api_state.board.hazards.len() > 0 => {
-                let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
-                Rc::new(move |board, moves| {
-                    board.turn += 1;
-                    move_heads::<S, W, H, WRAP>(board, moves);
-                    move_tails::<S, W, H, WRAP>(board);
-                    update_health_with_fixed_spawns::<S, W, H, WRAP>(board);
-                    perform_collisions::<S, W, H, WRAP>(board);
-                    finish_head_movement::<S, W, H, WRAP>(board);
-                    finish_tail_movement::<S, W, H, WRAP>(board);
-                })
-            },
+            // "arcade_maze" => {
+            //     let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
+            //     Rc::new(move |board, moves| {
+            //         board.turn += 1;
+            //         board.depth += 1;
+            //         move_heads::<S, W, H, WRAP>(board, moves);
+            //         move_tails::<S, W, H, WRAP>(board);
+            //         update_health_with_fixed_spawns::<S, W, H, WRAP>(board);
+            //         perform_collisions::<S, W, H, WRAP>(board);
+            //         finish_head_movement::<S, W, H, WRAP>(board);
+            //         finish_tail_movement::<S, W, H, WRAP>(board);
+            //     })
+            // },
             "hz_spiral" if api_state.board.hazards.len() > 0 => {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
                 Rc::new(move |board, moves| {
                     board.turn += 1;
+                    board.depth += 1;
                     move_heads::<S, W, H, WRAP>(board, moves);
                     move_tails::<S, W, H, WRAP>(board);
                     update_health::<S, W, H, WRAP>(board);
@@ -48,6 +51,7 @@ where [(); (W*H+63)/64]: Sized {
             },
             _ => Rc::new(|board, moves| {
                 board.turn += 1;
+                board.depth += 1;
                 move_heads::<S, W, H, WRAP>(board, moves);
                 move_tails::<S, W, H, WRAP>(board);
                 update_health::<S, W, H, WRAP>(board);
@@ -239,7 +243,29 @@ where [(); (W*H+63)/64]: Sized {
 fn update_health_with_fixed_spawns<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
 where [(); (W*H+63)/64]: Sized {
     let mut eaten = ArrayVec::<u16, S>::new();
+
+    let mut tails = ArrayVec::<u16, S>::new();
+    for snake in board.snakes {
+        if snake.is_alive() {
+            tails.push(snake.tail);
+        }
+    }
+    
     for i in 0..S {
+        
+        let mut should_simulate_food_spawn = true;
+        if board.depth < 8 {
+            should_simulate_food_spawn = false;
+        } else {
+            for tail in &tails {
+                if board.distance(board.snakes[i].head, *tail) <= 1 {
+                    should_simulate_food_spawn = false;
+                    break
+                }
+            }
+        }
+        
+
         let snake = &mut board.snakes[i];
         if snake.is_dead() {
             continue
@@ -254,7 +280,7 @@ where [(); (W*H+63)/64]: Sized {
             snake.curled_bodyparts += 1;
             snake.length += 1;
             eaten.push(snake.head); // remember which food has been eaten
-        } else if i != 0 && get_food_spawns(board.gamemode).contains(&(snake.head as usize)) {
+        } else if i != 0 && should_simulate_food_spawn && get_food_spawns(board.gamemode).contains(&(snake.head as usize)) {
             snake.curled_bodyparts += 1;
         }
 
