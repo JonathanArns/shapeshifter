@@ -7,44 +7,52 @@ use rand::Rng;
 pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, snake_index: usize) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
-    let mut legal_moves = ArrayVec::<(Move, u16), 4>::new();
+    let mut some_legal_move = Move::Up;
+    let mut some_better_legal_move = None;
     let pos = board.snakes[snake_index].head;
     let survives_hazard = board.snakes[snake_index].health > board.hazard_dmg;
 
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][0] {
-        legal_moves.push((Move::Up, dest));
-        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
-            moves.push(Move::Up);
+        some_legal_move = Move::Up;
+        if survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
+            some_better_legal_move = Some(Move::Up);
+            if !board.bodies[0].get_bit(dest as usize) {
+                moves.push(Move::Up);
+            }
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][1] {
-        legal_moves.push((Move::Down, dest));
-        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
-            moves.push(Move::Down);
+        some_legal_move = Move::Down;
+        if survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
+            some_better_legal_move = Some(Move::Down);
+            if !board.bodies[0].get_bit(dest as usize) {
+                moves.push(Move::Down);
+            }
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][2] {
-        legal_moves.push((Move::Right, dest));
-        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
-            moves.push(Move::Right);
+        some_legal_move = Move::Right;
+        if survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
+            some_better_legal_move = Some(Move::Right);
+            if !board.bodies[0].get_bit(dest as usize) {
+                moves.push(Move::Right);
+            }
         }
     }
     if let Some(dest) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[pos as usize][3] {
-        legal_moves.push((Move::Left, dest));
-        if !board.bodies[0].get_bit(dest as usize) && (survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize)) {
-            moves.push(Move::Left);
-        }
-    }
-    if moves.len() == 0 {
-        for (mv, dest) in &legal_moves {
-            for snake in board.snakes {
-                if snake.head == *dest {
-                    moves.push(*mv);
-                    return moves
-                }
+        some_legal_move = Move::Left;
+        if survives_hazard || !board.hazards.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
+            some_better_legal_move = Some(Move::Left);
+            if !board.bodies[0].get_bit(dest as usize) {
+                moves.push(Move::Left);
             }
         }
-        moves.push(legal_moves[0].0);
+    }
+    if let Some(mv) = some_better_legal_move {
+        some_legal_move = mv;
+    }
+    if moves.len() == 0 {
+        moves.push(some_legal_move);
     }
     moves
 }
