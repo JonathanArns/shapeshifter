@@ -16,7 +16,7 @@ use shapeshifter::api;
 #[tokio::main]
 async fn main() {
     // set up tracing subscriber
-    let subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::TRACE);
+    let subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::DEBUG);
 
     // add honeycomb layer to subscriber if the key is in the environment
     // and set as default tracing subscriber
