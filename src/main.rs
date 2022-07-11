@@ -13,7 +13,7 @@ use std::env;
 
 use shapeshifter::api;
 
-#[tokio::main(worker_threads = 1)]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     // set up tracing subscriber
     let subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::DEBUG);
