@@ -121,7 +121,7 @@ where
     )
 )]
 pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
-    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
+    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into());
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
@@ -273,7 +273,7 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
     )
 )]
 pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>) -> Json<Value> {
-    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(80) - 80)).into());
+    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into());
 
     #[cfg(feature = "training")]
     {

@@ -86,7 +86,7 @@ where [(); (W*H+63)/64]: Sized {
                 1,2,area_diff(&my_area, &enemy_area),
                 0,2,area_diff(&my_close_area, &enemy_close_area),
                 // 3 3 controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
-                10,5,controlled_tail_diff(board, &my_area, &enemy_area),
+                10,10,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
         Gamemode::Standard => {
