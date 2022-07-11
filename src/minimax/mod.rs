@@ -36,17 +36,18 @@ where [(); (W*H+63)/64]: Sized {
 }
 
 pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     let mut node_counter = 0;
+    let mut history = [[0; 4]; W*H];
     let start_time = time::Instant::now(); // only used to calculate nodes / second
     let deadline = start_time + time::Duration::from_secs(5);
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
-    let mut enemy_moves = ordered_limited_move_combinations(board, 1);
-    let my_moves = allowed_moves(board, 0);
+    let mut enemy_moves = ordered_limited_move_combinations(board, 1, &history);
+    let my_moves = ordered_allowed_moves(board, 0, &history);
     let mut best = Score::MIN+1;
     for mv in &my_moves {
-        let score = alphabeta(board, &mut node_counter, deadline, *mv, &mut enemy_moves, depth, Score::MIN+1, Score::MAX).unwrap();
+        let score = alphabeta(board, &mut node_counter, deadline, *mv, &mut enemy_moves, &mut history, depth, Score::MIN+1, Score::MAX).unwrap();
         if score > best {
             best = score;
             best_move = *mv;
@@ -82,14 +83,15 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
 }
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
+    let mut history = [[0; 4]; W*H];
 
     let board = board.clone();
-    let mut enemy_moves = ordered_limited_move_combinations(&board, 1);
-    let mut my_allowed_moves = allowed_moves(&board, 0);
+    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut my_allowed_moves = ordered_allowed_moves(&board, 0, &history);
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
         info!(
@@ -114,7 +116,7 @@ where [(); (W*H+63)/64]: Sized {
             let test = next_bns_guess(last_test, alpha, beta);
             let mut better_moves = ArrayVec::<Move, 4>::new();
             for mv in &my_moves {
-                if let Some(score) = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, depth, test-1, test) {
+                if let Some(score) = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, &mut history, depth, test-1, test) {
                     if score >= test {
                         better_moves.push(*mv);
                     }
@@ -161,11 +163,12 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     deadline: time::Instant,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    history: &mut [[u64; 4]; W*H],
     depth: u8,
     mut alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     if time::Instant::now() > deadline {
         return None
     }
@@ -249,17 +252,17 @@ where [(); (W*H+63)/64]: Sized {  // min call
 
             // continue search
             let mut iseen_moves = ArrayVec::<Move, 4>::default();
-            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1);
-            for mv in itt_move.iter().chain(allowed_moves(&child, 0).iter()) {
+            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
+            for mv in itt_move.iter().chain(ordered_allowed_moves(&child, 0, history).iter()) {
                 if iseen_moves.contains(mv) {
                     continue
                 } else {
                     iseen_moves.push(*mv);
                 }
                 let iscore = if depth == 1 {
-                    quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, QUIESCENCE_DEPTH, ialpha, ibeta)?
+                    quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, QUIESCENCE_DEPTH, ialpha, ibeta)?
                 } else {
-                    alphabeta(&child, node_counter, deadline, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?
+                    alphabeta(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?
                 };
                 if iscore > ibeta {
                     ibest_score = iscore;
@@ -275,6 +278,8 @@ where [(); (W*H+63)/64]: Sized {  // min call
                 }
             }
             ttable::insert(itt_key, child.tt_id, ibest_score, ibest_score >= ibeta, ibest_score <= ialpha, depth, [ibest_move; 1]);
+            // update history heuristic
+            history[board.snakes[0].head as usize][ibest_move.to_int() as usize] += depth as u64;
             ibest_score
         };
         if score < alpha {
@@ -291,6 +296,12 @@ where [(); (W*H+63)/64]: Sized {  // min call
         }
     }
     ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
+    // update history heuristic
+    for i in 1..S {
+        if board.snakes[i].is_alive() {
+            history[board.snakes[i].head as usize][best_moves[i].to_int() as usize] += depth as u64;
+        }
+    }
     Some(best_score)
 }
 
@@ -321,6 +332,7 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     deadline: time::Instant,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    history: &mut [[u64; 4]; W*H],
     depth: u8,
     alpha: Score,
     mut beta: Score
@@ -349,9 +361,9 @@ where [(); (W*H+63)/64]: Sized {  // min call
             }
 
             // continue search
-            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1); // No idea why, but using unordered movegen here is a big improvement
-            for mv in &allowed_moves(&child, 0) {
-                let iscore = quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, depth-1, ialpha, ibeta)?;
+            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
+            for mv in &ordered_allowed_moves(&child, 0, history) {
+                let iscore = quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
                     break;

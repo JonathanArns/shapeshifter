@@ -114,6 +114,24 @@ where [(); (W*H+63)/64]: Sized {
     moves
 }
 
+pub fn ordered_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    board: &Bitboard<S, W, H, WRAP>,
+    snake_index: usize,
+    history: &[[u64; 4]; W*H]
+) -> ArrayVec<Move, 4>
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {
+    let mut moves = allowed_moves(board, snake_index);
+    moves.sort_by_key(|mv| {
+        let dest = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[board.snakes[snake_index].head as usize][mv.to_int() as usize].unwrap();
+        let mut dist = board.distance(board.snakes[0].head, dest);
+        if dist == 1 && board.snakes[snake_index].length <= board.snakes[0].length {
+            dist += 10;
+        }
+        u64::MAX - 10000 - history[board.snakes[snake_index].head as usize][mv.to_int() as usize] + dist as u64
+    });
+    moves
+}
+
 /// Generates up to 4 move combinations from a position, such that every move for every snake has
 /// been covered at least once.
 /// Can skip the first n snakes, their moves will always be Up in the result.
@@ -153,23 +171,15 @@ where [(); (W*H+63)/64]: Sized {
 /// Can skip the first n snakes, their moves will always be Up in the result.
 /// Applies move ordering to the individual moves of each enemy.
 #[allow(unused)]
-pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize) -> ArrayVec<[Move; S], 4>
-where [(); (W*H+63)/64]: Sized {
+pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, skip: usize, history: &[[u64; 4]; W*H]) -> ArrayVec<[Move; S], 4>
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     let mut i = 0;
     for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
         if snake.is_alive() {
             i += 1;
-            let mut moves = allowed_moves(board, j+skip);
-            moves.sort_by_key(|mv| {
-                let dest = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].unwrap();
-                let mut dist = board.distance(board.snakes[0].head, dest);
-                if dist == 1 && snake.length <= board.snakes[0].length {
-                    return dist + 10
-                }
-                dist
-            });
+            let mut moves = ordered_allowed_moves(board, j+skip, history);
             moves_per_snake.push(moves);
         } else {
             let mut none_move = ArrayVec::<_, 4>::new();
