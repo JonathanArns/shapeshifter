@@ -16,10 +16,6 @@ use shapeshifter::api;
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     // set up tracing subscriber
-    let subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::DEBUG);
-
-    // add honeycomb layer to subscriber if the key is in the environment
-    // and set as default tracing subscriber
     if let Ok(key) = env::var("HONEYCOMB_KEY") {
         let mut map = MetadataMap::new();
         map.insert("x-honeycomb-team", key.parse().unwrap());
@@ -47,11 +43,11 @@ async fn main() {
         let honeycomb_telemetry = tracing_opentelemetry::layer().with_tracer(honeycomb_tracer);
 
         // add to the subscriber and set it as global default
-        let honeycomb_subscriber = subscriber.with(honeycomb_telemetry);
+        let honeycomb_subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::DEBUG).with(honeycomb_telemetry);
         tracing::subscriber::set_global_default(honeycomb_subscriber).expect("setting global default tracing subscriber failed");
         println!("honeycomb subscriber initialized");
     } else {
-        let stdout_subscriber = subscriber.with(tracing_subscriber::fmt::Layer::default());
+        let stdout_subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::INFO).with(tracing_subscriber::fmt::Layer::default());
         tracing::subscriber::set_global_default(stdout_subscriber).expect("setting global default tracing subscriber failed");
     }
 
