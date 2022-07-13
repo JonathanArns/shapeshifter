@@ -14,7 +14,7 @@ pub use ttable::{init, get_tt_id};
 #[cfg(feature = "training")]
 pub use eval::set_training_weights;
 
-const QUIESCENCE_DEPTH: u8 = 3;
+const QUIESCENCE_DEPTH: u8 = 10;
 
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
@@ -91,7 +91,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
 
     let board = board.clone();
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
-    let mut my_allowed_moves = ordered_allowed_moves(&board, 0, &history);
+    let mut my_allowed_moves = allowed_moves(&board, 0);
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
         info!(
@@ -309,20 +309,53 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
 /// search must continue.
 fn is_stable<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> bool
 where [(); (W*H+63)/64]: Sized {
-    for snake in board.snakes {
-        if snake.curled_bodyparts != 0 {
-            return false
-        }
-        for i in 0..4 {
-            if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][i] {
-                if board.food.get_bit(pos as usize) {
+    match board.gamemode {
+        Gamemode::WrappedArcadeMaze => {
+            let mut moves = 1;
+            for (i, snake) in board.snakes.iter().enumerate() {
+                if snake.is_dead() {
+                    continue
+                }
+                // if i != 0 && board.distance(snake.head, board.snakes[0].head) < 4 {
+                //     return false
+                // }
+                // if i != 0 && board.distance(snake.tail, board.snakes[0].head) < 2 {
+                //     return false
+                // }
+                if snake.curled_bodyparts != 0 {
                     return false
                 }
+                for j in 0..4 {
+                    if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][j] {
+                        if board.food.get_bit(pos as usize) {
+                            return false
+                        }
+                    }
+                }
+                moves *= allowed_moves(board, i).len();
             }
-        }
-        
+            moves > 2
+            // true
+        },
+        _ => {
+            for snake in board.snakes {
+                if snake.is_dead() {
+                    continue
+                }
+                if snake.curled_bodyparts != 0 {
+                    return false
+                }
+                for i in 0..4 {
+                    if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][i] {
+                        if board.food.get_bit(pos as usize) {
+                            return false
+                        }
+                    }
+                }
+            }
+            true
+        },
     }
-    true
 }
 
 /// Returns None if it received a timeout from stop_receiver.
