@@ -5,7 +5,7 @@ use std::env;
 use std::time;
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
-use tracing::info;
+use tracing::{info, debug};
 
 mod eval;
 mod ttable;
@@ -94,7 +94,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     let mut my_allowed_moves = allowed_moves(&board, 0);
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
-        info!(
+        debug!(
             game.turn = board.turn,
             game.mode = ?board.gamemode,
             search.best_move = ?my_allowed_moves[0],
@@ -408,6 +408,8 @@ where [(); (W*H+63)/64]: Sized {  // min call
                     }
                 }
             }
+            // update history heuristic
+            history[board.snakes[0].head as usize][ibest_move.to_int() as usize] += depth as u64;
             ibest_score
         };
         if score < alpha {
@@ -419,6 +421,12 @@ where [(); (W*H+63)/64]: Sized {  // min call
             if score < beta {
                 beta = score;
             }
+        }
+    }
+    // update history heuristic
+    for i in 1..S {
+        if board.snakes[i].is_alive() {
+            history[board.snakes[i].head as usize][best_moves[i].to_int() as usize] += depth as u64;
         }
     }
     Some(best_score)

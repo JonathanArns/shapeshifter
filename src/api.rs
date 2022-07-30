@@ -63,7 +63,7 @@ pub async fn handle_index() -> Json<Value> {
         "apiversion": "1",
         "author": "JonathanArns",
         "color": "#900050",
-        "head": "cosmic-horror",
+        "head": "cosmic-horror-special",
         "tail": "cosmic-horror",
     }))
 }
