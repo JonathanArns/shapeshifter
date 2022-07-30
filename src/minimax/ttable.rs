@@ -4,9 +4,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use fxhash::FxHasher64;
 
-const TT_LENGTH: usize = 0b_10000000000000000000000000000;
-const TT_MASK: u64 =     0b__1111111111111111111111111111;
-const MAX_SIMUL_GAMES: usize = 6;
+const TT_LENGTH: usize = 0b_100000000000000000000000000000;
+const TT_MASK: u64 =     0b__11111111111111111111111111111;
+const MAX_SIMUL_GAMES: usize = 3;
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.
