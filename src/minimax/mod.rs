@@ -376,11 +376,13 @@ where [(); (W*H+63)/64]: Sized {  // min call
     }
 
     let mut best_score = Score::MAX;
+    let mut best_moves = [Move::Up; S];
     for mvs in enemy_moves.iter_mut() {
         let score = 'max_call: { // max call
             let mut ialpha = alpha;
             let ibeta = beta;
             let mut ibest_score = Score::MIN;
+            let mut ibest_move = Move::Up;
             mvs[0] = mv;
             let mut child = board.clone();
             (child.apply_moves.clone())(&mut child, &mvs);
@@ -399,10 +401,12 @@ where [(); (W*H+63)/64]: Sized {  // min call
                 let iscore = quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
+                    ibest_move = *mv;
                     break;
                 }
                 if iscore > ibest_score {
                     ibest_score = iscore;
+                    ibest_move = *mv;
                     if iscore > ialpha {
                         ialpha = iscore;
                     }
@@ -414,10 +418,12 @@ where [(); (W*H+63)/64]: Sized {  // min call
         };
         if score < alpha {
             best_score = score;
+            best_moves = *mvs;
             break;
         }
         if score < best_score {
             best_score = score;
+            best_moves = *mvs;
             if score < beta {
                 beta = score;
             }
