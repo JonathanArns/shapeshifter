@@ -14,7 +14,7 @@ pub use ttable::{init, get_tt_id};
 #[cfg(feature = "training")]
 pub use eval::set_training_weights;
 
-const QUIESCENCE_DEPTH: u8 = 10;
+const QUIESCENCE_DEPTH: u8 = 20;
 
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
@@ -316,26 +316,9 @@ where [(); (W*H+63)/64]: Sized {
                 if snake.is_dead() {
                     continue
                 }
-                // if i != 0 && board.distance(snake.head, board.snakes[0].head) < 4 {
-                //     return false
-                // }
-                // if i != 0 && board.distance(snake.tail, board.snakes[0].head) < 2 {
-                //     return false
-                // }
-                if snake.curled_bodyparts != 0 {
-                    return false
-                }
-                for j in 0..4 {
-                    if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][j] {
-                        if board.food.get_bit(pos as usize) {
-                            return false
-                        }
-                    }
-                }
                 moves *= allowed_moves(board, i).len();
             }
             moves > 2
-            // true
         },
         _ => {
             for snake in board.snakes {
