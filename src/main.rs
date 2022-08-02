@@ -13,7 +13,7 @@ use std::env;
 
 use shapeshifter::api;
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() {
     // set up tracing subscriber
     if let Ok(key) = env::var("HONEYCOMB_KEY") {

@@ -68,7 +68,6 @@ func ProxyRequestHandler(proxy *httputil.ReverseProxy) func(http.ResponseWriter,
 }
 
 func main() {
-	// initialize a reverse proxy and pass the actual backend server url here
 	proxy, err := NewProxy("http://localhost:8080")
 	if err != nil {
 		panic(err)

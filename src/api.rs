@@ -59,11 +59,11 @@ pub struct GameState {
     pub you: Battlesnake,
 }
 
-pub struct DeadlineHeader(u64);
+pub struct StartTimeHeader(u64);
 
-impl Header for DeadlineHeader {
+impl Header for StartTimeHeader {
     fn name() -> &'static HeaderName {
-        static DEADLINE_HEADER: HeaderName = HeaderName::from_static("x-deadline-unix-millis");
+        static DEADLINE_HEADER: HeaderName = HeaderName::from_static("x-received-at");
         &DEADLINE_HEADER
     }
 
@@ -76,13 +76,13 @@ impl Header for DeadlineHeader {
             .ok_or_else(axum::headers::Error::invalid)?;
 
         let x = if let Ok(val) = value.to_str() {
-            val
+            val.replace(".", "")
         } else {
             return Err(axum::headers::Error::invalid())
         };
 
         if let Ok(val) = x.parse::<u64>() {
-            Ok(DeadlineHeader(val))
+            Ok(StartTimeHeader(val))
         } else {
             Err(axum::headers::Error::invalid())
         }
@@ -160,7 +160,7 @@ where
     )
 )]
 pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
-    let deadline = if let Some(TypedHeader(DeadlineHeader(value))) = deadline_header {
+    let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = deadline_header {
         time::UNIX_EPOCH + time::Duration::from_millis(value)
     } else {
         time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
@@ -307,7 +307,7 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
 #[cfg(not(feature = "mcts"))]
 #[tracing::instrument(
     name = "handle_move",
-    skip(state, deadline_header),
+    skip(state, start_time_header),
     fields(
         game.source = state.game.source.as_str(),
         game.id = state.game.id.as_str(),
@@ -315,9 +315,10 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
         search.algo = "minimax"
     )
 )]
-pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, deadline_header: Option<TypedHeader<DeadlineHeader>>) -> Json<Value> {
-    let deadline = if let Some(TypedHeader(DeadlineHeader(value))) = deadline_header {
-        time::UNIX_EPOCH + time::Duration::from_millis(value)
+pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
+    let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
+        time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
+
     } else {
         time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
     };
