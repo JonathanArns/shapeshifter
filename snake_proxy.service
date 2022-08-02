@@ -1,0 +1,10 @@
+[Unit]
+Description=Battlesnake proxy
+
+[Service]
+User=root
+Restart=always
+ExecStart=/root/shapeshifter/snake_proxy
+
+[Install]
+WantedBy=multi-user.target
