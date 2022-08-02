@@ -4,7 +4,7 @@ Description=Shapeshifter battlesnake
 [Service]
 User=root
 Restart=always
-ExecStart=/root/shapeshifter/target/release/shapeshifter
+ExecStart=/root/shapeshifter/snake_proxy & /root/shapeshifter/target/release/shapeshifter
 
 [Install]
 WantedBy=multi-user.target

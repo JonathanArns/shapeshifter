@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use axum::extract::Json;
+use axum::extract::{Json, TypedHeader};
+use axum::headers::{Header, HeaderName, HeaderValue};
 use tokio::task;
 use tracing::info;
 use std::collections::HashMap;
@@ -58,6 +59,44 @@ pub struct GameState {
     pub you: Battlesnake,
 }
 
+pub struct DeadlineHeader(u64);
+
+impl Header for DeadlineHeader {
+    fn name() -> &'static HeaderName {
+        static DEADLINE_HEADER: HeaderName = HeaderName::from_static("x-deadline-unix-millis");
+        &DEADLINE_HEADER
+    }
+
+    fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>
+    where
+        I: Iterator<Item = &'i HeaderValue>,
+    {
+        let value = values
+            .next()
+            .ok_or_else(axum::headers::Error::invalid)?;
+
+        let x = if let Ok(val) = value.to_str() {
+            val
+        } else {
+            return Err(axum::headers::Error::invalid())
+        };
+
+        if let Ok(val) = x.parse::<u64>() {
+            Ok(DeadlineHeader(val))
+        } else {
+            Err(axum::headers::Error::invalid())
+        }
+    }
+
+    fn encode<E>(&self, values: &mut E)
+    where
+        E: Extend<HeaderValue>,
+    {
+        let value = HeaderValue::from_str(&self.0.to_string()).unwrap();
+        values.extend(std::iter::once(value));
+    }
+}
+
 pub async fn handle_index() -> Json<Value> {
     Json(json!({
         "apiversion": "1",
@@ -112,7 +151,7 @@ where
 #[cfg(feature = "mcts")]
 #[tracing::instrument(
     name = "handle_move",
-    skip(state),
+    skip(state, deadline_header),
     fields(
         game.source = state.game.source.as_str(),
         game.id = state.game.id.as_str(),
@@ -121,7 +160,11 @@ where
     )
 )]
 pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
-    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into());
+    let deadline = if let Some(TypedHeader(DeadlineHeader(value))) = deadline_header {
+        time::UNIX_EPOCH + time::Duration::from_millis(value)
+    } else {
+        time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
+    };
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
@@ -264,7 +307,7 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
 #[cfg(not(feature = "mcts"))]
 #[tracing::instrument(
     name = "handle_move",
-    skip(state),
+    skip(state, deadline_header),
     fields(
         game.source = state.game.source.as_str(),
         game.id = state.game.id.as_str(),
@@ -272,8 +315,12 @@ pub async fn handle_move(Json(state): Json<GameState>) -> Json<Value> {
         search.algo = "minimax"
     )
 )]
-pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>) -> Json<Value> {
-    let deadline = time::Instant::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into());
+pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, deadline_header: Option<TypedHeader<DeadlineHeader>>) -> Json<Value> {
+    let deadline = if let Some(TypedHeader(DeadlineHeader(value))) = deadline_header {
+        time::UNIX_EPOCH + time::Duration::from_millis(value)
+    } else {
+        time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
+    };
 
     #[cfg(feature = "training")]
     {

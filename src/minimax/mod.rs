@@ -26,7 +26,7 @@ lazy_static! {
 
 pub type Score = i16;
 
-pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
+pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::SystemTime) -> (Move, Score, u8)
 where [(); (W*H+63)/64]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
@@ -40,7 +40,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     let mut node_counter = 0;
     let mut history = [[0; 4]; W*H];
     let start_time = time::Instant::now(); // only used to calculate nodes / second
-    let deadline = start_time + time::Duration::from_secs(5);
+    let deadline = time::SystemTime::now() + time::Duration::from_secs(5);
     let mut best_move = Move::Up;
     let mut best_score = Score::MIN+1;
     let mut enemy_moves = ordered_limited_move_combinations(board, 1, &history);
@@ -82,7 +82,7 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     }
 }
 
-pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::Instant) -> (Move, Score, u8)
+pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::SystemTime) -> (Move, Score, u8)
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
@@ -160,7 +160,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
 pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
-    deadline: time::Instant,
+    deadline: time::SystemTime,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     history: &mut [[u64; 4]; W*H],
@@ -169,7 +169,7 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
-    if time::Instant::now() > deadline {
+    if time::SystemTime::now() > deadline {
         return None
     }
     let tt_key = ttable::hash(&(board, mv));
@@ -345,7 +345,7 @@ where [(); (W*H+63)/64]: Sized {
 pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
-    deadline: time::Instant,
+    deadline: time::SystemTime,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     history: &mut [[u64; 4]; W*H],
@@ -354,7 +354,7 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+63)/64]: Sized {  // min call
-    if time::Instant::now() > deadline {
+    if time::SystemTime::now() > deadline {
         return None
     }
 
