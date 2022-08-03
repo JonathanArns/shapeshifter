@@ -14,8 +14,6 @@ pub use ttable::{init, get_tt_id};
 #[cfg(feature = "training")]
 pub use eval::set_training_weights;
 
-const QUIESCENCE_DEPTH: u8 = 20;
-
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
         var.parse().unwrap()
@@ -220,8 +218,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
             // search stops
             if child.is_terminal() {
                 break 'max_call eval::eval_terminal(&child);
-            } else if depth == 1 && is_stable(&child) {
-                // TODO: insert into TT and move TT check to before?
+            } else if depth == 1 && (get_quiescence_params(board.gamemode).1)(&child) { // calls is_stable
                 break 'max_call eval::eval(&child);
             }
             // check TT
@@ -260,7 +257,8 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
                     iseen_moves.push(*mv);
                 }
                 let iscore = if depth == 1 {
-                    quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, QUIESCENCE_DEPTH, ialpha, ibeta)?
+                    let (q_depth, is_stable) = get_quiescence_params(board.gamemode);
+                    quiescence(&child, node_counter, deadline, is_stable, *mv, &mut next_enemy_moves, history, q_depth, ialpha, ibeta)?
                 } else {
                     alphabeta(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?
                 };
@@ -307,10 +305,12 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
 
 /// Used for quiescence search, to determine, if the position is stable and can be evaluated, or if
 /// search must continue.
-fn is_stable<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>) -> bool
+fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+    mode: Gamemode
+) -> (u8, fn(&Bitboard<S, W, H, WRAP>) -> bool)
 where [(); (W*H+63)/64]: Sized {
-    match board.gamemode {
-        Gamemode::WrappedArcadeMaze => {
+    match mode {
+        Gamemode::WrappedArcadeMaze => (20, |board| {
             let mut moves = 1;
             for (i, snake) in board.snakes.iter().enumerate() {
                 if snake.is_dead() {
@@ -319,8 +319,8 @@ where [(); (W*H+63)/64]: Sized {
                 moves *= allowed_moves(board, i).len();
             }
             moves > 2
-        },
-        _ => {
+        }),
+        _ => (3, |board| {
             for snake in board.snakes {
                 if snake.is_dead() {
                     continue
@@ -337,7 +337,7 @@ where [(); (W*H+63)/64]: Sized {
                 }
             }
             true
-        },
+        }),
     }
 }
 
@@ -346,6 +346,7 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     board: &Bitboard<S, W, H, WRAP>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
+    is_stable: fn (&Bitboard<S, W, H, WRAP>) -> bool,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     history: &mut [[u64; 4]; W*H],
@@ -381,7 +382,7 @@ where [(); (W*H+63)/64]: Sized {  // min call
             // continue search
             let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
             for mv in &ordered_allowed_moves(&child, 0, history) {
-                let iscore = quiescence(&child, node_counter, deadline, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?;
+                let iscore = quiescence(&child, node_counter, deadline, is_stable, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {
                     ibest_score = iscore;
                     ibest_move = *mv;
