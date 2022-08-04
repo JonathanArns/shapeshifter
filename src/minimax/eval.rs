@@ -58,34 +58,16 @@ pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
 ) -> Score
 where [(); (W*H+63)/64]: Sized {
     match board.gamemode {
-        // Gamemode::WrappedArcadeMaze => {
-        //     let me = board.snakes[0];
-        //     let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
-        //     score!(
-        //         turn_progression(board.turn, 509),
-        //         5,0,me.health as Score,
-        //         // 0,0,lowest_enemy_health(board),
-        //         1,0,length_diff(board),
-        //         4,0,being_longer(board),
-        //         2,10,controlled_food_diff(board, &my_area, &enemy_area),
-        //         3,1,area_diff(&my_area, &enemy_area),
-        //         // 0,0,area_diff(&my_close_area, &enemy_close_area),
-        //         7,4,(W as Score - closest_food_distance),
-        //         10,8,controlled_tail_diff(board, &my_area, &enemy_area),
-        //     )
-        // },
         Gamemode::WrappedArcadeMaze => {
             let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
             score!(
                 turn_progression(board.turn, 500),
                 1,1,me.health as Score,
-                // -1 -1 lowest_enemy_health(board),
                 2,0,length_diff(board),
                 2,0,controlled_food_diff(board, &my_area, &enemy_area),
                 1,2,area_diff(&my_area, &enemy_area),
                 0,2,area_diff(&my_close_area, &enemy_close_area),
-                // 3 3 controlled_arcade_maze_junctions(board, &my_area, &enemy_area),
                 10,10,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
@@ -246,21 +228,6 @@ where [(); (W*H+63)/64]: Sized {
     res
 }
 
-fn controlled_arcade_maze_junctions<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &Bitboard<S, W, H, WRAP>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
-) -> Score
-where [(); (W*H+63)/64]: Sized {
-    let mut res = 0;
-    for pos in [20, 27, 29, 36, 59, 73, 99, 101, 103, 105, 107, 109, /* 134, 135, */ 137, 139, 145, 147, /* 149, 150, */ 177, 179, 181, 183, 213, 215, 217, 219, 221, 223, 255, 257, 289, 299, 324, 327, 329, 331, 333, 335, 337, 339, 361, 364, 374, 377] {
-        if my_area.get_bit(pos) {
-            res += 1;
-        } else if enemy_area.get_bit(pos) {
-            res -= 1;
-        }
-    }
-    res
-}
-
 fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
     match gamemode {
         Gamemode::WrappedArcadeMaze => &[20, 36, 104, 137, 147, 212, 218, 224, 327, 332, 337],
@@ -274,7 +241,7 @@ fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool
 where [(); (W*H+63)/64]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
     let mut reachable5 = state;
-    let mut walkable = if board.hazard_dmg > 95 {
+    let walkable = if board.hazard_dmg > 95 {
         !board.hazards & !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
     } else {
         !board.bodies[0] & Bitboard::<S, W, H, WRAP>::FULL_BOARD_MASK
@@ -299,7 +266,7 @@ where [(); (W*H+63)/64]: Sized {
                 | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
             enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.1) >> (W-1)
                 | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.1) << (W-1)
-                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W) // debug changes
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W)
                 | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
         }
         state = (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me)));
@@ -338,7 +305,6 @@ where [(); (W*H+63)/64]: Sized {
 mod tests {
     use super::*;
     use crate::api;
-    use crate::bitboard::move_gen;
     use test::Bencher;
 
     fn c(x: usize, y: usize) -> api::Coord {
