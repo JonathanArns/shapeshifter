@@ -72,16 +72,15 @@ where [(); (W*H+63)/64]: Sized {
             )
         },
         Gamemode::Standard => {
-            let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
+            // genetically learned for duels
+            let ((my_area, enemy_area), _, _) = area_control(board);
             score!(
-                turn_progression(board.turn, 1),
-                1,1,me.health as Score,
-                -1,-1,lowest_enemy_health(board),
-                1,1,controlled_food_diff(board, &my_area, &enemy_area),
-                1,1,area_diff(&my_area, &enemy_area),
-                1,1,area_diff(&my_close_area, &enemy_close_area),
-                5,5,being_longer(board),
+                turn_progression(board.turn, 1500),
+                2,1,length_diff(board),
+                2,10,being_longer(board),
+                8,1,controlled_food_diff(board, &my_area, &enemy_area),
+                0,8,area_diff(&my_area, &enemy_area),
+                0,9,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
         Gamemode::Constrictor => {
