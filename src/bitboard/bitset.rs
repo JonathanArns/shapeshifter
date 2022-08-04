@@ -117,6 +117,20 @@ where [(); (N+63)/64]: Sized {
         }
         zeros
     }
+
+    pub unsafe fn load_m128i(&mut self) -> __m128i {
+        if self.state.len() != 2 {
+            panic!("wrong bitset size");
+        }
+        _mm_loadu_si128(self.state.as_ptr() as *const __m128i)
+    }
+
+    pub unsafe fn store_m128i(&mut self, x: __m128i) {
+        if self.state.len() != 2 {
+            panic!("wrong bitset size");
+        }
+        _mm_storeu_si128(self.state.as_mut_ptr() as *mut __m128i, x)
+    }
 }
 
 impl<const N: usize> std::fmt::Debug for Bitset<N>

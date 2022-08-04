@@ -1,4 +1,4 @@
-#![feature(test, generic_const_exprs, label_break_value)]
+#![feature(test, generic_const_exprs, label_break_value, stdsimd)]
 
 use axum::{Router, routing::get, routing::post};
 use tower_http::trace::TraceLayer;

@@ -1,6 +1,8 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
 
+use std::arch::x86_64::*;
+
 macro_rules! score {
     ($progress:expr , $( $w0:expr, $w1:expr, $feat:expr ),* $(,)?) => {
         {
@@ -287,6 +289,149 @@ where [(); (W*H+63)/64]: Sized {
     let mut old_state = state; // state at n-1
     let mut turn_counter = 0;
     let mut closest_food_distance = None;
+
+
+    // special case simd optimization for 11x11 board
+    if W == 11 || H == 11 {
+        unsafe fn is_eq(a: __m256i, b: __m256i) -> bool {
+            let mut tmp = [0_u64; 4];
+            _mm256_storeu_si256(tmp.as_mut_ptr() as *mut __m256i, _mm256_cmpeq_epi64(a, b));
+            for x in tmp {
+                if x != u64::MAX {
+                    return false
+                }
+            }
+            true
+        }
+        // we need to define our own 128 bit shifts, since AVX2 doesn't have those
+        unsafe fn shl1(a: __m256i) -> __m256i {
+            let x = _mm256_slli_epi64::<1>(a);
+            let y = _mm256_srli_epi64::<63>(_mm256_bslli_epi128::<8>(a));
+            _mm256_or_si256(x, y)
+        }
+        unsafe fn shr1(a: __m256i) -> __m256i {
+            let x = _mm256_srli_epi64::<1>(a);
+            let y = _mm256_slli_epi64::<63>(_mm256_bsrli_epi128::<8>(a));
+            _mm256_or_si256(x, y)
+        }
+        unsafe fn shl10(a: __m256i) -> __m256i {
+            let x = _mm256_slli_epi64::<10>(a);
+            let y = _mm256_srli_epi64::<54>(_mm256_bslli_epi128::<8>(a));
+            _mm256_or_si256(x, y)
+        }
+        unsafe fn shr10(a: __m256i) -> __m256i {
+            let x = _mm256_srli_epi64::<10>(a);
+            let y = _mm256_slli_epi64::<54>(_mm256_bsrli_epi128::<8>(a));
+            _mm256_or_si256(x, y)
+        }
+        unsafe fn shl11(a: __m256i) -> __m256i {
+            let x = _mm256_slli_epi64::<11>(a);
+            let y = _mm256_srli_epi64::<53>(_mm256_bslli_epi128::<8>(a));
+            _mm256_or_si256(x, y)
+        }
+        unsafe fn shr11(a: __m256i) -> __m256i {
+            let x = _mm256_srli_epi64::<11>(a);
+            let y = _mm256_slli_epi64::<53>(_mm256_bsrli_epi128::<8>(a));
+            _mm256_or_si256(x, y)
+        }
+        unsafe fn shl110(a: __m256i) -> __m256i {
+            _mm256_slli_epi64::<46>(_mm256_bslli_epi128::<8>(a))
+        }
+        unsafe fn shr110(a: __m256i) -> __m256i {
+            _mm256_srli_epi64::<46>(_mm256_bsrli_epi128::<8>(a))
+        }
+
+        unsafe {
+            // load masks into simd registers
+            let tmp = Bitboard::<S, W, H, WRAP>::ALL_BUT_LEFT_EDGE_MASK.load_m128i();
+            let all_but_left_edge_mask = _mm256_set_m128i(tmp, tmp);
+            let tmp = Bitboard::<S, W, H, WRAP>::ALL_BUT_RIGHT_EDGE_MASK.load_m128i();
+            let all_but_right_edge_mask = _mm256_set_m128i(tmp, tmp);
+            let tmp = Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK.load_m128i();
+            let left_edge_mask = _mm256_set_m128i(tmp, tmp);
+            let tmp = Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK.load_m128i();
+            let right_edge_mask = _mm256_set_m128i(tmp, tmp);
+            let tmp = Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK.load_m128i();
+            let top_edge_mask = _mm256_set_m128i(tmp, tmp);
+            let tmp = Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK.load_m128i();
+            let bottom_edge_mask = _mm256_set_m128i(tmp, tmp);
+
+            let tmp = walkable.load_m128i();
+            let simd_walkable = _mm256_set_m128i(tmp, tmp);
+
+            let mut x0 = state.0.load_m128i();
+            let mut x1 = state.1.load_m128i();
+            let mut simd_state = _mm256_set_m128i(x0, x1);
+            let mut old_simd_state = simd_state.clone();
+
+            loop {
+                turn_counter += 1;
+                debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
+                let mut intermediate = _mm256_or_si256(
+                    simd_state,
+                    _mm256_or_si256(
+                        shl1(_mm256_and_si256(all_but_left_edge_mask, simd_state)),
+                        _mm256_or_si256(
+                            shr1(_mm256_and_si256(all_but_right_edge_mask, simd_state)),
+                            _mm256_or_si256(
+                                shl11(simd_state),
+                                shr11(simd_state)
+                            )
+                        )
+                    )
+                );
+                if WRAP {
+                    intermediate = _mm256_or_si256(
+                        intermediate,
+                        _mm256_or_si256(
+                            shl10(_mm256_and_si256(right_edge_mask, simd_state)),
+                            _mm256_or_si256(
+                                shr10(_mm256_and_si256(left_edge_mask, simd_state)),
+                                _mm256_or_si256(
+                                    shl110(_mm256_and_si256(bottom_edge_mask, simd_state)),
+                                    shr110(_mm256_and_si256(top_edge_mask, simd_state))
+                                )
+                            )
+                        )
+                    );
+                }
+
+                _mm256_storeu2_m128i(&mut x0, &mut x1, intermediate.clone());
+                let swapped = _mm256_set_m128i(x1, x0);
+                simd_state = _mm256_or_si256(
+                    simd_state,
+                    _mm256_and_si256(
+                        simd_walkable,
+                        _mm256_andnot_si256(swapped, intermediate)
+                    )
+                );
+
+                // if closest_food_distance == None && (state.0 & board.food).any() {
+                //     closest_food_distance = Some(turn_counter);
+                // }
+                if turn_counter == 5 {
+                    _mm256_storeu2_m128i(&mut x0, &mut x1, simd_state.clone());
+                    reachable5.0.store_m128i(x0);
+                    reachable5.1.store_m128i(x1);
+                }
+                if is_eq(simd_state, old_simd_state) {
+                    _mm256_storeu2_m128i(&mut x0, &mut x1, simd_state.clone());
+                    state.0.store_m128i(x0);
+                    state.1.store_m128i(x1);
+                    if let Some(dist) = closest_food_distance {
+                        return (state, reachable5, dist as Score)
+                    } else {
+                        return (state, reachable5, W as Score)
+                    }
+                } else {
+                    old_simd_state = simd_state.clone();
+                }
+            }
+        }
+    }
+
+
+
     loop {
         turn_counter += 1;
         debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
@@ -299,7 +444,7 @@ where [(); (W*H+63)/64]: Sized {
                 | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
             enemies |= (Bitboard::<S, W, H, WRAP>::LEFT_EDGE_MASK & state.1) >> (W-1)
                 | (Bitboard::<S, W, H, WRAP>::RIGHT_EDGE_MASK & state.1) << (W-1)
-                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W) // debug changes
+                | (Bitboard::<S, W, H, WRAP>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W)
                 | (Bitboard::<S, W, H, WRAP>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
         }
         state = (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me)));
