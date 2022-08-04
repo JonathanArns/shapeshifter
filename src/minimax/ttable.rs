@@ -206,7 +206,7 @@ mod tests {
         let mut ruleset = std::collections::HashMap::new();
         ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
         let state = api::GameState{
-            game: api::Game{ id: "testing123".to_string(), timeout: 100, ruleset, map: "standard".to_string() },
+            game: api::Game{ id: "testing123".to_string(), timeout: 100, ruleset, map: "standard".to_string(), source: "".to_string() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),

@@ -109,8 +109,8 @@ where [(); (W*H+63)/64]: Sized {
     pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(false);
     pub const TOP_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(true);
     pub const BOTTOM_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(false);
-    pub const LEFT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(false);
-    pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(true);
+    pub const LEFT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(true);
+    pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(false);
     pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = constants::precompute_moves::<S, W, H, WRAP>();
 
     pub fn new() -> Self {
@@ -408,7 +408,7 @@ mod tests {
         let mut ruleset = std::collections::HashMap::new();
         ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
         let state = api::GameState{
-            game: api::Game{ id: "".to_string(), timeout: 100, ruleset, map: "standard".to_string() },
+            game: api::Game{ id: "".to_string(), timeout: 100, ruleset, map: "standard".to_string(), source: "".to_string() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),
