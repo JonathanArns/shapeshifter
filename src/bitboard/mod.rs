@@ -2,7 +2,6 @@ use crate::api::GameState;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use std::rc::Rc;
-use arrayvec::ArrayVec;
 use colored::{Colorize, Color};
 #[cfg(not(feature = "mcts"))]
 use crate::minimax;
@@ -26,6 +25,7 @@ pub enum Gamemode {
     WrappedWithHazard,
     WrappedSpiral,
     WrappedArcadeMaze,
+    WrappedSinkholes,
 
     Constrictor,
 }
@@ -37,6 +37,7 @@ impl Gamemode {
             Some("wrapped") => match state.game.map.as_str() {
                 "arcade_maze" => Self::WrappedArcadeMaze,
                 "hz_spiral" => Self::WrappedSpiral,
+                "sinkholes" => Self::WrappedSinkholes,
                 _ if state.board.hazards.len() == 0 => Self::Wrapped,
                 _ => Self::WrappedWithHazard,
             },
@@ -70,14 +71,23 @@ impl Snake {
     }
 }
 
+pub const fn hz_stack_len<const STACK: bool, const W: usize, const H: usize>() -> usize {
+    if STACK {
+        W*H
+    } else {
+        0
+    }
+}
+
 /// 112 Bytes for an 11x11 Board with 4 Snakes!
 #[derive(Clone)]
-pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool> 
-where [(); (W*H+63)/64]: Sized {
+pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> 
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
     pub snakes: [Snake; S],
     pub food: Bitset<{W*H}>,
-    pub hazards: Bitset<{W*H}>,
+    pub hazards: [u8; hz_stack_len::<HZSTACK, W, H>()],
+    pub hazard_mask: Bitset<{W*H}>,
     pub hazard_dmg: i8,
     pub tt_id: u8,
     pub turn: u16,
@@ -86,8 +96,8 @@ where [(); (W*H+63)/64]: Sized {
     pub apply_moves: Rc<dyn Fn(&mut Self, &[Move; S])>,
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Hash for Bitboard<S, W, H, WRAP>
-where [(); (W*H+63)/64]: Sized {
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Hash for Bitboard<S, W, H, WRAP, HZSTACK>
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     fn hash<T: Hasher>(&self, state: &mut T) {
         self.bodies.hash(state);
         self.food.hash(state);
@@ -102,8 +112,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> Bitboard<S, W, H, WRAP>
-where [(); (W*H+63)/64]: Sized {
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Bitboard<S, W, H, WRAP, HZSTACK>
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
     pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(true);
     pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(false);
@@ -118,7 +128,8 @@ where [(); (W*H+63)/64]: Sized {
             bodies: [Bitset::new(); 3],
             snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; S],
             food: Bitset::new(),
-            hazards: Bitset::new(),
+            hazards: [0; hz_stack_len::<HZSTACK, W, H>()],
+            hazard_mask: Bitset::new(),
             hazard_dmg: 14,
             gamemode: Gamemode::Standard,
             tt_id: 0,
@@ -148,7 +159,10 @@ where [(); (W*H+63)/64]: Sized {
             board.food.set_bit(W*food.y + food.x);
         }
         for hazard in state.board.hazards {
-            board.hazards.set_bit(W*hazard.y + hazard.x);
+            board.hazard_mask.set_bit(W*hazard.y + hazard.x);
+            if HZSTACK {
+                board.hazards[W*hazard.y + hazard.x] += 1;
+            }
         }
         let mut m = 0;
         let mut n;
@@ -287,8 +301,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP>
-where [(); (W*H+63)/64]: Sized {
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP, HZSTACK>
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // draw the board
         for i in 0..H {
@@ -327,8 +341,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool> std::fmt::Display for Bitboard<S, W, H, WRAP>
-where [(); (W*H+63)/64]: Sized {
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> std::fmt::Display for Bitboard<S, W, H, WRAP, HZSTACK>
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // decide on colors for the individual snakes
         let colors = [Color::Red, Color::Green, Color::Cyan, Color::Yellow, Color::Blue, Color::Magenta];
@@ -364,7 +378,7 @@ where [(); (W*H+63)/64]: Sized {
                 tile.push_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
                 tile.push_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
                 let mut colored_tile = tile.color(Color::BrightWhite);
-                if self.hazards.get_bit((W*(H-1-i))+j) {
+                if self.hazard_mask.get_bit(W*(H-1-i)+j) {
                     colored_tile = tile.on_color(Color::White);
                 }
                 if self.food.get_bit((W*(H-1-i))+j) {
@@ -404,7 +418,7 @@ mod tests {
         api::Coord{x, y}
     }
 
-    fn create_board() -> Bitboard<4, 11, 11, true> {
+    fn create_board() -> Bitboard<4, 11, 11, true, false> {
         let mut ruleset = std::collections::HashMap::new();
         ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
         let state = api::GameState{

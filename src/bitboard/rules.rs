@@ -6,52 +6,64 @@ const BODY_COLLISION: i8 = -1;
 const OUT_OF_HEALTH: i8 = -2;
 const HEAD_COLLISION: i8 = -3;
 const EVEN_HEAD_COLLISION: i8 = -4;
-const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = constants::precompute_hazard_spiral();
 
-pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &mut Bitboard<S, W, H, WRAP>,
+pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
     api_state: &GameState
 )
-where [(); (W*H+63)/64]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
         Some("constrictor") => Rc::new(|board, moves| {
             board.turn += 1;
             board.depth += 1;
-            move_heads::<S, W, H, WRAP>(board, moves);
-            perform_collisions::<S, W, H, WRAP>(board);
-            finish_head_movement::<S, W, H, WRAP>(board);
+            move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
+            perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
+            finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
         }),
         _ => match api_state.game.map.as_str() {
+            "sinkholes" if api_state.board.hazards.len() > 0 => {
+                Rc::new(move |board, moves| {
+                    board.turn += 1;
+                    board.depth += 1;
+                    move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
+                    move_tails::<S, W, H, WRAP, HZSTACK>(board);
+                    update_health::<S, W, H, WRAP, HZSTACK>(board);
+                    perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
+                    finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
+                    finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
+                    inc_sinkholes_hazards::<S, W, H, WRAP, HZSTACK>(board, 20);
+                })
+            },
             "hz_spiral" if api_state.board.hazards.len() > 0 => {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
                 Rc::new(move |board, moves| {
                     board.turn += 1;
                     board.depth += 1;
-                    move_heads::<S, W, H, WRAP>(board, moves);
-                    move_tails::<S, W, H, WRAP>(board);
-                    update_health::<S, W, H, WRAP>(board);
-                    perform_collisions::<S, W, H, WRAP>(board);
-                    finish_head_movement::<S, W, H, WRAP>(board);
-                    finish_tail_movement::<S, W, H, WRAP>(board);
-                    inc_spiral_hazards::<S, W, H, WRAP>(board, center);
+                    move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
+                    move_tails::<S, W, H, WRAP, HZSTACK>(board);
+                    update_health::<S, W, H, WRAP, HZSTACK>(board);
+                    perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
+                    finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
+                    finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
+                    inc_spiral_hazards::<S, W, H, WRAP, HZSTACK>(board, center);
                 })
             },
             _ => Rc::new(|board, moves| {
                 board.turn += 1;
                 board.depth += 1;
-                move_heads::<S, W, H, WRAP>(board, moves);
-                move_tails::<S, W, H, WRAP>(board);
-                update_health::<S, W, H, WRAP>(board);
-                perform_collisions::<S, W, H, WRAP>(board);
-                finish_head_movement::<S, W, H, WRAP>(board);
-                finish_tail_movement::<S, W, H, WRAP>(board);
+                move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
+                move_tails::<S, W, H, WRAP, HZSTACK>(board);
+                update_health::<S, W, H, WRAP, HZSTACK>(board);
+                perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
+                finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
+                finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
             }),
         },
     };
 }
 
-fn move_heads<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>, moves: &[Move; S])
-where [(); (W*H+63)/64]: Sized {
+fn move_heads<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>, moves: &[Move; S])
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         let snake = &mut board.snakes[i];
         if snake.is_dead() {
@@ -63,12 +75,12 @@ where [(); (W*H+63)/64]: Sized {
         board.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
         board.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
         // set new head
-        snake.head = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
+        snake.head = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
     }
 }
 
-fn move_tails<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
-where [(); (W*H+63)/64]: Sized {
+fn move_tails<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         let snake = &mut board.snakes[i];
         if snake.is_dead() {
@@ -90,8 +102,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-fn update_health<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
-where [(); (W*H+63)/64]: Sized {
+fn update_health<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut eaten = ArrayVec::<u16, S>::new();
     for i in 0..S {
         let snake = &mut board.snakes[i];
@@ -99,8 +111,12 @@ where [(); (W*H+63)/64]: Sized {
             continue
         }
         // reduce health
-        let is_on_hazard = board.hazards.get_bit(snake.head as usize) as i8;
-        snake.health -= 1 + board.hazard_dmg * is_on_hazard;
+        if HZSTACK {
+            snake.health -= 1 + board.hazard_dmg * board.hazards[snake.head as usize] as i8;
+        } else {
+            let is_on_hazard = board.hazard_mask.get_bit(snake.head as usize) as i8;
+            snake.health -= 1 + board.hazard_dmg * is_on_hazard;
+        }
 
         // feed snake
         if board.food.get_bit(snake.head as usize) {
@@ -122,8 +138,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-pub fn perform_collisions<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
-where [(); (W*H+63)/64]: Sized {
+pub fn perform_collisions<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_dead() {
             continue
@@ -164,8 +180,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-pub fn finish_head_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
-where [(); (W*H+63)/64]: Sized {
+pub fn finish_head_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_alive() {
             // set snake heads in bodies
@@ -176,8 +192,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-pub fn finish_tail_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>)
-where [(); (W*H+63)/64]: Sized {
+pub fn finish_tail_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
             // unset tail bits for snakes that have no curled bodyparts 
@@ -193,8 +209,10 @@ where [(); (W*H+63)/64]: Sized {
 // Map specific rules //
 
 
-pub fn inc_spiral_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &mut Bitboard<S, W, H, WRAP>, center: u16)
-where [(); (W*H+63)/64]: Sized {
+const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = constants::precompute_hazard_spiral();
+
+pub fn inc_spiral_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>, center: u16)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     if board.turn % 3 != 0 || board.turn / 3 > 142 || board.turn == 0 {
         return
     }
@@ -202,6 +220,57 @@ where [(); (W*H+63)/64]: Sized {
     let x = center as i16 % W as i16 + x_shift as i16;
     let y = center as i16 / W as i16 + y_shift as i16;
     if x >= 0 && x < W as i16 && y >= 0 && y < H as i16 {
-        board.hazards.set_bit((center as i16 + x_shift as i16 + y_shift as i16 * W as i16) as usize);
+        board.hazard_mask.set_bit((center as i16 + x_shift as i16 + y_shift as i16 * W as i16) as usize);
+    }
+}
+
+pub fn inc_sinkholes_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
+    expand_every_n_turns: u16,
+)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    if !HZSTACK {
+        return // only works with stacking hazards
+    }
+
+    let start_turn = 1;
+	let max_rings = if W == 7 {
+		3
+	} else if W == 19 {
+		7
+	} else {
+        5
+    };
+    if (board.turn - start_turn) % expand_every_n_turns != 0 {
+		return // this is not a turn to expand
+	}
+    if board.turn > expand_every_n_turns * max_rings {
+		return // the sinkhole is at max size
+	}
+
+    let offset = ((board.turn - start_turn) as f64 / expand_every_n_turns as f64).floor() as u16;
+    let spawn_x = (W as f32 / 2.0).ceil() as u16;
+    let spawn_y = (H as f32 / 2.0).ceil() as u16;
+
+    if board.turn == start_turn {
+        let pos = W * spawn_y as usize + spawn_x as usize;
+        board.hazard_mask.set_bit(pos);
+        board.hazards[pos] += 1;
+    }
+
+    if offset > 0 && offset <= max_rings {
+        for x in (spawn_x-offset)..(spawn_x+offset) {
+            for y in (spawn_y-offset)..(spawn_y+offset) {
+                // don't draw in the corners of the square so we get a rounded effect
+                if !(x == spawn_x-offset && y == spawn_y-offset)
+					&& !(x == spawn_x+offset && y == spawn_y-offset)
+					&& !(x == spawn_x-offset && y == spawn_y+offset)
+					&& !(x == spawn_x+offset && y == spawn_y+offset) {
+                    let pos = W * y as usize + x as usize;
+                    board.hazard_mask.set_bit(pos);
+                    board.hazards[pos] += 1;
+				}
+            }
+        }
     }
 }

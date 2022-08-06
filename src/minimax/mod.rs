@@ -24,8 +24,8 @@ lazy_static! {
 
 pub type Score = i16;
 
-pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::SystemTime) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized {
+pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, deadline: time::SystemTime) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
@@ -33,8 +33,8 @@ where [(); (W*H+63)/64]: Sized {
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, depth: u8) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, depth: u8) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
     let mut node_counter = 0;
     let mut history = [[0; 4]; W*H];
     let start_time = time::Instant::now(); // only used to calculate nodes / second
@@ -80,8 +80,8 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     }
 }
 
-pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool>(board: &Bitboard<S, W, H, WRAP>, deadline: time::SystemTime) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
+pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, deadline: time::SystemTime) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
@@ -155,8 +155,8 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
     (best_move, best_score, depth)
 }
 
-pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &Bitboard<S, W, H, WRAP>,
+pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
     mv: Move,
@@ -166,7 +166,7 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     mut alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
     if time::SystemTime::now() > deadline {
         return None
     }
@@ -305,10 +305,10 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {  // min call
 
 /// Used for quiescence search, to determine, if the position is stable and can be evaluated, or if
 /// search must continue.
-fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
+fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     mode: Gamemode
-) -> (u8, fn(&Bitboard<S, W, H, WRAP>) -> bool)
-where [(); (W*H+63)/64]: Sized {
+) -> (u8, fn(&Bitboard<S, W, H, WRAP, HZSTACK>) -> bool)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match mode {
         Gamemode::WrappedArcadeMaze => (20, |board| {
             let mut moves = 1;
@@ -329,7 +329,7 @@ where [(); (W*H+63)/64]: Sized {
                     return false
                 }
                 for i in 0..4 {
-                    if let Some(pos) = Bitboard::<S, W, H, WRAP>::MOVES_FROM_POSITION[snake.head as usize][i] {
+                    if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[snake.head as usize][i] {
                         if board.food.get_bit(pos as usize) {
                             return false
                         }
@@ -342,11 +342,11 @@ where [(); (W*H+63)/64]: Sized {
 }
 
 /// Returns None if it received a timeout from stop_receiver.
-pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &Bitboard<S, W, H, WRAP>,
+pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
-    is_stable: fn (&Bitboard<S, W, H, WRAP>) -> bool,
+    is_stable: fn (&Bitboard<S, W, H, WRAP, HZSTACK>) -> bool,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
     history: &mut [[u64; 4]; W*H],
@@ -354,7 +354,7 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
     if time::SystemTime::now() > deadline {
         return None
     }
