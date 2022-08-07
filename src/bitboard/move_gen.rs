@@ -4,7 +4,10 @@ use arrayvec::ArrayVec;
 #[cfg(feature = "mcts")]
 use rand::Rng;
 
-pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, snake_index: usize) -> ArrayVec<Move, 4>
+pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    snake_index: usize
+) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
@@ -57,63 +60,6 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     moves
 }
 
-/// Can never return a move that moves out of bounds on the board on unrwapped boards,
-/// because that would cause a panic elsewhere.
-#[allow(unused)]
-pub fn slow_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, pos: u16) -> ArrayVec<Move, 4>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-    let mut moves = ArrayVec::<Move, 4>::new();
-    let mut some_legal_move = Move::Left;
-
-    if WRAP {
-        let move_to = (pos as usize + W) % (W*H);
-        if !board.bodies[0].get_bit(move_to) {
-            moves.push(Move::Up);
-        }
-        let move_to = if W > pos as usize { W*(H-1) + pos as usize } else { pos as usize - W };
-        if !board.bodies[0].get_bit(move_to) {
-            moves.push(Move::Down);
-        }
-        let move_to = if pos as usize % W == W-1 { pos as usize - (W-1) } else { pos as usize + 1};
-        if !board.bodies[0].get_bit(move_to) {
-            moves.push(Move::Right);
-        }
-        let move_to = if pos as usize % W == 0 { pos as usize + (W-1) } else { pos as usize - 1 };
-        if !board.bodies[0].get_bit(move_to) {
-            moves.push(Move::Left);
-        }
-    } else {
-        if pos < (W * (H-1)) as u16 {
-            some_legal_move = Move::Up;
-            if !board.bodies[0].get_bit(pos as usize + W) {
-                moves.push(Move::Up);
-            }
-        }
-        if pos >= W as u16 {
-            some_legal_move = Move::Down;
-            if !board.bodies[0].get_bit(pos as usize - W) {
-                moves.push(Move::Down);
-            }
-        }
-        if pos % (W as u16) < (W as u16 - 1) {
-            some_legal_move = Move::Right;
-            if !board.bodies[0].get_bit(pos as usize + 1) {
-                moves.push(Move::Right);
-            }
-        }
-        if pos % (W as u16) > 0 {
-            some_legal_move = Move::Left;
-            if !board.bodies[0].get_bit(pos as usize - 1) {
-                moves.push(Move::Left);
-            }
-        }
-    }
-    if moves.len() == 0 {
-        moves.push(some_legal_move);
-    }
-    moves
-}
-
 pub fn ordered_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     snake_index: usize,
@@ -136,7 +82,10 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 /// been covered at least once.
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
-pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, skip: usize) -> ArrayVec<[Move; S], 4>
+pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    skip: usize
+) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // only generate enough move combinations so that every enemy move appears at least once
     let mut moves = ArrayVec::<[Move; S], 4>::new();
@@ -171,7 +120,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 /// Can skip the first n snakes, their moves will always be Up in the result.
 /// Applies move ordering to the individual moves of each enemy.
 #[allow(unused)]
-pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, skip: usize, history: &[[u64; 4]; W*H]) -> ArrayVec<[Move; S], 4>
+pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    skip: usize,
+    history: &[[u64; 4]; W*H]
+) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
@@ -205,13 +158,17 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 /// Generates all possible move combinations from a position.
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
-pub fn move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, skip: usize) -> Vec<[Move; S]>
+pub fn ordered_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    skip: usize,
+    history: &[[u64; 4]; W*H]
+) -> Vec<[Move; S]>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
         if snake.is_alive() {
-            moves_per_snake.push(allowed_moves(board, j+skip));
+            moves_per_snake.push(ordered_allowed_moves(board, j+skip, history));
         } else {
             let mut none_move = ArrayVec::<_, 4>::new();
             none_move.insert(0, Move::Up);
@@ -240,7 +197,10 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 #[cfg(feature = "mcts")]
-pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, rng: &mut impl Rng) -> [Move; S]
+pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    rng: &mut impl Rng
+) -> [Move; S]
 where [(); (W*H+63)/64]: Sized {
     let moves = limited_move_combinations(board, 0);
     moves[rng.gen_range(0..moves.len())]

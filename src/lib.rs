@@ -5,13 +5,13 @@ extern crate lazy_static;
 extern crate test;
 
 
-mod bitboard;
+pub mod bitboard;
 
 #[cfg(not(feature = "mcts"))]
-mod minimax;
+pub mod minimax;
 
 #[cfg(feature = "mcts")]
-mod uct;
+pub mod uct;
 
 // Public stuff
 
@@ -19,7 +19,7 @@ pub mod api;
 
 pub fn init() {
     #[cfg(all(feature = "tt", not(feature = "mcts")))]
-    minimax::init()
+    minimax::ttable::init()
 }
 
 #[cfg(feature = "training")]

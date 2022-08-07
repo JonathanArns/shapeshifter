@@ -14,6 +14,11 @@ name = "trainer"
 path = "src/training/main.rs"
 required-features = ["training"]
 
+[[bin]]
+name = "analyzer"
+path = "src/analyzer/main.rs"
+required-features = []
+
 [features]
 default = ["tt"]
 spl = []
@@ -42,6 +47,7 @@ arrayvec = "0.7"
 lazy_static = "1.4.0"
 fxhash = "0.2.1"
 colored = "2"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 
 [build]
 rustflags = "-C target-cpu=native"
