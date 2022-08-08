@@ -76,7 +76,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let ((my_area, enemy_area), _, _) = area_control(board);
             score!(
                 turn_progression(board.turn, 1500),
-                2,1,length_diff(board),
+                2,1,capped_length_diff(board, 5),
                 2,10,being_longer(board),
                 8,1,controlled_food_diff(board, &my_area, &enemy_area),
                 0,8,area_diff(&my_area, &enemy_area),
@@ -173,6 +173,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 fn length_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     W as Score * (board.snakes[0].length as Score - largest_enemy_length(board))
+}
+
+fn capped_length_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, cap: Score) -> Score
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    W as Score * (board.snakes[0].length as Score - largest_enemy_length(board)).min(cap)
 }
 
 fn being_longer<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>) -> Score
