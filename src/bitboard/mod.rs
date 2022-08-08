@@ -79,7 +79,6 @@ pub const fn hz_stack_len<const STACK: bool, const W: usize, const H: usize>() -
     }
 }
 
-/// 112 Bytes for an 11x11 Board with 4 Snakes!
 #[derive(Clone)]
 pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> 
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {

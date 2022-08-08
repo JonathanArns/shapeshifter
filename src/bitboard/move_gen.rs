@@ -241,7 +241,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 
 #[cfg(feature = "mcts")]
 pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, rng: &mut impl Rng) -> [Move; S]
-where [(); (W*H+63)/64]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let moves = limited_move_combinations(board, 0);
     moves[rng.gen_range(0..moves.len())]
 }
@@ -319,7 +319,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state)
+        Bitboard::<4, 11, 11, true, false>::from_gamestate(state)
     }
 
     #[bench]
