@@ -10,7 +10,8 @@ const MAX_SIMUL_GAMES: usize = 3;
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.
-static mut TABLES: Option<Vec<Vec<Entry>>> = None;
+// static mut TABLES: Option<Vec<Vec<Entry>>> = None;
+static mut TABLE: Option<Vec<Entry>> = None;
 
 /// The Pair holds the next tt_id to give out and a list of game IDs.
 /// The index of a game ID is the tt_id of that game.
@@ -19,8 +20,8 @@ static mut GAME_IDS: Option<Mutex<(u8, Vec<String>)>> = None;
 /// Initializes an empty transposition table.
 pub fn init() {
     unsafe {
-        if let None = TABLES {
-            TABLES = Some(vec![vec![Entry{data: 0, key: 0}; TT_LENGTH]; MAX_SIMUL_GAMES]);
+        if let None = TABLE {
+            TABLE = Some(vec![Entry{data: 0, key: 0}; TT_LENGTH*MAX_SIMUL_GAMES]);
         }
         if let None = GAME_IDS {
             GAME_IDS = Some(Mutex::new((0, vec!["".to_string(); MAX_SIMUL_GAMES])));
@@ -57,12 +58,15 @@ pub fn get_tt_id(game_id: String) -> u8 {
     }
 }
 
+fn index(tt_id: u8, key: u64) -> usize {
+    tt_id as usize * TT_LENGTH + (key & TT_MASK) as usize
+}
+
 /// Get an entry from the transposition table
 pub fn get(key: u64, tt_id: u8) -> Option<Entry> {
     unsafe {
-        if let Some(tables) = &TABLES {
-            let index = key & TT_MASK;
-            let entry = tables[tt_id as usize][index as usize];
+        if let Some(table) = &TABLE {
+            let entry = table[index(tt_id, key)];
             if entry.matches_key(key) {
                 return Some(entry)
             }
@@ -82,13 +86,13 @@ pub fn insert<const S: usize>(
     best_moves: [Move; S]
 ) {
     unsafe {
-        if let Some(tables) = &mut TABLES {
-            let index = key & TT_MASK;
-            let entry = tables[tt_id as usize][index as usize];
+        if let Some(table) = &mut TABLE {
+            let index = index(tt_id, key);
+            let entry = table[index];
             if entry.matches_key(key) && entry.get_depth() > depth {
                 return
             }
-            tables[tt_id as usize][index as usize] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
+            table[index] = Entry::new(key, score, is_lower_bound, is_upper_bound, depth, best_moves);
         }
     }
 }
@@ -188,114 +192,5 @@ impl Entry {
     #[allow(unused)]
     pub fn is_exact(&self) -> bool {
         (self.data >> Self::LOWER_BOUND_SHIFT) & 0b_11 == 0
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use test::Bencher;
-    use crate::bitboard::*;
-    use crate::api;
-
-    fn c(x: usize, y: usize) -> api::Coord {
-        api::Coord{x, y}
-    }
-
-    fn create_board() -> Bitboard<4, 11, 11, true> {
-        let mut ruleset = std::collections::HashMap::new();
-        ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
-        let state = api::GameState{
-            game: api::Game{ id: "testing123".to_string(), timeout: 100, ruleset, map: "standard".to_string(), source: "".to_string() },
-            turn: 157,
-            you: api::Battlesnake{
-                id: "a".to_string(),
-                name: "a".to_string(),
-                shout: None,
-                squad: None,
-                health: 100,
-                length: 11,
-                head: c(5,2),
-                body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
-            },
-            board: api::Board{
-                height: 11,
-                width: 11,
-                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
-                hazards: vec![],
-                snakes: vec![
-                    api::Battlesnake{
-                        id: "a".to_string(),
-                        name: "a".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 100,
-                        length: 11,
-                        head: c(5,2),
-                        body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
-                    },  
-                    api::Battlesnake{
-                        id: "b".to_string(),
-                        name: "b".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 12,
-                        head: c(3,4),
-                        body: vec![c(3,4), c(2,4), c(2,5), c(3, 5), c(3,6), c(3,7), c(3,8), c(4,8), c(4,7), c(4,6), c(4,5), c(4,4)],
-                    },  
-                    api::Battlesnake{
-                        id: "c".to_string(),
-                        name: "c".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 3,
-                        head: c(6,7),
-                        body: vec![c(6,7), c(7,7), c(8,7)],
-                    },  
-                    api::Battlesnake{
-                        id: "d".to_string(),
-                        name: "d".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 3,
-                        head: c(9,9),
-                        body: vec![c(9,9), c(9,8), c(8,8)],
-                    },  
-                ],
-            },
-        };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state)
-    }
-    
-    #[bench]
-    fn bench_tt_access(b: &mut Bencher) {
-        let board = create_board();
-        super::init();
-        let key = super::hash(&board);
-        b.iter(|| {
-            super::get(key, board.tt_id)
-        })
-    }
-
-    #[bench]
-    fn bench_tt_hash(b: &mut Bencher) {
-        let board = create_board();
-        super::init();
-        b.iter(|| {
-            super::hash(&board)
-        })
-    }
-
-    #[bench]
-    fn bench_tt_insert(b: &mut Bencher) {
-        let board = create_board();
-        super::init();
-        let key = super::hash(&board);
-        b.iter(|| {
-            super::insert(key, board.tt_id, 0, false, true, 5, [Move::Up])
-        })
     }
 }
