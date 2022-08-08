@@ -33,23 +33,33 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, depth: u8) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+/// An iterative deepening MTD(f)
+pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    target_depth: u8
+) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut node_counter = 0;
     let mut history = [[0; 4]; W*H];
-    let start_time = time::Instant::now(); // only used to calculate nodes / second
-    let deadline = time::SystemTime::now() + time::Duration::from_secs(5);
-    let mut best_move = Move::Up;
-    let mut best_score = Score::MIN+1;
-    let mut enemy_moves = ordered_limited_move_combinations(board, 1, &history);
     let my_moves = ordered_allowed_moves(board, 0, &history);
-    let mut best = Score::MIN+1;
+    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut best_move = my_moves[0];
+    let start_time = time::Instant::now(); // used to calculate nodes / second
+    let deadline = time::SystemTime::now() + time::Duration::from_millis(500000);
+    let mut best_score = Score::MIN+1;
     for mv in &my_moves {
-        let score = alphabeta(board, &mut node_counter, deadline, *mv, &mut enemy_moves, &mut history, depth, Score::MIN+1, Score::MAX).unwrap();
-        if score > best {
-            best = score;
+        let mut guess = 0;
+        for depth in 1..=target_depth {
+            let mut bounds = [Score::MIN, Score::MAX];
+            while bounds[0] < bounds[1] {
+                let beta = guess + (guess == bounds[0]) as Score;
+                guess = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, &mut history, depth, beta-1, beta).unwrap();
+                bounds[(guess < beta) as usize] = guess;
+            }
+        }
+        if guess > best_score {
+            best_score = guess;
             best_move = *mv;
-            best_score = best;
         }
     }
     info!(
@@ -59,11 +69,11 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
         search.nodes_per_second = (node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos())) as u64,
         search.best_move = ?best_move,
         search.score = best_score,
-        search.depth = depth,
+        search.depth = target_depth,
         search.time_used = time::Instant::now().duration_since(start_time).as_millis() as u64,
         "fixed_depth_search_finished"
     );
-    (best_move, best_score, depth)
+    (best_move, best_score, target_depth)
 }
 
 fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
