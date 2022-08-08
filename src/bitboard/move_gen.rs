@@ -158,6 +158,46 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 /// Generates all possible move combinations from a position.
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
+pub fn move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    skip: usize
+) -> Vec<[Move; S]>
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    // get moves for each enemy
+    let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
+    for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
+        if snake.is_alive() {
+            moves_per_snake.push(allowed_moves(board, j+skip));
+        } else {
+            let mut none_move = ArrayVec::<_, 4>::new();
+            none_move.insert(0, Move::Up);
+            moves_per_snake.push(none_move);
+        }
+    }
+
+    // kartesian product of the possible moves to get the possible combinations
+    let mut moves: Vec<[Move; S]> = Vec::with_capacity(1 + S.pow(S as u32));
+    moves.push([Move::Up; S]);
+    let mut moves_start;
+    let mut moves_end = 0;
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        moves_start = moves_end;
+        moves_end = moves.len();
+        for mv in snake_moves.iter() {
+            for j in moves_start..moves_end {
+                let mut tmp = moves[j];
+                tmp[i+skip] = *mv;
+                moves.push(tmp);
+            }
+        }
+    }
+    moves.drain(0..moves_end);
+    moves
+}
+
+/// Generates all possible move combinations from a position.
+/// Can skip the first n snakes, their moves will always be Up in the result.
+#[allow(unused)]
 pub fn ordered_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     skip: usize,
@@ -197,11 +237,8 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 #[cfg(feature = "mcts")]
-pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
-    rng: &mut impl Rng
-) -> [Move; S]
-where [(); (W*H+63)/64]: Sized {
+pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, rng: &mut impl Rng) -> [Move; S]
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let moves = limited_move_combinations(board, 0);
     moves[rng.gen_range(0..moves.len())]
 }
@@ -279,7 +316,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state)
+        Bitboard::<4, 11, 11, true, false>::from_gamestate(state)
     }
 
     #[bench]
