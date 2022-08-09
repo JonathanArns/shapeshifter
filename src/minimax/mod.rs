@@ -76,6 +76,65 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     (best_move, best_score, target_depth)
 }
 
+/// An iterative deepening MTD(f)
+pub fn mtdf<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    deadline: time::SystemTime
+) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let start_time = time::Instant::now(); // used to calculate nodes / second
+    let mut node_counter = 0;
+    let mut rng = rand::thread_rng();
+    let mut depth = 1;
+    let mut history = [[0; 4]; W*H];
+    let mut my_moves = allowed_moves(board, 0);
+    my_moves.shuffle(&mut rng);
+    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut best_move = my_moves[0];
+    let mut best_score = Score::MIN+1;
+    'outer_loop: loop {
+        let mut best_move_candidate = my_moves[0];
+        let mut best_score_candidate = Score::MIN+1;
+        for mv in &my_moves {
+            let mut guess = 0;
+            let mut bounds = [Score::MIN, Score::MAX];
+            while bounds[0] < bounds[1] {
+                let beta = guess + (guess == bounds[0]) as Score;
+                if let Some(score) = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, &mut history, depth, beta-1, beta) {
+                    guess = score;
+                    bounds[(guess < beta) as usize] = guess;
+                } else {
+                    break 'outer_loop
+                }
+            }
+            if guess > best_score_candidate {
+                best_score_candidate = guess;
+                best_move_candidate = *mv;
+            }
+        }
+        // if best_score_candidate > best_score {
+            best_score = best_score_candidate;
+            best_move = best_move_candidate;
+        // }
+        if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX {
+            break // Our last best move resulted in a terminal state, so we don't need to search deeper
+        }
+        depth += 1;
+    }
+    info!(
+        game.turn = board.turn,
+        game.mode = ?board.gamemode,
+        search.nodes_total = node_counter,
+        search.nodes_per_second = (node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos())) as u64,
+        search.best_move = ?best_move,
+        search.score = best_score,
+        search.depth = depth,
+        search.time_used = time::Instant::now().duration_since(start_time).as_millis() as u64,
+        "fixed_depth_search_finished"
+    );
+    (best_move, best_score, depth)
+}
+
 fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     if prev_guess > alpha && prev_guess < beta {
         return prev_guess
@@ -90,8 +149,11 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     }
 }
 
-pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, deadline: time::SystemTime) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    deadline: time::SystemTime
+) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
@@ -330,6 +392,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             }
             moves > 2
         }),
+        Gamemode::Constrictor => (0, |_| true),
         _ => (3, |board| {
             for snake in board.snakes {
                 if snake.is_dead() {
