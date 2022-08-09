@@ -62,7 +62,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
             score!(
-                turn_progression(board.turn, 500),
+                turn_progression(board.turn, 0, 500),
                 1,1,me.health as Score,
                 2,0,length_diff(board),
                 2,0,controlled_food_diff(board, &my_area, &enemy_area),
@@ -75,7 +75,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             // genetically learned for duels
             let ((my_area, enemy_area), _, _) = area_control(board);
             score!(
-                turn_progression(board.turn, 1500),
+                turn_progression(board.turn, 0, 1500),
                 2,1,capped_length_diff(board, 5),
                 2,10,being_longer(board),
                 8,1,controlled_food_diff(board, &my_area, &enemy_area),
@@ -86,7 +86,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         Gamemode::Constrictor => {
             let ((my_area, enemy_area), (_, _), _) = area_control(board);
             score!(
-                turn_progression(board.turn, 1),
+                turn_progression(board.turn, 0, 1),
                 1,1,area_diff(&my_area, &enemy_area),
             )
         }
@@ -94,7 +94,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
-                turn_progression(board.turn, 800),
+                turn_progression(board.turn, 0, 800),
                 1,2,me.health as Score,
                 -1,-2,lowest_enemy_health(board),
                 2,2,length_diff(board),
@@ -108,7 +108,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
             score!(
-                turn_progression(board.turn, 800),
+                turn_progression(board.turn, 0, 800),
                 1,2,me.health as Score,
                 -1,-2,lowest_enemy_health(board),
                 2,2,length_diff(board),
@@ -140,8 +140,8 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 
-fn turn_progression(turns: u16, late_game_start: i16) -> f64 {
-    (turns as f64 / late_game_start as f64).min(1.0)
+fn turn_progression(turns: u16, early_game_end: i16, late_game_start: i16) -> f64 {
+    ((turns as i16 - early_game_end) as f64 / (late_game_start - early_game_end) as f64).min(1.0)
 }
 
 fn lowest_enemy_health<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>) -> Score
