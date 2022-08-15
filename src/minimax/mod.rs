@@ -6,9 +6,12 @@ use std::time;
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
 use tracing::{info, debug};
+use tokio::task;
+use tokio::join;
 
 mod eval;
 mod ttable;
+mod full_width;
 
 pub use ttable::{init, get_tt_id};
 #[cfg(feature = "training")]
@@ -24,12 +27,15 @@ lazy_static! {
 
 pub type Score = i16;
 
-pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, deadline: time::SystemTime) -> (Move, Score, u8)
+pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    deadline: time::SystemTime
+) -> (Move, Score, u8)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
-        best_node_search(board, deadline)
+        best_node_search(board, deadline, 1)
     }
 }
 
@@ -149,11 +155,59 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     }
 }
 
-pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+pub async fn lazy_smp<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     deadline: time::SystemTime
 ) -> (Move, Score, u8)
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let tmp = board.clone();
+    let x = task::spawn_blocking(move || { best_node_search(&tmp, deadline, 1) });
+    let tmp = board.clone();
+    let y = task::spawn_blocking(move || { best_node_search(&tmp, deadline, 2) });
+    let tmp = board.clone();
+    let z = task::spawn_blocking(move || { best_node_search(&tmp, deadline, 3) });
+    let tmp = board.clone();
+    let a = task::spawn_blocking(move || { best_node_search(&tmp, deadline, 4) });
+    let (a, b, c, d) = join!(
+        x, y, z, a
+    );
+    let (a, b, c, d) = (a.unwrap(), b.unwrap(), c.unwrap(), d.unwrap());
+    let depth = a.2.max(b.2).max(c.2).max(d.2);
+    if a.2 == depth {
+        a
+    } else if b.2 == depth {
+        b
+    } else if c.2 == depth {
+        c
+    } else {
+        d
+    }
+}
+
+pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    deadline: time::SystemTime,
+    start_depth: u8,
+) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let mut my_allowed_moves = if S > 2 {
+        let losses_at_depth = full_width::paranoid_loss_prevention(board, deadline-time::Duration::from_millis(15), 1);
+        let tmp_moves = allowed_moves(&board, 0);
+        let mut my_allowed_moves = ArrayVec::<Move, 4>::new();
+        for mv in &tmp_moves {
+            if losses_at_depth[mv.to_int() as usize] == None {
+                my_allowed_moves.push(*mv)
+            }
+        }
+        if my_allowed_moves.len() == 0 {
+            tmp_moves
+        } else {
+            my_allowed_moves
+        }
+    } else {
+        allowed_moves(&board, 0)
+    };
+
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
@@ -161,7 +215,22 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 
     let board = board.clone();
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
-    let mut my_allowed_moves = allowed_moves(&board, 0);
+
+
+
+    // let tmp_moves = allowed_moves(&board, 0);
+    // let mut my_allowed_moves = ArrayVec::<Move, 4>::new();
+    // for mv in &tmp_moves {
+    //     if losses_at_depth[mv.to_int() as usize] == None {
+    //         my_allowed_moves.push(*mv)
+    //     }
+    // }
+    // if my_allowed_moves.len() == 0 {
+    //     my_allowed_moves = tmp_moves;
+    // }
+
+
+
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
         debug!(
@@ -175,7 +244,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 
     let mut best_move = my_allowed_moves[0];
     let mut best_score = Score::MIN+1;
-    let mut depth = 1;
+    let mut depth = start_depth;
 
     let mut last_test = 0;
     'outer_loop: loop {

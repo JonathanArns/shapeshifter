@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use std::rc::Rc;
+use std::sync::Arc;
 use super::*;
 
 const BODY_COLLISION: i8 = -1;
@@ -13,7 +13,7 @@ pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: 
 )
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
-        Some("constrictor") => Rc::new(|board, moves| {
+        Some("constrictor") => Arc::new(|board, moves| {
             board.turn += 1;
             board.depth += 1;
             move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
@@ -22,7 +22,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         }),
         _ => match api_state.game.map.as_str() {
             "sinkholes" if api_state.board.hazards.len() > 0 => {
-                Rc::new(move |board, moves| {
+                Arc::new(move |board, moves| {
                     board.turn += 1;
                     board.depth += 1;
                     move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
@@ -36,7 +36,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             },
             "hz_spiral" if api_state.board.hazards.len() > 0 => {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
-                Rc::new(move |board, moves| {
+                Arc::new(move |board, moves| {
                     board.turn += 1;
                     board.depth += 1;
                     move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
@@ -48,7 +48,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                     inc_spiral_hazards::<S, W, H, WRAP, HZSTACK>(board, center);
                 })
             },
-            _ => Rc::new(|board, moves| {
+            _ => Arc::new(|board, moves| {
                 board.turn += 1;
                 board.depth += 1;
                 move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
