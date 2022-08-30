@@ -27,9 +27,6 @@ The following manual of battlesnake play applies.
 		battlesnake play --help
 		exit
 		;;
-	-v )
-		verbose="yes"
-		;;
 	--version )
 		echo $version
 		exit
@@ -47,11 +44,17 @@ esac; shift; done
 
 # run x games in a loop and count the wins of each snake
 for ((i=0; i<x; i++)); do
-	echo -ne "progress: $i/$x\r"
+	# print the progress
+	tput -x clear
+	for snake in "${snakes[@]}"; do
+		echo "$snake : ${snake_scores[$snake]}"
+	done
+	echo "draw : ${snake_scores["draw"]}"
+	echo " "
+	echo "progress: $i/$x"
+
+	# run game
 	result=$(battlesnake play $(echo "$params") 2>&1 | grep "Game completed")
-	if [[ -n "$verbose" ]]; then
-		echo "$result"
-	fi
 	if [[ $result =~ .*draw.* ]]; then
 		snake_scores["draw"]=$((snake_scores["draw"] + 1))
 	fi
@@ -62,7 +65,8 @@ for ((i=0; i<x; i++)); do
 	done
 done
 
-# print the amount of wins of each snake
+tput rc
+tput ed
 echo " "
 for snake in "${snakes[@]}"; do
 	echo "$snake : ${snake_scores[$snake]}"
