@@ -1,14 +1,15 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
+use serde_json;
 
 macro_rules! score {
     ($progress:expr , $( $w0:expr, $w1:expr, $feat:expr ),* $(,)?) => {
         {
-            let mut early_score: Score = 0;
-            let mut late_score: Score = 0;
+            let mut early_score: i32 = 0;
+            let mut late_score: i32 = 0;
             $(
-                early_score += $w0 * $feat;
-                late_score += $w1 * $feat;
+                early_score += ($w0 * $feat) as i32;
+                late_score += ($w1 * $feat) as i32;
             )*
             (early_score as f64 * (1.0 - $progress) + late_score as f64 * $progress).floor() as Score
         }
@@ -24,32 +25,40 @@ pub unsafe fn set_training_weights(weights: Vec<Vec<Score>>) {
 }
 
 #[cfg(feature = "training")]
-pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool>(
-    board: &Bitboard<S, W, H, WRAP>
+pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
 ) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     unsafe {
         if let Some(weights) = &TRAINING_WEIGHTS {
             let id = board.tt_id as usize;
-            let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
-            score!(
-                turn_progression(board.turn, weights[id][0]),
-                weights[id][1],weights[id][2],me.health as Score,
-                weights[id][3],weights[id][4],lowest_enemy_health(board),
-                weights[id][5],weights[id][6],length_diff(board),
-                weights[id][7],weights[id][8],being_longer(board),
-                weights[id][9],weights[id][10],controlled_food_diff(board, &my_area, &enemy_area),
-                weights[id][11],weights[id][12],area_diff(&my_area, &enemy_area),
-                weights[id][13],weights[id][14],area_diff(&my_close_area, &enemy_close_area),
-                weights[id][15],weights[id][16],non_hazard_area_diff(board, &my_area, &enemy_area),
-                weights[id][17],weights[id][18],(W as Score - closest_food_distance),
-                weights[id][19],weights[id][20],controlled_tail_diff(board, &my_area, &enemy_area),
-            )
+            eval_with_weights(board, &weights[id])
         } else {
             panic!("no training weights set, but using training eval")
         }
     }
+}
+
+pub fn eval_with_weights<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    weights: &Vec<Score>,
+) -> Score
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let me = board.snakes[0];
+    let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+    score!(
+        turn_progression(board.turn, weights[0], weights[1]),
+        weights[2],weights[3],me.health as Score,
+        weights[4],weights[5],lowest_enemy_health(board),
+        weights[6],weights[7],capped_length_diff(board, weights[8]),
+        weights[9],weights[10],being_longer(board),
+        weights[11],weights[12],controlled_food_diff(board, &my_area, &enemy_area),
+        weights[13],weights[14],area_diff(&my_area, &enemy_area),
+        weights[15],weights[16],area_diff(&my_close_area, &enemy_close_area),
+        weights[17],weights[18],non_hazard_area_diff(board, &my_area, &enemy_area),
+        weights[19],weights[20],(W as Score - closest_food_distance),
+        weights[21],weights[22],controlled_tail_diff(board, &my_area, &enemy_area),
+    )
 }
 
 #[cfg(not(feature = "training"))]
@@ -375,7 +384,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state)
+        Bitboard::<4, 11, 11, true, false>::from_gamestate(state)
     }
     
     #[bench]
