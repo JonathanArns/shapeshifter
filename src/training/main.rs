@@ -103,15 +103,17 @@ const SNAKES_PER_GAME: usize = 4;
 const MUTATIONS_PER_GENERATION: usize = 8;
 const TOURNAMENT_SIZE: usize = 2;
 
-const NUM_WEIGHTS: usize = 21;
+const NUM_WEIGHTS: usize = 23;
 const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
-    (0, 2000), // turn progression
+    (0, 2000), // turn progression start
+    (0, 2000), // turn progression end
     (0, 5), // me health early
     (0, 5), // me health late
     (-5, 0), // lowest enemy health early
     (-5, 0), // lowest enemy health late
-    (-3, 5), // length diff early
-    (-3, 5), // length diff late
+    (-3, 5), // capped length diff early
+    (-3, 5), // capped length diff late
+    (0, 10), // length diff cap
     (0, 10), // being longer early
     (0, 10), // being longer late
     (0, 10), // food control diff early
