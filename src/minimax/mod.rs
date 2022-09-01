@@ -392,8 +392,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             }
             moves > 2
         }),
-        Gamemode::Constrictor => (0, |_| true),
-        _ => (3, |board| {
+        Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => (3, |board| {
             for snake in board.snakes {
                 if snake.is_dead() {
                     continue
@@ -411,6 +410,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             }
             true
         }),
+        _ => (0, |_| true),
     }
 }
 
