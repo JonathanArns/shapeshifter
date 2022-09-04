@@ -378,8 +378,8 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
 
     // search extension for forcing sequences
-    if my_moves.len() * next_enemy_moves.len() <= 0 {
-        depth += 1
+    if my_moves.len() * next_enemy_moves.len() <= 1 {
+        depth += 1;
     }
 
     for mv in tt_move.iter().chain(my_moves.iter()) {
