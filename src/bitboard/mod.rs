@@ -250,16 +250,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 
     pub fn is_legal_move(&self, from: u16, mv: Move) -> bool {
-        if WRAP {
-            true
-        } else {
-            match mv {
-                Move::Up => from < W as u16 * (H as u16 - 1),
-                Move::Down => from >= W as u16,
-                Move::Left => from % (W as u16) != 0,
-                Move::Right => from % (W as u16) < W as u16 - 1,
-            }
-        }
+        WRAP || None != Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[from as usize][mv.to_int() as usize]
     }
 
     pub fn is_legal_enemy_moves(&self, mvs: [Move; S]) -> bool {
