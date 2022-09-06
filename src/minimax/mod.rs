@@ -227,10 +227,6 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     (best_move, best_score, depth)
 }
 
-const MULTI_CUT_REDUCTION: u8 = 2;
-const MULTI_CUT_CUTS: u8 = 2;
-const MULTI_CUT_PLY: u8 = 3;
-
 pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     node_counter: &mut u64,
@@ -334,8 +330,6 @@ pub fn ab_max<const S: usize, const W: usize, const H: usize, const WRAP: bool, 
     mut beta: Score
 ) -> Option<Score>
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
-    let mut best_score = Score::MIN;
-    let mut best_move = Move::Up;
     let mut child = board.clone();
     (child.apply_moves.clone())(&mut child, moves);
     *node_counter += 1;
@@ -373,6 +367,8 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     }
 
     // continue search
+    let mut best_score = Score::MIN;
+    let mut best_move = Move::Left;
     let mut seen_moves = ArrayVec::<Move, 4>::default();
     let my_moves = ordered_allowed_moves(&child, 0, history);
     let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
@@ -407,9 +403,10 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             }
         }
     }
-    ttable::insert(tt_key, child.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, [best_move; 1]);
-    // update history heuristic
-    history[board.snakes[0].head as usize][best_move.to_int() as usize] += depth as u64;
+    if best_score > Score::MIN { // important sanity check
+        ttable::insert(tt_key, child.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, [best_move; 1]);
+        history[board.snakes[0].head as usize][best_move.to_int() as usize] += depth as u64;
+    }
     Some(best_score)
 }
 
