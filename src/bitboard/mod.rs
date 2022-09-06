@@ -284,6 +284,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         }
     }
 
+    pub fn kill_snake(&mut self, snake_index: usize) {
+        self.snakes[snake_index].health = -1;
+        self.remove_snake_body(snake_index);
+    }
+
     fn coord_string_from_index(&self, idx: u16) -> String {
         let x = idx % W as u16;
         let y = idx / W as u16;
@@ -473,7 +478,7 @@ mod tests {
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true>::from_gamestate(state)
+        Bitboard::<4, 11, 11, true, false>::from_gamestate(state)
     }
     
     #[bench]

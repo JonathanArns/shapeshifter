@@ -403,7 +403,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             }
         }
     }
-    if best_score > Score::MIN { // important sanity check
+    if best_score > Score::MIN { // sanity check
         ttable::insert(tt_key, child.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, [best_move; 1]);
         history[board.snakes[0].head as usize][best_move.to_int() as usize] += depth as u64;
     }

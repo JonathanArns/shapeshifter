@@ -2,11 +2,6 @@ use arrayvec::ArrayVec;
 use std::rc::Rc;
 use super::*;
 
-const BODY_COLLISION: i8 = -1;
-const OUT_OF_HEALTH: i8 = -2;
-const HEAD_COLLISION: i8 = -3;
-const EVEN_HEAD_COLLISION: i8 = -4;
-
 pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
     api_state: &GameState
@@ -65,17 +60,21 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 fn move_heads<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>, moves: &[Move; S])
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
-        let snake = &mut board.snakes[i];
-        if snake.is_dead() {
+        if board.snakes[i].is_dead() {
             continue
         }
         let mv = moves[i];
         let mv_int = mv.to_int();
         // set direction of new body part
-        board.bodies[1].set(snake.head as usize, (mv_int&1) != 0);
-        board.bodies[2].set(snake.head as usize, (mv_int>>1) != 0);
+        board.bodies[1].set(board.snakes[i].head as usize, (mv_int&1) != 0);
+        board.bodies[2].set(board.snakes[i].head as usize, (mv_int>>1) != 0);
         // set new head
-        snake.head = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[snake.head as usize][mv.to_int() as usize].expect("move out of bounds") as u16;
+        board.snakes[i].head = if let Some(new_head) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[i].head as usize][mv.to_int() as usize] {
+            new_head as u16
+        } else { // this snake has moved out of bounds
+            board.kill_snake(i);
+            board.snakes[i].head
+        };
     }
 }
 
@@ -128,8 +127,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 
         // starvation
         if snake.is_dead() {
-            snake.health = OUT_OF_HEALTH;
-            board.remove_snake_body(i);
+            board.kill_snake(i);
         }
     }
     // remove eaten food
@@ -155,9 +153,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             && board.snakes[j].is_alive()
             && board.snakes[i].head == board.snakes[j].head {
                 if board.snakes[i].length < board.snakes[j].length {
-                    board.snakes[i].curled_bodyparts = 101; // marked for removal
+                    board.snakes[i].curled_bodyparts = 100; // marked for removal
                 } else if board.snakes[i].length == board.snakes[j].length {
-                    board.snakes[i].curled_bodyparts = 102; // marked for removal
+                    board.snakes[i].curled_bodyparts = 100; // marked for removal
                 }
             }
         }
@@ -166,16 +164,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // remove collided snakes
     for i in 0..S {
         // remove collided snakes
-        if board.snakes[i].curled_bodyparts >= 100 {
-            if board.snakes[i].curled_bodyparts == 100 {
-                board.snakes[i].health = BODY_COLLISION;
-            } else if board.snakes[i].curled_bodyparts == 101 {
-                board.snakes[i].health = HEAD_COLLISION;
-            } else if board.snakes[i].curled_bodyparts == 102 {
-                board.snakes[i].health = EVEN_HEAD_COLLISION;
-            }
+        if board.snakes[i].curled_bodyparts == 100 {
             board.snakes[i].curled_bodyparts = 0;
-            board.remove_snake_body(i);
+            board.kill_snake(i);
         }
     }
 }
