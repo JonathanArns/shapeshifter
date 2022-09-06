@@ -154,10 +154,10 @@ fn is_hazard_stacking(state: &GameState) -> bool {
         _ => {
             let mut hazards = vec![false; state.board.width*state.board.height];
             for hz in &state.board.hazards {
-                if hazards[hz.x*hz.y] {
+                if hazards[hz.x+state.board.width*hz.y] {
                     return true
                 }
-                hazards[hz.x*hz.y] = true;
+                hazards[hz.x+state.board.width*hz.y] = true;
             }
             false
         },
