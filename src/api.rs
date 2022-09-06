@@ -141,9 +141,10 @@ where
 }
 
 fn is_wrapped(state: &GameState) -> bool {
-    match state.game.ruleset["name"].as_str() {
-        Some("wrapped") => true,
-        _ => false,
+    if let Some(name) = state.game.ruleset["name"].as_str() && name.contains("wrapped") {
+        true
+    } else {
+        false
     }
 }
 
@@ -361,7 +362,7 @@ pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, start_t
         (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, false>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, false>::from_gamestate(state), deadline)).await.unwrap(),
         (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, false>::from_gamestate(state), deadline)).await.unwrap(),
-        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height),
+        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
     };
 
     #[cfg(feature = "spl")]
@@ -486,7 +487,7 @@ pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, start_t
         (14, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<14, 25, 25, false, false>::from_gamestate(state), deadline)).await.unwrap(),
         (15, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<15, 25, 25, false, false>::from_gamestate(state), deadline)).await.unwrap(),
         (16, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<16, 25, 25, false, false>::from_gamestate(state), deadline)).await.unwrap(),
-        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}", state.board.snakes.len(), state.board.width, state.board.height),
+        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
     };
     Json(mv.to_json())
 }

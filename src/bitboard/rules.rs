@@ -8,9 +8,8 @@ pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: 
 )
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
-        Some("constrictor") => Rc::new(|board, moves| {
+        Some("constrictor") | Some("wrapped_constrictor") => Rc::new(|board, moves| {
             board.turn += 1;
-            board.depth += 1;
             move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
             perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
             finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
@@ -19,7 +18,6 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             "sinkholes" if api_state.board.hazards.len() > 0 => {
                 Rc::new(move |board, moves| {
                     board.turn += 1;
-                    board.depth += 1;
                     move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
                     move_tails::<S, W, H, WRAP, HZSTACK>(board);
                     update_health::<S, W, H, WRAP, HZSTACK>(board);
@@ -33,7 +31,6 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
                 Rc::new(move |board, moves| {
                     board.turn += 1;
-                    board.depth += 1;
                     move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
                     move_tails::<S, W, H, WRAP, HZSTACK>(board);
                     update_health::<S, W, H, WRAP, HZSTACK>(board);
@@ -45,7 +42,6 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             },
             _ => Rc::new(|board, moves| {
                 board.turn += 1;
-                board.depth += 1;
                 move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
                 move_tails::<S, W, H, WRAP, HZSTACK>(board);
                 update_health::<S, W, H, WRAP, HZSTACK>(board);
