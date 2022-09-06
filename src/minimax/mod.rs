@@ -208,7 +208,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
                 break
             }
         }
-        if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX {
+        if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX-1 {
             break // Our last best move resulted in a terminal state, so we don't need to search deeper
         }
         depth += 1;
