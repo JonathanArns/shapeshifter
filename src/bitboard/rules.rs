@@ -11,6 +11,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         Some("constrictor") | Some("wrapped_constrictor") => Rc::new(|board, moves| {
             board.turn += 1;
             move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
+            update_health::<S, W, H, WRAP, HZSTACK>(board);
             perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
             finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
         }),
