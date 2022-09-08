@@ -1,6 +1,5 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
-use serde_json;
 
 macro_rules! score {
     ($progress:expr , $( $w0:expr, $w1:expr, $feat:expr ),* $(,)?) => {
@@ -45,7 +44,7 @@ pub fn eval_with_weights<const S: usize, const W: usize, const H: usize, const W
 ) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let me = board.snakes[0];
-    let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+    let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, weights[25] as usize);
     score!(
         turn_progression(board.turn, weights[0], weights[1]),
         weights[2],weights[3],me.health as Score,
@@ -58,6 +57,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         weights[17],weights[18],non_hazard_area_diff(board, &my_area, &enemy_area),
         weights[19],weights[20],(W as Score - closest_food_distance),
         weights[21],weights[22],controlled_tail_diff(board, &my_area, &enemy_area),
+        weights[23],weights[24],distance_from_center(board),
     )
 }
 
@@ -69,7 +69,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match board.gamemode {
         Gamemode::WrappedArcadeMaze => {
             let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board);
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), _) = area_control(board, 5);
             score!(
                 turn_progression(board.turn, 0, 500),
                 1,1,me.health as Score,
@@ -82,7 +82,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         },
         Gamemode::Standard => {
             // genetically learned for duels
-            let ((my_area, enemy_area), _, _) = area_control(board);
+            let ((my_area, enemy_area), _, _) = area_control(board, 5);
             score!(
                 turn_progression(board.turn, 0, 1500),
                 2,1,capped_length_diff(board, 5),
@@ -93,7 +93,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             )
         },
         Gamemode::Constrictor => {
-            let ((my_area, enemy_area), (_, _), _) = area_control(board);
+            let ((my_area, enemy_area), (_, _), _) = area_control(board, 5);
             score!(
                 turn_progression(board.turn, 0, 1),
                 1,1,area_diff(&my_area, &enemy_area),
@@ -101,7 +101,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         }
         Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => {
             let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5);
             score!(
                 turn_progression(board.turn, 0, 800),
                 1,2,me.health as Score,
@@ -115,7 +115,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         }
         _ => {
             let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board);
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5);
             score!(
                 turn_progression(board.turn, 0, 800),
                 1,2,me.health as Score,
@@ -199,6 +199,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
+fn distance_from_center<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>) -> Score
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    board.distance(board.snakes[0].head, ((W/2)+(H/2)) as u16) as Score
+}
+
 fn controlled_food_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &Bitboard<S, W, H, WRAP, HZSTACK>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
 ) -> Score
@@ -243,12 +248,14 @@ fn get_food_spawns(gamemode: Gamemode) -> &'static [usize] {
     }
 }
 
-fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK>
+// Returns ((my_fill, enemy_fill), (my_area, enemy_area), (my_close_area, enemy_close_area), my_distance_to_food)
+pub fn area_control<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    close_area_distance: usize
 ) -> ((Bitset<{W*H}>, Bitset<{W*H}>), (Bitset<{W*H}>, Bitset<{W*H}>), Score)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut state = (Bitset::<{W*H}>::with_bit_set(board.snakes[0].head as usize), Bitset::<{W*H}>::new());
-    let mut reachable5 = state;
+    let mut close_area = state;
     let walkable = if board.hazard_dmg > 95 {
         !board.hazard_mask & !board.bodies[0] & Bitboard::<S, W, H, WRAP, HZSTACK>::FULL_BOARD_MASK
     } else {
@@ -262,6 +269,31 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut old_state = state; // state at n-1
     let mut turn_counter = 0;
     let mut closest_food_distance = None;
+
+    // let bigger snake move first
+    if S == 2 {
+        if board.snakes[0].length > board.snakes[1].length {
+            turn_counter += 1;
+            let mut me = state.0 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W;
+            if WRAP {
+                me |= (Bitboard::<S, W, H, WRAP, HZSTACK>::LEFT_EDGE_MASK & state.0) >> (W-1)
+                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::RIGHT_EDGE_MASK & state.0) << (W-1)
+                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & state.0) << ((H-1)*W)
+                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
+            }
+            state.0 = state.0 | (walkable & me);
+        } else if board.snakes[0].length < board.snakes[1].length {
+            let mut enemies = state.1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W;
+            if WRAP {
+                enemies |= (Bitboard::<S, W, H, WRAP, HZSTACK>::LEFT_EDGE_MASK & state.1) >> (W-1)
+                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::RIGHT_EDGE_MASK & state.1) << (W-1)
+                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W)
+                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
+            }
+            state.1 = state.1 | (walkable & enemies);
+        }
+    }
+
     loop {
         turn_counter += 1;
         debug_assert!(turn_counter < 10000, "endless loop in area_control\n{:?}\n{:?}", state, old_state);
@@ -281,14 +313,14 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         if closest_food_distance == None && (state.0 & board.food).any() {
             closest_food_distance = Some(turn_counter);
         }
-        if turn_counter == 5 {
-            reachable5 = state;
+        if turn_counter == close_area_distance {
+            close_area = state;
         }
         if state == old_state {
             if let Some(dist) = closest_food_distance {
-                return (state, reachable5, dist as Score)
+                return (state, close_area, dist as Score)
             } else {
-                return (state, reachable5, W as Score)
+                return (state, close_area, W as Score)
             }
         } else {
             old_state = state;
@@ -314,6 +346,7 @@ mod tests {
     use super::*;
     use crate::api;
     use test::Bencher;
+    use serde_json;
 
     fn c(x: usize, y: usize) -> api::Coord {
         api::Coord{x, y}

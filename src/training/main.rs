@@ -97,22 +97,22 @@ async fn main() {
     }
 }
 
-const POPULATION_SIZE: usize = 200;
-const GAMES_PER_GENERATION: usize = 40;
-const SNAKES_PER_GAME: usize = 4;
-const MUTATIONS_PER_GENERATION: usize = 8;
+const POPULATION_SIZE: usize = 150;
+const GAMES_PER_GENERATION: usize = 30;
+const SNAKES_PER_GAME: usize = 2;
+const MUTATIONS_PER_GENERATION: usize = 10;
 const TOURNAMENT_SIZE: usize = 2;
 
-const NUM_WEIGHTS: usize = 23;
+const NUM_WEIGHTS: usize = 26;
 const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
-    (0, 2000), // turn progression start
-    (0, 2000), // turn progression end
-    (0, 5), // me health early
-    (0, 5), // me health late
-    (-5, 0), // lowest enemy health early
-    (-5, 0), // lowest enemy health late
-    (-3, 5), // capped length diff early
-    (-3, 5), // capped length diff late
+    (0, 100), // turn progression start
+    (300, 1500), // turn progression end
+    (0, 10), // me health early
+    (0, 10), // me health late
+    (-10, 0), // lowest enemy health early
+    (-10, 0), // lowest enemy health late
+    (-7, 10), // capped length diff early
+    (-7, 10), // capped length diff late
     (0, 10), // length diff cap
     (0, 10), // being longer early
     (0, 10), // being longer late
@@ -124,10 +124,13 @@ const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
     (0, 10), // close area diff late
     (0, 0), // non hazard area diff early
     (0, 0), // non hazard area diff late
-    (0, 7), // food distance early
-    (0, 7), // food distance late
-    (0, 20), // tail control diff early
-    (0, 20), // tail control diff late
+    (0, 10), // food distance early
+    (0, 10), // food distance late
+    (0, 30), // tail control diff early
+    (0, 30), // tail control diff late
+    (-10, 10), // distance from center early
+    (-10, 10), // distance from center late
+    (0, 10), // close area distance
 ];
 
 struct Entity {
@@ -192,7 +195,7 @@ fn next_generation(mut population: Vec<Entity>) -> Vec<Entity> {
     // selection
     population.sort_by(|a, b| { b.wins.partial_cmp(&a.wins).unwrap() });
     let mut next_population = vec![];
-    for entity in &population[0..(POPULATION_SIZE/10)] {
+    for entity in &population[0..1] {
         next_population.push(Entity{
             wins: 0,
             games: 0,
@@ -226,7 +229,7 @@ fn next_generation(mut population: Vec<Entity>) -> Vec<Entity> {
 }
 
 fn write_generation(population: &Vec<Entity>, generation: usize) -> Result<(), std::io::Error> {
-    let mut file = File::create(format!("new-training-output-{}.txt", generation))?;
+    let mut file = File::create(format!("training-output-{}.txt", generation))?;
     for entity in population {
         writeln!(file, "games: {}, wins: {}, weights: {:?}", entity.games, entity.wins, entity.weights)?;
     };
