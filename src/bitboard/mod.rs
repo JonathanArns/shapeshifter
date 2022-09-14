@@ -33,7 +33,7 @@ pub enum Gamemode {
 impl Gamemode {
     fn from_gamestate(state: &GameState) -> Self {
         match state.game.ruleset["name"].as_str() {
-            Some("constrictor") | Some("wrapped_constrictor") => Self::Constrictor,
+            Some("constrictor") | Some("wrapped-constrictor") => Self::Constrictor,
             Some("wrapped") => match state.game.map.as_str() {
                 "arcade_maze" => Self::WrappedArcadeMaze,
                 "hz_spiral" => Self::WrappedSpiral,

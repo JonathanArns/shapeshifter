@@ -8,7 +8,7 @@ pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: 
 )
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
-        Some("constrictor") | Some("wrapped_constrictor") => Rc::new(|board, moves| {
+        Some("constrictor") | Some("wrapped-constrictor") => Rc::new(|board, moves| {
             board.turn += 1;
             move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
             update_health::<S, W, H, WRAP, HZSTACK>(board);
