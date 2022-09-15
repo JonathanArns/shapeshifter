@@ -45,16 +45,11 @@ esac; shift; done
 # run x games in a loop and count the wins of each snake
 for ((i=0; i<x; i++)); do
 	# print the progress
-	tput -x clear
-	for snake in "${snakes[@]}"; do
-		echo "$snake : ${snake_scores[$snake]}"
-	done
-	echo "draw : ${snake_scores["draw"]}"
-	echo " "
-	echo "progress: $i/$x"
+	echo -ne "progress: $i/$x\r"
 
 	# run game
 	result=$(battlesnake play $(echo "$params") 2>&1 | grep "Game completed")
+	echo "$result"
 	if [[ $result =~ .*draw.* ]]; then
 		snake_scores["draw"]=$((snake_scores["draw"] + 1))
 	fi
@@ -65,8 +60,6 @@ for ((i=0; i<x; i++)); do
 	done
 done
 
-tput rc
-tput ed
 echo " "
 for snake in "${snakes[@]}"; do
 	echo "$snake : ${snake_scores[$snake]}"
