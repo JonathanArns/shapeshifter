@@ -270,29 +270,18 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut turn_counter = 0;
     let mut closest_food_distance = None;
 
-    // let bigger snake move first
-    if S == 2 {
-        if board.snakes[0].length > board.snakes[1].length {
-            turn_counter += 1;
-            let mut me = state.0 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_LEFT_EDGE_MASK & state.0)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_RIGHT_EDGE_MASK & state.0)>>1 | state.0<<W | state.0>>W;
-            if WRAP {
-                me |= (Bitboard::<S, W, H, WRAP, HZSTACK>::LEFT_EDGE_MASK & state.0) >> (W-1)
-                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::RIGHT_EDGE_MASK & state.0) << (W-1)
-                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & state.0) << ((H-1)*W)
-                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & state.0) >> ((H-1)*W);
-            }
-            state.0 = state.0 | (walkable & me);
-        } else if board.snakes[0].length < board.snakes[1].length {
-            let mut enemies = state.1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_LEFT_EDGE_MASK & state.1)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_RIGHT_EDGE_MASK & state.1)>>1 | state.1<<W | state.1>>W;
-            if WRAP {
-                enemies |= (Bitboard::<S, W, H, WRAP, HZSTACK>::LEFT_EDGE_MASK & state.1) >> (W-1)
-                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::RIGHT_EDGE_MASK & state.1) << (W-1)
-                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W)
-                    | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
-            }
-            state.1 = state.1 | (walkable & enemies);
+    let longer = if S == 2 {
+        let x = largest_enemy_length(board);
+        if board.snakes[0].length > x as u8 {
+            Some(true)
+        } else if board.snakes[0].length < x as u8 {
+            Some(false)
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
 
     loop {
         turn_counter += 1;
@@ -309,7 +298,17 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & state.1) << ((H-1)*W)
                 | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & state.1) >> ((H-1)*W);
         }
-        state = (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me)));
+        state = match longer {
+            None => (state.0 | (walkable & (me & !enemies)), state.1 | (walkable & (enemies & !me))),
+            Some(true) => {
+                let x = state.1 | (walkable & (enemies & !me));
+                (state.0 | (walkable & (me & !x)), x)
+            },
+            Some(false) => {
+                let x = state.0 | (walkable & (me & !enemies)); 
+                (x, state.1 | (walkable & (enemies & !x)))
+            },
+        };
         if closest_food_distance == None && (state.0 & board.food).any() {
             closest_food_distance = Some(turn_counter);
         }
