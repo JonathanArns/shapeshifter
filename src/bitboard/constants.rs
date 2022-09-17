@@ -32,6 +32,33 @@ where [(); (W*H+63)/64]: Sized {
     Bitset::<{W*H}>::from_array(arr)
 }
 
+/// Computes ALL_BUT_LEFT_EDGE_MASK and ALL_BUT_RIGHT_EDGE_MASK
+pub const fn checker_board_mask<const W: usize, const H: usize>() -> Bitset<{W*H}>
+where [(); (W*H+63)/64]: Sized {
+    let mut arr = [0_u64; (W*H+63)/64];
+    let mut i = 0;
+    let mut j;
+    loop {
+        if i == H {
+            break
+        }
+        j = 0;
+        loop {
+            if j == W {
+                break
+            }
+            if (i*W+j) % 2 == 0 {
+                let idx = (i*W+j)>>6;
+                let offset = (i*W+j) % 64;
+                arr[idx] |= 1_u64<<offset;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    Bitset::<{W*H}>::from_array(arr)
+}
+
 /// Computes LEFT_EDGE_MASK and RIGHT_EDGE_MASK
 pub const fn vertical_edge_mask<const W: usize, const H: usize>(right: bool) -> Bitset<{W*H}>
 where [(); (W*H+63)/64]: Sized {

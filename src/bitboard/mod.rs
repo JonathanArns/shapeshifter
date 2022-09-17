@@ -26,6 +26,7 @@ pub enum Gamemode {
     WrappedSpiral,
     WrappedArcadeMaze,
     WrappedSinkholes,
+    WrappedIslandsBridges,
 
     Constrictor,
 }
@@ -37,6 +38,7 @@ impl Gamemode {
             Some("wrapped") => match state.game.map.as_str() {
                 "arcade_maze" => Self::WrappedArcadeMaze,
                 "hz_spiral" => Self::WrappedSpiral,
+                "hz_islands_bridges" => Self::WrappedIslandsBridges,
                 "sinkholes" => Self::WrappedSinkholes,
                 _ if state.board.hazards.len() == 0 => Self::Wrapped,
                 _ => Self::WrappedWithHazard,
@@ -113,6 +115,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Bitboard<S, W, H, WRAP, HZSTACK>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
+    pub const CHECKER_BOARD_MASK: Bitset<{W*H}> = constants::checker_board_mask::<W, H>();
     pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(true);
     pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(false);
     pub const TOP_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(true);
@@ -270,15 +273,22 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         while snake.head != tail_pos {
             debug_counter += 1;
             debug_assert!(debug_counter < 10000, "endless loop in remove_snake_body\n{:?}", self);
-            let move_int = self.bodies[1].get_bit(tail_pos as usize) as u8 | (self.bodies[2].get_bit(tail_pos as usize) as u8) << 1;
+            let next_pos = self.next_body_segment(tail_pos);
             self.bodies[0].unset_bit(tail_pos as usize);
             self.bodies[1].unset_bit(tail_pos as usize);
             self.bodies[2].unset_bit(tail_pos as usize);
-            tail_pos = if WRAP {
-                tail_pos as i16 + Move::int_to_index_wrapping(move_int, W, H, tail_pos)
-            } else {
-                tail_pos as i16 + Move::int_to_index(move_int, W)
-            } as u16;
+            tail_pos = next_pos;
+        }
+    }
+
+    // Gets next segment in snake body in head direction.
+    // Does not check if pos is actually on a snake.
+    pub fn next_body_segment(&self, pos: u16) -> u16 {
+        let move_int = self.bodies[1].get_bit(pos as usize) as u8 | (self.bodies[2].get_bit(pos as usize) as u8) << 1;
+        if WRAP {
+            (pos as i16 + Move::int_to_index_wrapping(move_int, W, H, pos)) as u16
+        } else {
+            (pos as i16 + Move::int_to_index(move_int, W)) as u16
         }
     }
 

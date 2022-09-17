@@ -1,4 +1,4 @@
-#![feature(test, generic_const_exprs, label_break_value)]
+#![feature(test, generic_const_exprs, label_break_value, let_chains)]
 
 #[macro_use]
 extern crate lazy_static;
