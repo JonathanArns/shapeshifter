@@ -58,17 +58,7 @@ async fn main() {
         .route("/1/", get(api::handle_index))
         .route("/1/start", post(api::handle_start))
         .route("/1/end", post(api::handle_end))
-        .route("/1/move", post(api::handle_move::<1>))
-
-        .route("/2/", get(api::handle_index))
-        .route("/2/start", post(api::handle_start))
-        .route("/2/end", post(api::handle_end))
-        .route("/2/move", post(api::handle_move::<2>))
-
-        .route("/3/", get(api::handle_index))
-        .route("/3/start", post(api::handle_start))
-        .route("/3/end", post(api::handle_end))
-        .route("/3/move", post(api::handle_move::<3>));
+        .route("/1/move", post(api::handle_move::<1>));
 
     let env_port = env::var("PORT").ok();
     let addr = "0.0.0.0:".to_owned() + env_port.as_ref().map(String::as_str).unwrap_or("8080");
@@ -248,9 +238,9 @@ fn run_games(population: &mut Vec<Entity>) {
 
 fn run_game(snakes: &mut [Entity]) {
     let mut weights: Vec<Vec<i16>> = snakes.iter().map(|entity| { return entity.weights.clone() }).collect();
-    while weights.len() < 4 {
-        weights.push(vec![500, 1, 1, 0, 0, 2, 0, 0, 0, 2, 0, 1, 2, 0, 2, 0, 0, 0, 0, 0, 0])
-    }
+    // while weights.len() < 2 {
+    //     weights.push(vec![500, 1, 1, 0, 0, 2, 0, 0, 0, 2, 0, 1, 2, 0, 2, 0, 0, 0, 0, 0, 0])
+    // }
     unsafe {
         set_training_weights(weights);
     }
@@ -258,20 +248,11 @@ fn run_game(snakes: &mut [Entity]) {
         .arg("play")
         // game settings
         .arg("-t").arg("3")
-        .arg("-m").arg("arcade_maze")
-        .arg("-W").arg("19")
-        .arg("-H").arg("21")
-        .arg("-g").arg("wrapped")
-        .arg("--hazardDamagePerTurn").arg("100")
         // snakes
         .arg("-n").arg("zero")
         .arg("-u").arg("http://localhost:8080/0/")
         .arg("-n").arg("one")
         .arg("-u").arg("http://localhost:8080/1/")
-        .arg("-n").arg("two")
-        .arg("-u").arg("http://localhost:8080/2/")
-        .arg("-n").arg("three")
-        .arg("-u").arg("http://localhost:8080/3/")
         .output()
         .expect("failed to run game");
     let output = String::from_utf8_lossy(&cli_output.stderr);
