@@ -8,6 +8,7 @@ use rand::seq::SliceRandom;
 use tracing::{info, debug};
 
 mod eval;
+mod endgame;
 mod ttable;
 
 pub use ttable::{init, get_tt_id};

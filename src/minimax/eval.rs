@@ -1,5 +1,6 @@
 use crate::bitboard::*;
 use crate::minimax::Score;
+use crate::minimax::endgame;
 
 macro_rules! score {
     ($progress:expr , $( $w0:expr, $w1:expr, $feat:expr ),* $(,)?) => {
@@ -68,17 +69,17 @@ pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool, co
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match board.gamemode {
         Gamemode::WrappedIslandsBridges => {
-            let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5);
+            let ((my_area, enemy_area), _, food_dist) = area_control(board, 5);
+            let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
+            if let Some(score) = endgame::solver(board, &my_area, &enemy_area, my_area_size, enemy_area_size, food_dist) {
+                return score
+            }
             score!(
-                turn_progression(board.turn, 0, 800),
-                1,2,me.health as Score,
-                -1,-2,lowest_enemy_health(board),
-                2,2,length_diff(board),
-                1,1,non_hazard_area_diff(board, &my_area, &enemy_area),
-                3,3,controlled_food_diff(board, &my_area, &enemy_area),
-                2,2,(W as Score - closest_food_distance),
-                0,1,checkered_area_diff(board, &my_area, &enemy_area),
+                turn_progression(board.turn, 0, 1500),
+                50,100,being_longer(board),
+                8,1,controlled_food_diff(board, &my_area, &enemy_area),
+                0,8,my_area_size - enemy_area_size,
+                0,9,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
         Gamemode::WrappedArcadeMaze => {
@@ -96,13 +97,17 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         },
         Gamemode::Standard => {
             // genetically learned for duels
-            let ((my_area, enemy_area), _, _) = area_control(board, 5);
+            let ((my_area, enemy_area), _, food_dist) = area_control(board, 5);
+            let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
+            if let Some(score) = endgame::solver(board, &my_area, &enemy_area, my_area_size, enemy_area_size, food_dist) {
+                return score
+            }
             score!(
                 turn_progression(board.turn, 0, 1500),
                 2,1,capped_length_diff(board, 5),
                 2,10,being_longer(board),
                 8,1,controlled_food_diff(board, &my_area, &enemy_area),
-                0,8,area_diff(&my_area, &enemy_area),
+                0,8,my_area_size - enemy_area_size,
                 0,9,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
@@ -237,23 +242,22 @@ where [(); (N+63)/64]: Sized {
     (*my_area).count_ones() as Score - (*enemy_area).count_ones() as Score
 }
 
+fn checkered_area_size<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>, area: &Bitset<{W*H}>
+) -> Score
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let x = (*area & Bitboard::<S, W, H, WRAP, HZSTACK>::CHECKER_BOARD_MASK).count_ones();
+    let y = (*area & !Bitboard::<S, W, H, WRAP, HZSTACK>::CHECKER_BOARD_MASK).count_ones();
+
+    let over = x.max(y) - x.min(y);
+    (x + y - over + over.min(1)) as i16
+}
+
 fn checkered_area_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &Bitboard<S, W, H, WRAP, HZSTACK>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
 ) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-    let x = (*my_area & Bitboard::<S, W, H, WRAP, HZSTACK>::CHECKER_BOARD_MASK).count_ones();
-    let y = (*my_area & !Bitboard::<S, W, H, WRAP, HZSTACK>::CHECKER_BOARD_MASK).count_ones();
-
-    let over = x.max(y) - x.min(y);
-    let me = (x + y - over + over.min(1)) as i16;
-
-    let x = (*enemy_area & Bitboard::<S, W, H, WRAP, HZSTACK>::CHECKER_BOARD_MASK).count_ones();
-    let y = (*enemy_area & !Bitboard::<S, W, H, WRAP, HZSTACK>::CHECKER_BOARD_MASK).count_ones();
-
-    let over = x.max(y) - x.min(y);
-    let enemy = (x + y - over + over.min(1)) as i16;
-
-    me - enemy
+    checkered_area_size(board, my_area) - checkered_area_size(board, enemy_area)
 }
 
 fn controlled_tail_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
