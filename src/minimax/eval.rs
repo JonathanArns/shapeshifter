@@ -75,11 +75,13 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 return score
             }
             score!(
-                turn_progression(board.turn, 0, 1500),
-                50,100,being_longer(board),
-                8,1,controlled_food_diff(board, &my_area, &enemy_area),
-                0,8,my_area_size - enemy_area_size,
-                0,9,controlled_tail_diff(board, &my_area, &enemy_area),
+                turn_progression(board.turn, 60, 300),
+                -4,0,lowest_enemy_health(board),
+                0,6,being_longer(board),
+                5,8,controlled_food_diff(board, &my_area, &enemy_area),
+                9,9,area_diff(&my_area, &enemy_area),
+                8,0,(W as Score - food_dist),
+                3,0,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
         Gamemode::WrappedArcadeMaze => {
@@ -96,7 +98,6 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             )
         },
         Gamemode::Standard => {
-            // genetically learned for duels
             let ((my_area, enemy_area), _, food_dist) = area_control(board, 5);
             let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
             if let Some(score) = endgame::solver(board, &my_area, &enemy_area, my_area_size, enemy_area_size, food_dist) {

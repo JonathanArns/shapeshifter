@@ -14,39 +14,6 @@ use shapeshifter::{api, set_training_weights};
 
 #[tokio::main]
 async fn main() {
-    // // set up tracing subscriber
-    // let subscriber = Registry::default().with(tracing_subscriber::filter::LevelFilter::INFO);
-
-    // // add honeycomb layer to subscriber if the key is in the environment
-    // // and set as default tracing subscriber
-    // if let Ok(key) = env::var("HONEYCOMB_KEY") {
-    //     let mut map = MetadataMap::new();
-    //     map.insert("x-honeycomb-team", key.parse().unwrap());
-    //     map.insert("x-honeycomb-dataset", "test".parse().unwrap());
-
-    //     let honeycomb_tracer = opentelemetry_otlp::new_pipeline()
-    //         .tracing()
-    //         .with_exporter(opentelemetry_otlp::new_exporter()
-    //             .tonic()
-    //             .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-    //             .with_endpoint("https://api.honeycomb.io")
-    //             .with_metadata(map)
-    //         )
-    //         .install_batch(opentelemetry::runtime::Tokio)
-    //         .expect("setting up honeycomb tracer failed");
-
-    //     // Create a tracing layer with the configured tracer
-    //     let honeycomb_telemetry = tracing_opentelemetry::layer().with_tracer(honeycomb_tracer);
-
-    //     // add to the subscriber and set it as global default
-    //     let honeycomb_subscriber = subscriber.with(honeycomb_telemetry);
-    //     tracing::subscriber::set_global_default(honeycomb_subscriber).expect("setting global default tracing subscriber failed");
-    //     println!("honeycomb subscriber initialized");
-    // } else {
-    //     let stdout_subscriber = subscriber.with(tracing_subscriber::fmt::Layer::default());
-    //     tracing::subscriber::set_global_default(stdout_subscriber).expect("setting global default tracing subscriber failed");
-    // }
-
     shapeshifter::init();
 
     let router = Router::new()
@@ -87,8 +54,8 @@ async fn main() {
     }
 }
 
-const POPULATION_SIZE: usize = 150;
-const GAMES_PER_GENERATION: usize = 30;
+const POPULATION_SIZE: usize = 100;
+const GAMES_PER_GENERATION: usize = 20;
 const SNAKES_PER_GAME: usize = 2;
 const MUTATIONS_PER_GENERATION: usize = 10;
 const TOURNAMENT_SIZE: usize = 2;
@@ -101,26 +68,26 @@ const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
     (0, 10), // me health late
     (-10, 0), // lowest enemy health early
     (-10, 0), // lowest enemy health late
-    (-7, 10), // capped length diff early
-    (-7, 10), // capped length diff late
-    (0, 10), // length diff cap
-    (0, 10), // being longer early
-    (0, 10), // being longer late
+     (0, 0), // capped length diff early
+     (0, 0), // capped length diff late
+     (5, 5), // length diff cap
+    (0, 100), // being longer early
+    (0, 100), // being longer late
     (0, 10), // food control diff early
     (0, 10), // food control diff late
     (0, 10), // area diff early
     (0, 10), // area diff late
-    (0, 10), // close area diff early
-    (0, 10), // close area diff late
-    (0, 0), // non hazard area diff early
-    (0, 0), // non hazard area diff late
+     (0, 0), // close area diff early
+     (0, 0), // close area diff late
+     (0, 0), // non hazard area diff early
+     (0, 0), // non hazard area diff late
     (0, 10), // food distance early
     (0, 10), // food distance late
     (0, 30), // tail control diff early
     (0, 30), // tail control diff late
-    (-10, 10), // distance from center early
-    (-10, 10), // distance from center late
-    (0, 10), // close area distance
+     (0, 0), // distance from center early
+     (0, 0), // distance from center late
+     (5, 5), // close area distance
 ];
 
 struct Entity {
@@ -142,7 +109,7 @@ fn new_population() -> Vec<Entity> {
                         rng.gen_range(WEIGHT_RANGES[i].0..=WEIGHT_RANGES[i].1)
                     } else {
                         0
-                    }
+                    }.min(WEIGHT_RANGES[i].1).max(WEIGHT_RANGES[i].0)
                 ).collect(),
             }
         )
@@ -213,13 +180,13 @@ fn next_generation(mut population: Vec<Entity>) -> Vec<Entity> {
             rng.gen_range(WEIGHT_RANGES[j].0..=WEIGHT_RANGES[j].1)
         } else {
             0
-        };
+        }.min(WEIGHT_RANGES[j].1).max(WEIGHT_RANGES[j].0);
     }
     next_population
 }
 
 fn write_generation(population: &Vec<Entity>, generation: usize) -> Result<(), std::io::Error> {
-    let mut file = File::create(format!("training-output-{}.txt", generation))?;
+    let mut file = File::create(format!("new-training-output-{}.txt", generation))?;
     for entity in population {
         writeln!(file, "games: {}, wins: {}, weights: {:?}", entity.games, entity.wins, entity.weights)?;
     };
@@ -238,9 +205,10 @@ fn run_games(population: &mut Vec<Entity>) {
 
 fn run_game(snakes: &mut [Entity]) {
     let mut weights: Vec<Vec<i16>> = snakes.iter().map(|entity| { return entity.weights.clone() }).collect();
-    // while weights.len() < 2 {
-    //     weights.push(vec![500, 1, 1, 0, 0, 2, 0, 0, 0, 2, 0, 1, 2, 0, 2, 0, 0, 0, 0, 0, 0])
-    // }
+    while weights.len() < 2 {
+        // current standard weights
+        weights.push(vec![0, 1500, 0, 0, 0, 0, 2, 1, 5, 2, 10, 8, 1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 5])
+    }
     unsafe {
         set_training_weights(weights);
     }
@@ -248,6 +216,10 @@ fn run_game(snakes: &mut [Entity]) {
         .arg("play")
         // game settings
         .arg("-t").arg("3")
+        .arg("-g").arg("wrapped")
+        .arg("-m").arg("hz_islands_bridges")
+        .arg("--hazardDamagePerTurn").arg("100")
+        
         // snakes
         .arg("-n").arg("zero")
         .arg("-u").arg("http://localhost:8080/0/")
