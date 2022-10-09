@@ -1,7 +1,7 @@
 use super::*;
 use arrayvec::ArrayVec;
 
-#[cfg(feature = "mcts")]
+// #[cfg(feature = "mcts")]
 use rand::Rng;
 
 pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, snake_index: usize) -> ArrayVec<Move, 4>
@@ -239,7 +239,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     moves
 }
 
-#[cfg(feature = "mcts")]
+// #[cfg(feature = "mcts")]
 pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, rng: &mut impl Rng) -> [Move; S]
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let moves = limited_move_combinations(board, 0);

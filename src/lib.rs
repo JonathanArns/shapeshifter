@@ -10,7 +10,7 @@ mod bitboard;
 #[cfg(not(feature = "mcts"))]
 mod minimax;
 
-#[cfg(feature = "mcts")]
+// #[cfg(feature = "mcts")]
 mod uct;
 
 // Public stuff

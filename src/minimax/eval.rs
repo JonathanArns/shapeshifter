@@ -75,13 +75,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 return score
             }
             score!(
-                turn_progression(board.turn, 60, 300),
-                -4,0,lowest_enemy_health(board),
-                0,6,being_longer(board),
-                5,8,controlled_food_diff(board, &my_area, &enemy_area),
-                9,9,area_diff(&my_area, &enemy_area),
-                8,0,(W as Score - food_dist),
-                3,0,controlled_tail_diff(board, &my_area, &enemy_area),
+                turn_progression(board.turn, 86, 504),
+                -1,0,lowest_enemy_health(board),
+                0,1,controlled_food_diff(board, &my_area, &enemy_area),
+                5,10,area_diff(&my_area, &enemy_area),
+                9,2,(W as Score - food_dist),
             )
         },
         Gamemode::WrappedArcadeMaze => {

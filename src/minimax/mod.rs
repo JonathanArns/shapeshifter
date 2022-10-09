@@ -1,5 +1,6 @@
 use crate::bitboard::*;
 use crate::bitboard::move_gen::*;
+use crate::uct;
 
 use std::env;
 use std::time;
@@ -30,7 +31,14 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
-        best_node_search(board, deadline)
+        let (mv, score, depth) = best_node_search(board, deadline);
+
+        #[cfg(not(feature = "training"))]
+        if score < -30000 {
+            let (mcts_mv, mcts_wr) = uct::search(board, deadline);
+            return (mcts_mv, score, depth)
+        }
+        (mv, score, depth)
     }
 }
 

@@ -10,7 +10,7 @@ use std::time;
 use crate::bitboard;
 #[cfg(not(feature = "mcts"))]
 use crate::minimax;
-#[cfg(feature = "mcts")]
+// #[cfg(feature = "mcts")]
 use crate::uct;
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -194,18 +194,6 @@ pub async fn handle_move<const UNUSED: u8>(Json(state): Json<GameState>, start_t
         (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, 11, 11, false, false>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, 11, 11, false, false>::from_gamestate(state), deadline)).await.unwrap(),
         (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, 11, 11, false, false>::from_gamestate(state), deadline)).await.unwrap(),
-
-        // sinkholes
-        (1, 11, 11, true, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, 11, 11, true, true>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, 11, 11, true, true>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, 11, 11, true, true>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, 11, 11, true, true>::from_gamestate(state), deadline)).await.unwrap(),
-
-        // sinkholes
-        (1, 11, 11, false, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, 11, 11, false, true>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, 11, 11, false, true>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, 11, 11, false, true>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, 11, 11, false, true>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height),
     };
 

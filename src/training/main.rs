@@ -25,7 +25,17 @@ async fn main() {
         .route("/1/", get(api::handle_index))
         .route("/1/start", post(api::handle_start))
         .route("/1/end", post(api::handle_end))
-        .route("/1/move", post(api::handle_move::<1>));
+        .route("/1/move", post(api::handle_move::<1>))
+
+        .route("/2/", get(api::handle_index))
+        .route("/2/start", post(api::handle_start))
+        .route("/2/end", post(api::handle_end))
+        .route("/2/move", post(api::handle_move::<2>))
+
+        .route("/3/", get(api::handle_index))
+        .route("/3/start", post(api::handle_start))
+        .route("/3/end", post(api::handle_end))
+        .route("/3/move", post(api::handle_move::<3>));
 
     let env_port = env::var("PORT").ok();
     let addr = "0.0.0.0:".to_owned() + env_port.as_ref().map(String::as_str).unwrap_or("8080");
@@ -54,7 +64,7 @@ async fn main() {
     }
 }
 
-const POPULATION_SIZE: usize = 100;
+const POPULATION_SIZE: usize = 200;
 const GAMES_PER_GENERATION: usize = 20;
 const SNAKES_PER_GAME: usize = 2;
 const MUTATIONS_PER_GENERATION: usize = 10;
@@ -68,10 +78,10 @@ const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
     (0, 10), // me health late
     (-10, 0), // lowest enemy health early
     (-10, 0), // lowest enemy health late
-     (0, 0), // capped length diff early
+     (0, 10), // capped length diff early
      (0, 0), // capped length diff late
      (5, 5), // length diff cap
-    (0, 100), // being longer early
+    (0, 0), // being longer early
     (0, 100), // being longer late
     (0, 10), // food control diff early
     (0, 10), // food control diff late
@@ -186,7 +196,7 @@ fn next_generation(mut population: Vec<Entity>) -> Vec<Entity> {
 }
 
 fn write_generation(population: &Vec<Entity>, generation: usize) -> Result<(), std::io::Error> {
-    let mut file = File::create(format!("new-training-output-{}.txt", generation))?;
+    let mut file = File::create(format!("training-output-{}.txt", generation))?;
     for entity in population {
         writeln!(file, "games: {}, wins: {}, weights: {:?}", entity.games, entity.wins, entity.weights)?;
     };
@@ -209,6 +219,9 @@ fn run_game(snakes: &mut [Entity]) {
         // current standard weights
         weights.push(vec![0, 1500, 0, 0, 0, 0, 2, 1, 5, 2, 10, 8, 1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 5])
     }
+    if weights.len() == 2 {
+        weights = [weights.clone(), weights.clone()].concat();
+    }
     unsafe {
         set_training_weights(weights);
     }
@@ -225,6 +238,10 @@ fn run_game(snakes: &mut [Entity]) {
         .arg("-u").arg("http://localhost:8080/0/")
         .arg("-n").arg("one")
         .arg("-u").arg("http://localhost:8080/1/")
+        .arg("-n").arg("zero_")
+        .arg("-u").arg("http://localhost:8080/2/")
+        .arg("-n").arg("one_")
+        .arg("-u").arg("http://localhost:8080/3/")
         .output()
         .expect("failed to run game");
     let output = String::from_utf8_lossy(&cli_output.stderr);
