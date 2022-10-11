@@ -75,8 +75,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 return score
             }
             score!(
-                turn_progression(board.turn, 86, 504),
+                turn_progression(board.turn, 86, 300),
                 -1,0,lowest_enemy_health(board),
+                3,0,being_longer(board),
                 0,1,controlled_food_diff(board, &my_area, &enemy_area),
                 5,10,area_diff(&my_area, &enemy_area),
                 9,2,(W as Score - food_dist),
