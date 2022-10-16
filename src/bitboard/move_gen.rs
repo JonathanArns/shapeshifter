@@ -251,14 +251,18 @@ mod tests {
     use super::*;
     use crate::api;
     use test::Bencher;
+    use rand::Rng;
+    use rand_pcg::Pcg64Mcg;
 
     fn c(x: usize, y: usize) -> api::Coord {
         api::Coord{x, y}
     }
 
-    fn create_board() -> Bitboard<4, 11, 11, true, false> {
+    fn create_board() -> Bitboard<4, 11, 11, false, false> {
+        let mut ruleset = std::collections::HashMap::new();
+        ruleset.insert("name".into(), "standard".into());
         let state = api::GameState{
-            game: api::Game{ id: "".to_string(), timeout: 100, ruleset: std::collections::HashMap::new(), map: "standard".to_string(), source: "".to_string() },
+            game: api::Game{ id: "".to_string(), timeout: 100, ruleset: ruleset, map: "standard".to_string(), source: "".to_string() },
             turn: 157,
             you: api::Battlesnake{
                 id: "a".to_string(),
@@ -284,7 +288,7 @@ mod tests {
                         health: 100,
                         length: 11,
                         head: c(5,2),
-                        body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
+                        body: vec![c(5,2), c(5,1), c(6, 1)],
                     },  
                     api::Battlesnake{
                         id: "b".to_string(),
@@ -294,32 +298,12 @@ mod tests {
                         health: 95,
                         length: 12,
                         head: c(3,4),
-                        body: vec![c(3,4), c(2,4), c(2,5), c(3, 5), c(3,6), c(3,7), c(3,8), c(4,8), c(4,7), c(4,6), c(4,5), c(4,4)],
-                    },  
-                    api::Battlesnake{
-                        id: "c".to_string(),
-                        name: "c".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 3,
-                        head: c(6,7),
-                        body: vec![c(6,7), c(7,7), c(8,7)],
-                    },  
-                    api::Battlesnake{
-                        id: "d".to_string(),
-                        name: "d".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 3,
-                        head: c(9,9),
-                        body: vec![c(9,9), c(9,8), c(8,8)],
-                    },  
+                        body: vec![c(3,4), c(2,4), c(2,5)],
+                    }
                 ],
             },
         };
-        Bitboard::<4, 11, 11, true, false>::from_gamestate(state)
+        Bitboard::<4, 11, 11, false, false>::from_gamestate(state)
     }
 
     #[bench]
@@ -327,6 +311,16 @@ mod tests {
         let board = create_board();
         b.iter(|| {
             limited_move_combinations(&board, 1)
+        });
+    }
+
+    #[bench]
+    fn bench_simulate(b: &mut Bencher) {
+        let mut board = create_board();
+        let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
+        b.iter(|| {
+            let moves = random_move_combination(&board, &mut rng);
+            (board.apply_moves.clone())(&mut board, &moves);
         });
     }
 }

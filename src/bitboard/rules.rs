@@ -1,6 +1,8 @@
 use arrayvec::ArrayVec;
 use std::rc::Rc;
 use super::*;
+use rand::Rng;
+use rand_pcg::Pcg64Mcg;
 
 pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
@@ -49,6 +51,8 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
                 finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
                 finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
+                #[cfg(feature = "mcts")]
+                spawn_food::<S, W, H, WRAP, HZSTACK>(board);
             }),
         },
     };
@@ -189,6 +193,17 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             // spaces as empty for the next move
             // we also do this last, since we need it earlier for collision checks of this turn
             board.bodies[0].unset_bit(board.snakes[i].tail as usize);
+        }
+    }
+}
+
+pub fn spawn_food<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
+    if rng.gen_ratio(15, 100) {
+        let pos = rng.gen_range(0..(W*H));
+        if !board.bodies[0].get_bit(pos) {
+            board.food.set_bit(pos);
         }
     }
 }
