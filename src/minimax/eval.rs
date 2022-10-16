@@ -47,7 +47,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let me = board.snakes[0];
     let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, weights[25] as usize);
     score!(
-        turn_progression(board.turn, weights[0], weights[1]),
+        turn_or_duel_progression(board, board.turn, weights[0], weights[1]),
         weights[2],weights[3],me.health as Score,
         weights[4],weights[5],lowest_enemy_health(board),
         weights[6],weights[7],capped_length_diff(board, weights[8]),
@@ -75,12 +75,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 return score
             }
             score!(
-                turn_progression(board.turn, 86, 300),
-                -1,0,lowest_enemy_health(board),
-                3,0,being_longer(board),
-                0,1,controlled_food_diff(board, &my_area, &enemy_area),
-                5,10,area_diff(&my_area, &enemy_area),
-                9,2,(W as Score - food_dist),
+                turn_or_duel_progression(board, board.turn, 67, 250),
+                3,0,capped_length_diff(board, 5),
+                5,1,my_area_size - enemy_area_size,
+                3,0,(W as Score - food_dist),
+                27,29,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
         Gamemode::WrappedArcadeMaze => {
@@ -170,6 +169,20 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 
 fn turn_progression(turns: u16, early_game_end: i16, late_game_start: i16) -> f64 {
     ((turns as i16 - early_game_end) as f64 / (late_game_start - early_game_end) as f64).min(1.0)
+}
+
+fn turn_or_duel_progression<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, turns: u16, early_game_end: i16, late_game_start: i16) -> f64
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let mut count = 0;
+    for snake in board.snakes {
+        if snake.is_alive() {
+            count += 1;
+        }
+    }
+    if count <= 2 {
+        return 1.0
+    }
+    ((turns as i16 - early_game_end).min(0) as f64 / (late_game_start - early_game_end) as f64).min(1.0)
 }
 
 fn lowest_enemy_health<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>) -> Score
