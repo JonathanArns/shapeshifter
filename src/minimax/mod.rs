@@ -27,18 +27,18 @@ lazy_static! {
 pub type Score = i16;
 
 pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, deadline: time::SystemTime) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
         let (mv, score, depth) = best_node_search(board, deadline);
 
         // if shallow loss is detected, return a result from MCTS instead
-        #[cfg(not(feature = "training"))]
-        if S > 2 && score < Score::MIN + board.turn as Score + 7 {
-            let (mcts_mv, mcts_wr) = uct::search(board, deadline);
-            return (mcts_mv, score, depth)
-        }
+        // #[cfg(not(feature = "training"))]
+        // if S > 2 && score < Score::MIN + board.turn as Score + 7 {
+        //     let (mcts_mv, mcts_wr) = uct::search(board, deadline);
+        //     return (mcts_mv, score, depth)
+        // }
         (mv, score, depth)
     }
 }
@@ -48,11 +48,11 @@ pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const 
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     target_depth: u8
 ) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
     let mut node_counter = 0;
     let mut history = [[0; 4]; W*H];
     let my_moves = ordered_allowed_moves(board, 0, &history);
-    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut enemy_moves = brs_move_combinations(&board, &history);
     let mut best_move = my_moves[0];
     let start_time = time::Instant::now(); // used to calculate nodes / second
     let deadline = time::SystemTime::now() + time::Duration::from_millis(500000);
@@ -91,7 +91,7 @@ pub fn mtdf<const S: usize, const W: usize, const H: usize, const WRAP: bool, co
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     deadline: time::SystemTime
 ) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
     let start_time = time::Instant::now(); // used to calculate nodes / second
     let mut node_counter = 0;
     let mut rng = rand::thread_rng();
@@ -99,7 +99,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut history = [[0; 4]; W*H];
     let mut my_moves = allowed_moves(board, 0);
     my_moves.shuffle(&mut rng);
-    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut enemy_moves = brs_move_combinations(&board, &history);
     let mut best_move = my_moves[0];
     let mut best_score = Score::MIN+1;
     'outer_loop: loop {
@@ -163,14 +163,14 @@ pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WR
     board: &Bitboard<S, W, H, WRAP, HZSTACK>,
     deadline: time::SystemTime
 ) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
     let mut history = [[0; 4]; W*H];
 
     let board = board.clone();
-    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut enemy_moves = brs_move_combinations(&board, &history);
     let mut my_allowed_moves = allowed_moves(&board, 0);
     my_allowed_moves.shuffle(&mut rng);
     if my_allowed_moves.len() == 1 {
@@ -242,13 +242,13 @@ pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: boo
     node_counter: &mut u64,
     deadline: time::SystemTime,
     mv: Move,
-    enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    enemy_moves: &mut ArrayVec<[Move; S], {(S-1)*4}>,
     history: &mut [[u64; 4]; W*H],
     depth: u8,
     alpha: Score,
     beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {  // min call
     ab_min(board, node_counter, deadline, mv, enemy_moves, history, depth, 0, alpha, beta)
 }
 
@@ -257,14 +257,14 @@ pub fn ab_min<const S: usize, const W: usize, const H: usize, const WRAP: bool, 
     node_counter: &mut u64,
     deadline: time::SystemTime,
     mv: Move,
-    enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    enemy_moves: &mut ArrayVec<[Move; S], {(S-1)*4}>,
     history: &mut [[u64; 4]; W*H],
     depth: u8,
     ply: u8,
     mut alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {  // min call
     if time::SystemTime::now() > deadline {
         return None
     }
@@ -296,7 +296,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     // search
     let mut best_score = Score::MAX;
     let mut best_moves = [Move::Up; S];
-    let mut seen_moves = ArrayVec::<[Move; S], 4>::default();
+    let mut seen_moves = ArrayVec::<[Move; S], {(S-1)*4}>::default();
     for mvs in tt_move.iter_mut().chain(enemy_moves.iter_mut()) {
         mvs[0] = mv;
         if seen_moves.contains(&mvs) {
@@ -339,7 +339,7 @@ pub fn ab_max<const S: usize, const W: usize, const H: usize, const WRAP: bool, 
     mut alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
     let mut child = board.clone();
     (child.apply_moves.clone())(&mut child, moves);
     *node_counter += 1;
@@ -381,7 +381,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut best_move = Move::Left;
     let mut seen_moves = ArrayVec::<Move, 4>::default();
     let my_moves = ordered_allowed_moves(&child, 0, history);
-    let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
+    let mut next_enemy_moves = brs_move_combinations(&child, history);
 
     // search extension for forcing sequences
     if my_moves.len() * next_enemy_moves.len() <= 1 {
@@ -466,13 +466,13 @@ pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bo
     deadline: time::SystemTime,
     is_stable: fn (&Bitboard<S, W, H, WRAP, HZSTACK>) -> bool,
     mv: Move,
-    enemy_moves: &mut ArrayVec<[Move; S], 4>,
+    enemy_moves: &mut ArrayVec<[Move; S], {(S-1)*4}>,
     history: &mut [[u64; 4]; W*H],
     depth: u8,
     alpha: Score,
     mut beta: Score
 ) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {  // min call
     if time::SystemTime::now() > deadline {
         return None
     }
@@ -498,7 +498,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  
             }
 
             // continue search
-            let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
+            let mut next_enemy_moves = brs_move_combinations(&child, history);
             for mv in &ordered_allowed_moves(&child, 0, history) {
                 let iscore = quiescence(&child, node_counter, deadline, is_stable, *mv, &mut next_enemy_moves, history, depth-1, ialpha, ibeta)?;
                 if iscore > ibeta {

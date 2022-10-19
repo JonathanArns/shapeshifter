@@ -176,7 +176,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
     let mut i = 0;
-    for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
+    for (j, snake) in board.snakes[skip..].iter().enumerate() {
         if snake.is_alive() {
             i += 1;
             let mut moves = ordered_allowed_moves(board, j+skip, history);
@@ -202,6 +202,48 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     moves
 }
 
+/// Generates enemy moves for best reply search (BRS+)
+/// This function does not eliminate duplicates in the returned list
+#[allow(unused)]
+pub fn brs_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    history: &[[u64; 4]; W*H]
+) -> ArrayVec<[Move; S], {(S-1)*4}>
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
+    const skip: usize = 1;
+    // get moves for each enemy
+    let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
+    let mut i = 0;
+    for (j, snake) in board.snakes[skip..].iter().enumerate() {
+        if snake.is_alive() {
+            i += 1;
+            let mut moves = ordered_allowed_moves(board, j+skip, history);
+            moves_per_snake.push(moves);
+        } else {
+            let mut none_move = ArrayVec::<_, 4>::new();
+            none_move.insert(0, Move::Up);
+            moves_per_snake.push(none_move);
+        }
+    }
+
+    // find default moves
+    let mut default_moves = [Move::Up; S];
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        default_moves[i+skip] = snake_moves[0];
+    }
+
+    // only generate enough move combinations so that every enemy move appears at least once
+    let mut moves = ArrayVec::<[Move; S], {(S-1)*4}>::default();
+    for (i, snake_moves) in moves_per_snake.iter().enumerate() {
+        for mv in snake_moves {
+            let mut mvs = default_moves.clone();
+            mvs[i+skip] = *mv;
+            moves.push(mvs);
+        }
+    }
+    moves
+}
+
 /// Generates all possible move combinations from a position.
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
@@ -209,7 +251,7 @@ pub fn move_combinations<const S: usize, const W: usize, const H: usize, const W
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
-    for (j, snake) in board.snakes[0+skip..].iter().enumerate() {
+    for (j, snake) in board.snakes[skip..].iter().enumerate() {
         if snake.is_alive() {
             moves_per_snake.push(allowed_moves(board, j+skip));
         } else {
