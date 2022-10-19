@@ -80,6 +80,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 5,1,my_area_size - enemy_area_size,
                 3,0,(W as Score - food_dist),
                 27,29,controlled_tail_diff(board, &my_area, &enemy_area),
+                0,10,(board.snakes[0].length%2) as Score,
             )
         },
         Gamemode::WrappedArcadeMaze => {
