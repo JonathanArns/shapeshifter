@@ -123,11 +123,13 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut moves = allowed_moves(board, snake_index);
     moves.sort_by_key(|mv| {
         let dest = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[snake_index].head as usize][mv.to_int() as usize].unwrap();
-        let mut dist = board.distance(board.snakes[0].head, dest);
-        if dist == 1 && board.snakes[snake_index].length <= board.snakes[0].length {
-            dist += 10;
+        let mut options = 1;
+        for i in 0..4 {
+            if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[dest as usize][i] {
+                options += (!board.bodies[0].get_bit(pos as usize) && !board.hazard_mask.get_bit(pos as usize)) as u64;
+            }
         }
-        u64::MAX - 10000 - history[board.snakes[snake_index].head as usize][mv.to_int() as usize] + dist as u64
+        u64::MAX - 10000 - history[board.snakes[snake_index].head as usize][mv.to_int() as usize] - options
     });
     moves
 }
