@@ -16,10 +16,12 @@ required-features = ["training"]
 
 [features]
 default = ["tt"]
+prod = ["spl", "mcts_fallback"]
 spl = []
 mcts = []
 tt = []
 training = []
+mcts_fallback = []
 
 [dependencies]
 axum = { version = "0.5.6", features = ["headers"] }

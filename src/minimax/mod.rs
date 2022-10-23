@@ -34,11 +34,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(
         let (mv, score, depth) = best_node_search(board, deadline);
 
         // if shallow loss is detected, return a result from MCTS instead
-        // #[cfg(not(feature = "training"))]
-        // if S > 2 && score < Score::MIN + board.turn as Score + 7 {
-        //     let (mcts_mv, mcts_wr) = uct::search(board, deadline);
-        //     return (mcts_mv, score, depth)
-        // }
+        #[cfg(all(not(feature = "training"), feature = "mcts_fallback"))]
+        if S > 2 && score < Score::MIN + board.turn as Score + 6 {
+            let (mcts_mv, mcts_wr) = uct::search(board, deadline);
+            return (mcts_mv, score, depth)
+        }
         (mv, score, depth)
     }
 }

@@ -45,7 +45,7 @@ pub fn eval_with_weights<const S: usize, const W: usize, const H: usize, const W
 ) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let me = board.snakes[0];
-    let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, weights[25] as usize);
+    let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5 as usize);
     score!(
         turn_or_duel_progression(board, board.turn, weights[0], weights[1]),
         weights[2],weights[3],me.health as Score,
@@ -58,7 +58,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         weights[17],weights[18],non_hazard_area_diff(board, &my_area, &enemy_area),
         weights[19],weights[20],(W as Score - closest_food_distance),
         weights[21],weights[22],controlled_tail_diff(board, &my_area, &enemy_area),
-        weights[23],weights[24],distance_from_center(board),
+        weights[23],weights[24],(board.snakes[0].length%2) as Score,
     )
 }
 
