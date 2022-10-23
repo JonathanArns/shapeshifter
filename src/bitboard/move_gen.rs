@@ -129,11 +129,11 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
                 options += (!board.bodies[0].get_bit(pos as usize) && !board.hazard_mask.get_bit(pos as usize)) as u64;
             }
         }
-        // for snake in board.snakes {
-        //     if snake.is_alive() && snake.tail == dest {
-        //         options += 1;
-        //     }
-        // }
+        for snake in board.snakes {
+            if snake.is_alive() && snake.tail == dest {
+                options += 1;
+            }
+        }
         u64::MAX - 10000 - history[board.snakes[snake_index].head as usize][mv.to_int() as usize] - options
     });
     moves
