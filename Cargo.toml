@@ -15,8 +15,8 @@ path = "src/training/main.rs"
 required-features = ["training"]
 
 [features]
-default = ["tt"]
-prod = ["spl", "mcts_fallback"]
+default = []
+prod = ["spl", "mcts_fallback", "tt"]
 spl = []
 mcts = []
 tt = []

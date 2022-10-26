@@ -35,7 +35,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(
 
         // if shallow loss is detected, return a result from MCTS instead
         #[cfg(all(not(feature = "training"), feature = "mcts_fallback"))]
-        if S > 2 && score < Score::MIN + board.turn as Score + 6 {
+        if S > 2 && score < Score::MIN + board.turn as Score + 8 {
             let (mcts_mv, mcts_wr) = uct::search(board, deadline);
             return (mcts_mv, score, depth)
         }
@@ -434,7 +434,10 @@ fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const W
 ) -> (u8, fn(&Bitboard<S, W, H, WRAP, HZSTACK>) -> bool)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match mode {
-        Gamemode::WrappedIslandsBridges => (3, |board| {
+        Gamemode::WrappedIslandsBridges => (5, |board| {
+            if board.snakes[0].health < 5 {
+                return false
+            }
             for i in 1..S {
                 let snake = board.snakes[i];
                 if snake.is_alive() && board.distance(board.snakes[0].head, snake.head) < 3 {
