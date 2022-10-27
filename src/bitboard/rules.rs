@@ -112,7 +112,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         }
         // reduce health
         if HZSTACK {
-            snake.health -= 1 + board.hazard_dmg * board.hazards[snake.head as usize] as i8;
+            snake.health -= 1 + (board.hazard_dmg as i16 * board.hazards[snake.head as usize] as i16).min(100) as i8;
         } else {
             let is_on_hazard = board.hazard_mask.get_bit(snake.head as usize) as i8;
             snake.health -= 1 + board.hazard_dmg * is_on_hazard;
