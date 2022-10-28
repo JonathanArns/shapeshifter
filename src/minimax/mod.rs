@@ -435,9 +435,6 @@ fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const W
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match mode {
         Gamemode::WrappedIslandsBridges => (3, |board| {
-            if board.snakes[0].health < 3 {
-                return false
-            }
             for i in 1..S {
                 let snake = board.snakes[i];
                 if snake.is_alive() && board.distance(board.snakes[0].head, snake.head) < 3 {
