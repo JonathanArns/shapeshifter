@@ -126,7 +126,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
         let mut options = 1;
         for i in 0..4 {
             if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[dest as usize][i] {
-                options += (!board.bodies[0].get_bit(pos as usize) && !board.hazard_mask.get_bit(pos as usize)) as u64;
+                options += (!board.bodies[0].get_bit(pos as usize) && (board.hazard_dmg < 90 || !board.hazard_mask.get_bit(pos as usize))) as u64;
             }
         }
         for snake in board.snakes {
