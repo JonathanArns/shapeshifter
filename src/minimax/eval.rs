@@ -140,7 +140,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 1,2,me.health as Score,
                 -1,-2,lowest_enemy_health(board),
                 2,2,length_diff(board),
-                1,1,non_hazard_area_diff(board, &my_area, &enemy_area),
+                1,3,non_hazard_area_diff(board, &my_area, &enemy_area),
                 3,3,controlled_food_diff(board, &my_area, &enemy_area),
                 2,2,(W as Score - closest_food_distance),
                 0,1,area_diff(&my_close_area, &enemy_close_area),
