@@ -274,27 +274,29 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     if time::SystemTime::now() > deadline {
         return None
     }
-    let tt_key = ttable::hash(&(board, mv));
-    let tt_entry = ttable::get(tt_key, board.tt_id);
     let mut tt_move = None;
-    if let Some(entry) = tt_entry {
-        if entry.get_depth() >= depth {
-            let tt_score = entry.get_score();
-            if entry.is_lower_bound() {
-                alpha = alpha.max(tt_score);
-            } else if entry.is_upper_bound() {
-                beta = beta.min(tt_score);
-            } else {
-                return Some(tt_score) // got exact score
+    let tt_key = ttable::hash(&(board, mv));
+    if enemy_moves.len() > 1 {
+        let tt_entry = ttable::get(tt_key, board.tt_id);
+        if let Some(entry) = tt_entry {
+            if entry.get_depth() >= depth {
+                let tt_score = entry.get_score();
+                if entry.is_lower_bound() {
+                    alpha = alpha.max(tt_score);
+                } else if entry.is_upper_bound() {
+                    beta = beta.min(tt_score);
+                } else {
+                    return Some(tt_score) // got exact score
+                }
+                if alpha >= beta {
+                    return Some(tt_score);
+                }
             }
-            if alpha >= beta {
-                return Some(tt_score);
-            }
-        }
-        if let Some(x) = entry.get_best_moves::<S>() {
-            // sanity check for tt_move
-            if board.is_legal_enemy_moves(x) {
-                tt_move = Some(x);
+            if let Some(x) = entry.get_best_moves::<S>() {
+                // sanity check for tt_move
+                if board.is_legal_enemy_moves(x) {
+                    tt_move = Some(x);
+                }
             }
         }
     }
@@ -358,26 +360,29 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     }
     // check TT
     let tt_key = ttable::hash(&child);
-    let tt_entry = ttable::get(tt_key, child.tt_id);
     let mut tt_move = None;
-    if let Some(entry) = tt_entry {
-        if entry.get_depth() >= depth {
-            let tt_score = entry.get_score();
-            if entry.is_lower_bound() {
-                alpha = alpha.max(tt_score);
-            } else if entry.is_upper_bound() {
-                beta = beta.min(tt_score);
-            } else {
-                return Some(tt_score) // got exact score
+    let my_moves = ordered_allowed_moves(&child, 0, history);
+    if my_moves.len() > 1 {
+        let tt_entry = ttable::get(tt_key, child.tt_id);
+        if let Some(entry) = tt_entry {
+            if entry.get_depth() >= depth {
+                let tt_score = entry.get_score();
+                if entry.is_lower_bound() {
+                    alpha = alpha.max(tt_score);
+                } else if entry.is_upper_bound() {
+                    beta = beta.min(tt_score);
+                } else {
+                    return Some(tt_score) // got exact score
+                }
+                if alpha >= beta {
+                    return Some(tt_score)
+                }
             }
-            if alpha >= beta {
-                return Some(tt_score)
-            }
-        }
-        if let Some(x) = entry.get_best_moves::<1>() {
-            // sanity check for itt_move
-            if board.is_legal_move(board.snakes[0].head, x[0]) {
-                tt_move = Some(x[0]);
+            if let Some(x) = entry.get_best_moves::<1>() {
+                // sanity check for itt_move
+                if board.is_legal_move(board.snakes[0].head, x[0]) {
+                    tt_move = Some(x[0]);
+                }
             }
         }
     }
@@ -386,7 +391,6 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut best_score = Score::MIN;
     let mut best_move = Move::Left;
     let mut seen_moves = ArrayVec::<Move, 4>::default();
-    let my_moves = ordered_allowed_moves(&child, 0, history);
     let mut next_enemy_moves = ordered_limited_move_combinations(&child, 1, history);
 
     // search extension for forcing sequences
