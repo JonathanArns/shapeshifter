@@ -437,7 +437,7 @@ fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const W
 ) -> (u8, fn(&Bitboard<S, W, H, WRAP, HZSTACK>) -> bool)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match mode {
-        Gamemode::WrappedIslandsBridges => (5, |board| {
+        Gamemode::Standard | Gamemode::WrappedIslandsBridges => (5, |board| {
             for i in 1..S {
                 let snake = board.snakes[i];
                 if snake.is_alive() && board.distance(board.snakes[0].head, snake.head) < 3 {
