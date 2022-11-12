@@ -328,7 +328,8 @@ pub async fn handle_move<const UNUSED: u8>(Json(state): Json<GameState>, start_t
 )]
 pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
     let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
-        time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
+        // we are playing behind a proxy with "accurate" timing information
+        time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(60) - 60)).into())
     } else {
         time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
     };
