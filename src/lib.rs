@@ -1,4 +1,4 @@
-#![feature(test, generic_const_exprs, label_break_value, let_chains)]
+#![feature(test, generic_const_exprs, let_chains)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -12,6 +12,7 @@ mod minimax;
 
 // #[cfg(feature = "mcts")]
 mod uct;
+mod mcts;
 
 // Public stuff
 
