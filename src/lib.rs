@@ -12,7 +12,6 @@ mod minimax;
 
 // #[cfg(feature = "mcts")]
 mod uct;
-mod mcts;
 
 // Public stuff
 
