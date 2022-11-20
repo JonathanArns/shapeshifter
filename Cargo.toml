@@ -16,12 +16,13 @@ required-features = ["training"]
 
 [features]
 default = []
-prod = ["spl", "mcts_fallback", "tt"]
+prod = ["spl", "mcts_fallback", "tt", "parallel_search"]
 spl = []
 mcts = []
 tt = []
 training = []
 mcts_fallback = []
+parallel_search = []
 
 [dependencies]
 axum = { version = "0.5.6", features = ["headers"] }
@@ -41,7 +42,7 @@ serde_json = "1"
 rand = "0.8.4"
 rand_pcg = "0.3"
 arrayvec = "0.7"
-lazy_static = "1.4.0"
+lazy_static = "1.4"
 fxhash = "0.2.1"
 colored = "2"
 

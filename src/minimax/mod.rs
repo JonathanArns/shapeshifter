@@ -4,6 +4,7 @@ use crate::uct;
 
 use std::env;
 use std::time;
+use std::thread::{JoinHandle, spawn};
 use arrayvec::ArrayVec;
 use rand::seq::SliceRandom;
 use tracing::{info, debug};
@@ -39,7 +40,10 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     if *FIXED_DEPTH > 0 {
         fixed_depth_search(board, *FIXED_DEPTH as u8)
     } else {
+        #[cfg(not(feature = "parallel_search"))]
         let (mv, score, depth) = best_node_search(board, deadline);
+        #[cfg(feature = "parallel_search")]
+        let (mv, score, depth) = parallel_best_node_search(board, deadline);
 
         // if shallow loss is detected, return a result from MCTS instead
         #[cfg(all(not(feature = "training"), feature = "mcts_fallback"))]
@@ -163,6 +167,114 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     } else {
         test
     }
+}
+
+pub fn parallel_best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    deadline: time::SystemTime
+) -> (Move, Score, u8)
+where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let mut rng = rand::thread_rng();
+    let start_time = time::Instant::now();
+    let mut node_counter = 0;
+    let mut history = [[0; 4]; W*H];
+
+    let board = board.clone();
+    let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
+    let mut my_allowed_moves = allowed_moves(&board, 0);
+    my_allowed_moves.shuffle(&mut rng);
+    if my_allowed_moves.len() == 1 {
+        debug!(
+            game.turn = board.turn,
+            game.mode = ?board.gamemode,
+            search.best_move = ?my_allowed_moves[0],
+            "returned_only_move"
+        );
+        return (my_allowed_moves[0], 0, 0)
+    }
+
+    let mut best_move = my_allowed_moves[0];
+    let mut best_score = Score::MIN+1;
+    let mut depth = 1;
+
+    let mut last_test = 0;
+    'outer_loop: loop {
+        let mut my_moves = my_allowed_moves.clone();
+        let mut alpha = Score::MIN;
+        let mut beta = Score::MAX;
+        loop {
+            let test = next_bns_guess(last_test, alpha, beta);
+            let mut better_moves = ArrayVec::<Move, 4>::new();
+            if depth > 3 {
+                let mut join_handles: ArrayVec<(moves::Move, JoinHandle<(Option<i16>, [[u64; 4]; W*H])>), 4> = ArrayVec::new();
+                for mv in &my_moves {
+                    let b = board.clone();
+                    let mut nc = node_counter;
+                    let m = mv.clone();
+                    let mut em = enemy_moves.clone();
+                    let mut hist = history.clone();
+                    join_handles.push((*mv, spawn(move || {
+                        let score = alphabeta(&b, &mut nc, deadline, m, &mut em, &mut hist, depth, test-1, test);
+                        (score, hist)
+                    })));
+                }
+                for (mv, handle) in join_handles {
+                    if let Ok((Some(score), hist)) = handle.join() {
+                        for i in 0..(W*H) {
+                            for j in 0..4 {
+                                history[i][j] += hist[i][j];
+                            }
+                        }
+                        if score >= test {
+                            better_moves.push(mv);
+                        }
+                    } else {
+                        depth -= 1;
+                        break 'outer_loop // time has run out
+                    }
+                }
+            } else {
+                for mv in &my_moves {
+                    if let Some(score) = alphabeta(&board, &mut node_counter, deadline, *mv, &mut enemy_moves, &mut history, depth, test-1, test) {
+                        if score >= test {
+                            better_moves.push(*mv);
+                        }
+                    } else {
+                        depth -= 1;
+                        break 'outer_loop // time has run out
+                    }
+                }
+            }
+            if better_moves.len() == 0 {
+                beta = test; // update beta
+            } else {
+                alpha = test; // update alpha
+                my_moves = better_moves; // update subtrees left to search
+            }
+            if (beta as i32 - alpha as i32) < 2 || my_moves.len() == 1 {
+                last_test = test;
+                best_score = test;
+                best_move = my_moves[0];
+                break
+            }
+        }
+        if best_score > Score::MAX-1000 || best_score < Score::MIN+1000 || depth == u8::MAX-1 {
+            break // Our last best move resulted in a terminal state, so we don't need to search deeper
+        }
+        depth += 1;
+    }
+    info!(
+        game.turn = board.turn,
+        game.mode = ?board.gamemode,
+        search.nodes_total = node_counter,
+        search.nodes_per_second = (node_counter as u128 * (time::Duration::from_secs(1).as_nanos() / start_time.elapsed().as_nanos())) as u64,
+        search.best_move = ?best_move,
+        search.score = best_score,
+        search.depth = depth,
+        search.time_used = time::Instant::now().duration_since(start_time).as_millis() as u64,
+        "search_finished"
+    );
+    (best_move, best_score, depth)
 }
 
 pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(

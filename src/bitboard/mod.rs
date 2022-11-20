@@ -2,6 +2,7 @@ use crate::api::GameState;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 use colored::{Colorize, Color};
 #[cfg(not(feature = "mcts"))]
 use crate::minimax;
@@ -93,7 +94,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub tt_id: u8,
     pub turn: u16,
     pub gamemode: Gamemode,
-    pub apply_moves: Rc<dyn Fn(&mut Self, &[Move; S])>,
+    pub apply_moves: Arc<dyn Fn(&mut Self, &[Move; S]) + Send + Sync>,
 }
 
 impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Hash for Bitboard<S, W, H, WRAP, HZSTACK>
@@ -135,7 +136,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             gamemode: Gamemode::Standard,
             tt_id: 0,
             turn: 0,
-            apply_moves: Rc::new(|board, mvs| {}),
+            apply_moves: Arc::new(|board, mvs| {}),
         }
     }
 
