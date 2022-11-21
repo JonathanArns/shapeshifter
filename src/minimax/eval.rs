@@ -97,26 +97,27 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             )
         },
         Gamemode::Standard => {
+            let me = board.snakes[0];
             let ((my_area, enemy_area), _, food_dist) = area_control(board, 5);
             let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
             if let Some(score) = endgame::solver(board, &my_area, &enemy_area, my_area_size, enemy_area_size, food_dist) {
                 return score
             }
             score!(
-                turn_progression(board.turn, 0, 1500),
-                2,1,capped_length_diff(board, 5),
-                2,10,being_longer(board),
-                8,1,controlled_food_diff(board, &my_area, &enemy_area),
-                0,8,my_area_size - enemy_area_size,
-                0,9,controlled_tail_diff(board, &my_area, &enemy_area),
+                turn_progression(board.turn, 0, 632),
+                1,0,me.health as Score,
+                -2,0,lowest_enemy_health(board),
+                9,0,being_longer(board),
+                0,3,controlled_food_diff(board, &my_area, &enemy_area),
+                1,7,(my_area_size - enemy_area_size),
+                7,0,(W as Score - food_dist),
+                6,20,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
         Gamemode::Constrictor => {
             let ((my_area, enemy_area), (_, _), _) = area_control(board, 5);
-            score!(
-                turn_progression(board.turn, 0, 1),
-                1,1,area_diff(&my_area, &enemy_area),
-            )
+            let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
+            (my_area_size - enemy_area_size) as Score
         }
         Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => {
             let me = board.snakes[0];
@@ -226,9 +227,9 @@ fn being_longer<const S: usize, const W: usize, const H: usize, const WRAP: bool
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let length_diff = length_diff(board);
     if length_diff > 0 {
-        ((length_diff + 1) as f64).log2() as Score
+        (((length_diff + 1) as f64).log(1.5) * W as f64) as Score
     } else {
-        -(((-length_diff + 1) as f64).log2() as Score)
+        -((((-length_diff + 1) as f64).log(1.5) * W as f64) as Score)
     }
 }
 
@@ -242,6 +243,13 @@ fn controlled_food_diff<const S: usize, const W: usize, const H: usize, const WR
 ) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     (*my_area & board.food).count_ones() as Score - (*enemy_area & board.food).count_ones() as Score
+}
+
+fn hazard_area_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK>, my_area: &Bitset<{W*H}>, enemy_area: &Bitset<{W*H}>
+) -> Score
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    (*my_area & board.hazard_mask).count_ones() as Score - (*enemy_area & board.hazard_mask).count_ones() as Score
 }
 
 fn non_hazard_area_diff<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
