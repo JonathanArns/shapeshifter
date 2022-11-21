@@ -47,13 +47,13 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let me = board.snakes[0];
     let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5 as usize);
     score!(
-        turn_or_duel_progression(board, board.turn, weights[0], weights[1]),
+        turn_progression(board.turn, weights[0], weights[1]),
         weights[2],weights[3],me.health as Score,
         weights[4],weights[5],lowest_enemy_health(board),
         weights[6],weights[7],capped_length_diff(board, weights[8]),
         weights[9],weights[10],being_longer(board),
         weights[11],weights[12],controlled_food_diff(board, &my_area, &enemy_area),
-        weights[13],weights[14],area_diff(&my_area, &enemy_area),
+        weights[13],weights[14],hazard_area_diff(board, &my_area, &enemy_area),
         weights[15],weights[16],area_diff(&my_close_area, &enemy_close_area),
         weights[17],weights[18],non_hazard_area_diff(board, &my_area, &enemy_area),
         weights[19],weights[20],(W as Score - closest_food_distance),
@@ -123,28 +123,28 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5);
             score!(
-                turn_progression(board.turn, 0, 800),
-                1,2,me.health as Score,
-                -1,-2,lowest_enemy_health(board),
-                2,2,length_diff(board),
-                1,1,non_hazard_area_diff(board, &my_area, &enemy_area),
-                3,3,controlled_food_diff(board, &my_area, &enemy_area),
-                2,2,(W as Score - closest_food_distance),
-                0,1,checkered_area_diff(board, &my_area, &enemy_area),
+                turn_progression(board.turn, 83, 250),
+                3,3,me.health as Score,
+                -1,-1,lowest_enemy_health(board),
+                7,0,being_longer(board),
+                7,5,controlled_food_diff(board, &my_area, &enemy_area),
+                4,7,non_hazard_area_diff(board, &my_area, &enemy_area),
+                10,6,(W as Score - closest_food_distance),
+                0,16,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         }
         _ => {
             let me = board.snakes[0];
             let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5);
             score!(
-                turn_progression(board.turn, 0, 800),
-                1,2,me.health as Score,
-                -1,-2,lowest_enemy_health(board),
-                2,2,length_diff(board),
-                1,3,non_hazard_area_diff(board, &my_area, &enemy_area),
-                3,3,controlled_food_diff(board, &my_area, &enemy_area),
-                2,2,(W as Score - closest_food_distance),
-                0,1,area_diff(&my_close_area, &enemy_close_area),
+                turn_progression(board.turn, 83, 250),
+                3,3,me.health as Score,
+                -1,-1,lowest_enemy_health(board),
+                7,0,being_longer(board),
+                7,5,controlled_food_diff(board, &my_area, &enemy_area),
+                4,7,non_hazard_area_diff(board, &my_area, &enemy_area),
+                10,6,(W as Score - closest_food_distance),
+                0,16,controlled_tail_diff(board, &my_area, &enemy_area),
             )
         },
     }

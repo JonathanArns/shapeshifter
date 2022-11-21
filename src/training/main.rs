@@ -73,31 +73,31 @@ const TOURNAMENT_SIZE: usize = 2;
 const NUM_WEIGHTS: usize = 26;
 const WEIGHT_RANGES: [(i16, i16); NUM_WEIGHTS] = [
     (0, 100), // turn progression start
-    (300, 1500), // turn progression end
+    (250, 1500), // turn progression end
     (0, 10), // me health early
     (0, 10), // me health late
     (-10, 0), // lowest enemy health early
     (-10, 0), // lowest enemy health late
-     (0, 10), // capped length diff early
+     (0, 0), // capped length diff early
      (0, 0), // capped length diff late
      (5, 5), // length diff cap
-    (0, 0), // being longer early
-    (0, 100), // being longer late
+    (0, 10), // being longer early
+    (0, 10), // being longer late
     (0, 10), // food control diff early
     (0, 10), // food control diff late
-    (0, 10), // area diff early
-    (0, 10), // area diff late
+    (-5, 10), // hazard area diff early
+    (-5, 10), // hazard area diff late
      (0, 0), // close area diff early
      (0, 0), // close area diff late
-     (0, 0), // non hazard area diff early
-     (0, 0), // non hazard area diff late
+    (0, 10), // non hazard area diff early
+    (0, 10), // non hazard area diff late
     (0, 10), // food distance early
     (0, 10), // food distance late
     (0, 30), // tail control diff early
     (0, 30), // tail control diff late
-     (0, 0), // distance from center early
-     (0, 0), // distance from center late
-     (5, 5), // close area distance
+    (0, 20), // odd length early
+    (0, 20), // odd length late
+     (0, 0), // 
 ];
 
 struct Entity {
@@ -228,10 +228,10 @@ fn run_game(snakes: &mut [Entity]) {
     let cli_output = Command::new("battlesnake")
         .arg("play")
         // game settings
-        .arg("-t").arg("3")
+        .arg("-t").arg("10")
         .arg("-g").arg("wrapped")
-        .arg("-m").arg("hz_islands_bridges")
-        .arg("--hazardDamagePerTurn").arg("100")
+        .arg("-m").arg("royale")
+        // .arg("--hazardDamagePerTurn").arg("100")
         
         // snakes
         .arg("-n").arg("zero")
