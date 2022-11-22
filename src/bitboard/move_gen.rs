@@ -12,39 +12,14 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let pos = board.snakes[snake_index].head;
     let survives_hazard = board.snakes[snake_index].health > board.hazard_dmg;
 
-    if let Some(dest) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize][0] {
-        some_legal_move = Move::Up;
-        if survives_hazard || !board.hazard_mask.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
-            some_better_legal_move = Some(Move::Up);
-            if !board.bodies[0].get_bit(dest as usize) {
-                moves.push(Move::Up);
-            }
-        }
-    }
-    if let Some(dest) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize][1] {
-        some_legal_move = Move::Down;
-        if survives_hazard || !board.hazard_mask.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
-            some_better_legal_move = Some(Move::Down);
-            if !board.bodies[0].get_bit(dest as usize) {
-                moves.push(Move::Down);
-            }
-        }
-    }
-    if let Some(dest) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize][2] {
-        some_legal_move = Move::Right;
-        if survives_hazard || !board.hazard_mask.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
-            some_better_legal_move = Some(Move::Right);
-            if !board.bodies[0].get_bit(dest as usize) {
-                moves.push(Move::Right);
-            }
-        }
-    }
-    if let Some(dest) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize][3] {
-        some_legal_move = Move::Left;
-        if survives_hazard || !board.hazard_mask.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
-            some_better_legal_move = Some(Move::Left);
-            if !board.bodies[0].get_bit(dest as usize) {
-                moves.push(Move::Left);
+    for (mv_int, optional_dest) in Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize].iter().enumerate() {
+        if let Some(dest) = *optional_dest {
+            some_legal_move = Move::from_int(mv_int as u8);
+            if survives_hazard || !board.hazard_mask.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
+                some_better_legal_move = Some(some_legal_move);
+                if !board.bodies[0].get_bit(dest as usize) {
+                    moves.push(some_legal_move);
+                }
             }
         }
     }
@@ -60,8 +35,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 /// Can never return a move that moves out of bounds on the board on unrwapped boards,
 /// because that would cause a panic elsewhere.
 #[allow(unused)]
-pub fn slow_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, pos: u16) -> ArrayVec<Move, 4>
+pub fn old_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, snake_index: usize) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    let pos = board.snakes[snake_index].head;
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Left;
 
@@ -364,7 +340,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_simulate(b: &mut Bencher) {
+    fn bench_random_simulate(b: &mut Bencher) {
         let mut board = create_board();
         let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
         b.iter(|| {
