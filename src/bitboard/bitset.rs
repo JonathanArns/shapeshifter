@@ -56,14 +56,14 @@ where [(); (N+63)/64]: Sized {
     /// Sets the bit at index position to true
     pub fn set_bit(&mut self, position: usize) {
         let i = position >> 6;
-        let offset = position % 64;
+        let offset = position & 63;
         self.state[i] |= 1_u64<<offset;
     }
     
     /// Sets the bit at index position to false
     pub fn unset_bit(&mut self, position: usize) {
         let i = position >> 6;
-        let offset = position % 64;
+        let offset = position & 63;
         self.state[i] &= !(1_u64<<offset);
     }
 
@@ -86,7 +86,7 @@ where [(); (N+63)/64]: Sized {
             }
         }
         let i = position >> 6;
-        let offset = position % 64;
+        let offset = position & 63;
         (self.state[i]>>offset) & 1 == 1
     }
 
@@ -319,7 +319,7 @@ where [(); (N+63)/64]: Sized {
 
         let mut ret = Self::new();
         let trailing_zeros = rhs >> 6;
-        let actual_shift = rhs % 64;
+        let actual_shift = rhs & 63;
         let l = (N+63)/64;
         if trailing_zeros >= l {
             return ret
@@ -353,7 +353,7 @@ where [(); (N+63)/64]: Sized {
         }
 
         let trailing_zeros = rhs >> 6;
-        let actual_shift = rhs % 64;
+        let actual_shift = rhs & 63;
         let l = (N+63)/64;
         if actual_shift == 0 {
             for i in 0..(l-trailing_zeros) {
@@ -389,7 +389,7 @@ where [(); (N+63)/64]: Sized {
 
         let mut ret = Self::new();
         let leading_zeros = rhs >> 6;
-        let actual_shift = rhs % 64;
+        let actual_shift = rhs & 63;
         let l = (N+63)/64;
         if leading_zeros >= l {
             return ret
@@ -425,7 +425,7 @@ where [(); (N+63)/64]: Sized {
         }
 
         let leading_zeros = rhs >> 6;
-        let actual_shift = rhs % 64;
+        let actual_shift = rhs & 63;
         let l = (N+63)/64;
         if actual_shift == 0 {
             for i in 0..(l-leading_zeros) {
