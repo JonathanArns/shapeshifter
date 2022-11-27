@@ -578,7 +578,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 }
                 for i in 0..4 {
                     if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[snake.head as usize][i] {
-                        if board.food.get_bit(pos as usize) {
+                        if board.food.get(pos as usize) {
                             return false
                         }
                     }

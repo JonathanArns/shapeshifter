@@ -1,4 +1,5 @@
 use crate::bitboard::*;
+use bitssset::Bitset;
 
 pub fn solver<
     const S: usize,
@@ -72,18 +73,18 @@ where
     let mut counter = 1;
     let mut my_tail_dist = 0;
     let mut enemey_tail_dist = 0;
-    if em_fill.get_bit(snake.tail as usize) && !(board.snakes[1].length > board.snakes[0].length && enemy_area.get_bit(snake.tail as usize)) {
+    if em_fill.get(snake.tail as usize) && !(board.snakes[1].length > board.snakes[0].length && enemy_area.get(snake.tail as usize)) {
         my_tail_dist = counter;
     }
-    if ee_fill.get_bit(snake.tail as usize) && !(board.snakes[0].length > board.snakes[1].length && my_area.get_bit(snake.tail as usize)) {
+    if ee_fill.get(snake.tail as usize) && !(board.snakes[0].length > board.snakes[1].length && my_area.get(snake.tail as usize)) {
         enemey_tail_dist = counter;
     }
     let mut tail_pos = board.next_body_segment(snake.tail);
     while (my_tail_dist == 0 || enemey_tail_dist == 0) && tail_pos != snake.head {
-        if my_tail_dist == 0 && em_fill.get_bit(tail_pos as usize) {
+        if my_tail_dist == 0 && em_fill.get(tail_pos as usize) {
             my_tail_dist = counter;
         }
-        if enemey_tail_dist == 0 && ee_fill.get_bit(tail_pos as usize) {
+        if enemey_tail_dist == 0 && ee_fill.get(tail_pos as usize) {
             enemey_tail_dist = counter;
         }
         counter += 1;
@@ -99,18 +100,18 @@ where
     counter = 1;
     let mut my_etail_dist = 0;
     let mut enemey_etail_dist = 0;
-    if em_fill.get_bit(snake.tail as usize) && !(board.snakes[1].length > board.snakes[0].length && enemy_area.get_bit(snake.tail as usize)) {
+    if em_fill.get(snake.tail as usize) && !(board.snakes[1].length > board.snakes[0].length && enemy_area.get(snake.tail as usize)) {
         my_etail_dist = counter;
     }
-    if ee_fill.get_bit(snake.tail as usize) && !(board.snakes[0].length > board.snakes[1].length && my_area.get_bit(snake.tail as usize)) {
+    if ee_fill.get(snake.tail as usize) && !(board.snakes[0].length > board.snakes[1].length && my_area.get(snake.tail as usize)) {
         enemey_etail_dist = counter;
     }
     tail_pos = board.next_body_segment(snake.tail);
     while (counter < my_tail_dist || counter < enemey_tail_dist) && (my_etail_dist == 0 || enemey_etail_dist == 0) && tail_pos != snake.head {
-        if my_etail_dist == 0 && em_fill.get_bit(tail_pos as usize) {
+        if my_etail_dist == 0 && em_fill.get(tail_pos as usize) {
             my_etail_dist = counter;
         }
-        if enemey_etail_dist == 0 && ee_fill.get_bit(tail_pos as usize) {
+        if enemey_etail_dist == 0 && ee_fill.get(tail_pos as usize) {
             enemey_etail_dist = counter;
         }
         counter += 1;

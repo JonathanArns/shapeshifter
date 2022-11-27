@@ -4,17 +4,16 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use colored::{Colorize, Color};
+use bitssset::Bitset;
 #[cfg(not(feature = "mcts"))]
 use crate::minimax;
 
-mod bitset;
 mod constants;
 #[macro_use]
 mod rules;
 pub mod moves;
 pub mod move_gen;
 
-pub use bitset::Bitset;
 pub use moves::Move;
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -285,7 +284,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // Gets next segment in snake body in head direction.
     // Does not check if pos is actually on a snake.
     pub fn next_body_segment(&self, pos: u16) -> u16 {
-        let move_int = self.bodies[1].get_bit(pos as usize) as u8 | (self.bodies[2].get_bit(pos as usize) as u8) << 1;
+        let move_int = self.bodies[1].get(pos as usize) as u8 | (self.bodies[2].get(pos as usize) as u8) << 1;
         if WRAP {
             (pos as i16 + Move::int_to_index_wrapping(move_int, W, H, pos)) as u16
         } else {
@@ -321,9 +320,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                         }
                     }
                 }
-                let mut tile = if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." }.to_string();
-                tile.push_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
-                tile.push_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                let mut tile = if self.bodies[0].get((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." }.to_string();
+                tile.push_str(if self.bodies[2].get((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                tile.push_str(if self.bodies[1].get((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
                 f.write_str(&format!("{} ", tile))?;
             }
             f.write_str("\n")?;
@@ -355,7 +354,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let mut tail_pos = snake.tail;
             while snake.head != tail_pos {
                 snake_colors.insert(tail_pos as usize, colors[i % colors.len()]);
-                let move_int = self.bodies[1].get_bit(tail_pos as usize) as u8 | (self.bodies[2].get_bit(tail_pos as usize) as u8) << 1;
+                let move_int = self.bodies[1].get(tail_pos as usize) as u8 | (self.bodies[2].get(tail_pos as usize) as u8) << 1;
                 tail_pos = if WRAP {
                     tail_pos as i16 + Move::int_to_index_wrapping(move_int, W, H, tail_pos)
                 } else {
@@ -378,14 +377,14 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                         }
                     }
                 }
-                let mut tile = if self.bodies[0].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." }.to_string();
-                tile.push_str(if self.bodies[2].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
-                tile.push_str(if self.bodies[1].get_bit((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                let mut tile = if self.bodies[0].get((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." }.to_string();
+                tile.push_str(if self.bodies[2].get((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
+                tile.push_str(if self.bodies[1].get((W*(H-1-i))+j) { "x" } else if let Some(s) = head_str { s } else { "." });
                 let mut colored_tile = tile.color(Color::BrightWhite);
-                if self.hazard_mask.get_bit(W*(H-1-i)+j) {
+                if self.hazard_mask.get(W*(H-1-i)+j) {
                     colored_tile = tile.on_color(Color::White);
                 }
-                if self.food.get_bit((W*(H-1-i))+j) {
+                if self.food.get((W*(H-1-i))+j) {
                     colored_tile = tile.on_color(Color::Magenta);
                 }
                 if let Some(c) = snake_colors.get(&((W*(H-1-i))+j)) {

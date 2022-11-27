@@ -15,9 +15,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for (mv_int, optional_dest) in Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize].iter().enumerate() {
         if let Some(dest) = *optional_dest {
             some_legal_move = Move::from_int(mv_int as u8);
-            if survives_hazard || !board.hazard_mask.get_bit(dest as usize) || board.food.get_bit(dest as usize) {
+            if survives_hazard || !board.hazard_mask.get(dest as usize) || board.food.get(dest as usize) {
                 some_better_legal_move = Some(some_legal_move);
-                if !board.bodies[0].get_bit(dest as usize) {
+                if !board.bodies[0].get(dest as usize) {
                     moves.push(some_legal_move);
                 }
             }
@@ -43,43 +43,43 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 
     if WRAP {
         let move_to = (pos as usize + W) % (W*H);
-        if !board.bodies[0].get_bit(move_to) {
+        if !board.bodies[0].get(move_to) {
             moves.push(Move::Up);
         }
         let move_to = if W > pos as usize { W*(H-1) + pos as usize } else { pos as usize - W };
-        if !board.bodies[0].get_bit(move_to) {
+        if !board.bodies[0].get(move_to) {
             moves.push(Move::Down);
         }
         let move_to = if pos as usize % W == W-1 { pos as usize - (W-1) } else { pos as usize + 1};
-        if !board.bodies[0].get_bit(move_to) {
+        if !board.bodies[0].get(move_to) {
             moves.push(Move::Right);
         }
         let move_to = if pos as usize % W == 0 { pos as usize + (W-1) } else { pos as usize - 1 };
-        if !board.bodies[0].get_bit(move_to) {
+        if !board.bodies[0].get(move_to) {
             moves.push(Move::Left);
         }
     } else {
         if pos < (W * (H-1)) as u16 {
             some_legal_move = Move::Up;
-            if !board.bodies[0].get_bit(pos as usize + W) {
+            if !board.bodies[0].get(pos as usize + W) {
                 moves.push(Move::Up);
             }
         }
         if pos >= W as u16 {
             some_legal_move = Move::Down;
-            if !board.bodies[0].get_bit(pos as usize - W) {
+            if !board.bodies[0].get(pos as usize - W) {
                 moves.push(Move::Down);
             }
         }
         if pos % (W as u16) < (W as u16 - 1) {
             some_legal_move = Move::Right;
-            if !board.bodies[0].get_bit(pos as usize + 1) {
+            if !board.bodies[0].get(pos as usize + 1) {
                 moves.push(Move::Right);
             }
         }
         if pos % (W as u16) > 0 {
             some_legal_move = Move::Left;
-            if !board.bodies[0].get_bit(pos as usize - 1) {
+            if !board.bodies[0].get(pos as usize - 1) {
                 moves.push(Move::Left);
             }
         }
@@ -102,7 +102,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
         let mut options = 1;
         for i in 0..4 {
             if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[dest as usize][i] {
-                options += (!board.bodies[0].get_bit(pos as usize) && (board.hazard_dmg < 90 || !board.hazard_mask.get_bit(pos as usize))) as u64;
+                options += (!board.bodies[0].get(pos as usize) && (board.hazard_dmg < 90 || !board.hazard_mask.get(pos as usize))) as u64;
             }
         }
         for snake in board.snakes {
@@ -133,7 +133,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         for j in 0..4 {
             if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[i].head as usize][j] {
                 some_legal_move = Move::from_int(j as u8);
-                if !board.bodies[0].get_bit(pos as usize) {
+                if !board.bodies[0].get(pos as usize) {
                     if moves.len() == x {
                         moves.push(moves[0]);
                     }

@@ -1,3 +1,4 @@
+use bitssset::Bitset;
 use crate::bitboard::*;
 use crate::minimax::Score;
 use crate::minimax::endgame;
@@ -291,9 +292,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         if snake.is_dead() {
             continue
         }
-        if my_area.get_bit(snake.tail as usize) {
+        if my_area.get(snake.tail as usize) {
             res += 1;
-        } else if enemy_area.get_bit(snake.tail as usize) {
+        } else if enemy_area.get(snake.tail as usize) {
             res -= 1;
         }
     }
@@ -392,7 +393,7 @@ where [(); (W*H+63)/64]: Sized {
     let mut debug = "".to_string();
     for i in 0..H {
         for j in 0..W {
-            debug.push_str(if me.get_bit(W*(H-1-i)+j) { "x " } else if enemies.get_bit(W*(H-1-i)+j) { "o " } else { ". " });
+            debug.push_str(if me.get(W*(H-1-i)+j) { "x " } else if enemies.get(W*(H-1-i)+j) { "o " } else { ". " });
         }
         debug.push_str("\n");
     }

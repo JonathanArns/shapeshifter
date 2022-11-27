@@ -25,6 +25,7 @@ mcts_fallback = []
 parallel_search = []
 
 [dependencies]
+bitssset = "0.1"
 axum = { version = "0.5.6", features = ["headers"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"

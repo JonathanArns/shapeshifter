@@ -87,7 +87,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             continue
         }
         if snake.curled_bodyparts == 0 {
-            let tail_move_int = board.bodies[1].get_bit(snake.tail as usize) as u8 | (board.bodies[2].get_bit(snake.tail as usize) as u8) << 1;
+            let tail_move_int = board.bodies[1].get(snake.tail as usize) as u8 | (board.bodies[2].get(snake.tail as usize) as u8) << 1;
             board.bodies[0].unset_bit(snake.tail as usize);
             board.bodies[1].unset_bit(snake.tail as usize);
             board.bodies[2].unset_bit(snake.tail as usize);
@@ -114,12 +114,12 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         if HZSTACK {
             snake.health -= 1 + (board.hazard_dmg as i16 * board.hazards[snake.head as usize] as i16).min(100) as i8;
         } else {
-            let is_on_hazard = board.hazard_mask.get_bit(snake.head as usize) as i8;
+            let is_on_hazard = board.hazard_mask.get(snake.head as usize) as i8;
             snake.health -= 1 + board.hazard_dmg * is_on_hazard;
         }
 
         // feed snake
-        if board.food.get_bit(snake.head as usize) {
+        if board.food.get(snake.head as usize) {
             snake.health = 100;
             snake.curled_bodyparts += 1;
             snake.length += 1;
@@ -144,7 +144,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             continue
         }
         // body collisions
-        if board.bodies[0].get_bit(board.snakes[i].head as usize) {
+        if board.bodies[0].get(board.snakes[i].head as usize) {
             board.snakes[i].curled_bodyparts = 100; // marked for removal
             continue
         }
@@ -202,7 +202,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
     if rng.gen_ratio(15, 100) {
         let pos = rng.gen_range(0..(W*H));
-        if !board.bodies[0].get_bit(pos) {
+        if !board.bodies[0].get(pos) {
             board.food.set_bit(pos);
         }
     }

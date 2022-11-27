@@ -1,4 +1,4 @@
-use super::bitset::Bitset;
+use bitssset::Bitset;
 
 /// Computes ALL_BUT_LEFT_EDGE_MASK and ALL_BUT_RIGHT_EDGE_MASK
 pub const fn border_mask<const W: usize, const H: usize>(left: bool) -> Bitset<{W*H}>
