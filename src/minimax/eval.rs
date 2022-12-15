@@ -79,7 +79,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 7,0,being_longer(board),
                 7,5,controlled_food_diff(board, &my_area, &enemy_area),
                 4,7,non_hazard_area_diff(board, &my_area, &enemy_area),
-                0,7,if S == 2 { non_hazard_area_diff(board, &my_close_area, &enemy_close_area) } else { 0 },
+                0,7,non_hazard_area_diff(board, &my_close_area, &enemy_close_area),
                 10,6,(W as Score - closest_food_distance),
                 0,16,controlled_tail_diff(board, &my_area, &enemy_area),
             )
