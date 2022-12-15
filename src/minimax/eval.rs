@@ -69,21 +69,6 @@ pub fn eval<const S: usize, const W: usize, const H: usize, const WRAP: bool, co
 ) -> Score
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     match board.gamemode {
-        Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => {
-            let me = board.snakes[0];
-            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 4);
-            score!(
-                turn_progression(board.turn, 83, 250),
-                3,3,me.health as Score,
-                -1,-1,lowest_enemy_health(board),
-                7,0,being_longer(board),
-                7,5,controlled_food_diff(board, &my_area, &enemy_area),
-                4,7,non_hazard_area_diff(board, &my_area, &enemy_area),
-                0,7,non_hazard_area_diff(board, &my_close_area, &enemy_close_area),
-                10,6,(W as Score - closest_food_distance),
-                0,16,controlled_tail_diff(board, &my_area, &enemy_area),
-            )
-        }
         Gamemode::WrappedIslandsBridges => {
             let ((my_area, enemy_area), _, food_dist) = area_control(board, 5);
             let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
@@ -134,6 +119,20 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let ((my_area, enemy_area), (_, _), _) = area_control(board, 5);
             let (my_area_size, enemy_area_size) = (checkered_area_size(board, &my_area) as Score, checkered_area_size(board, &enemy_area) as Score);
             (my_area_size - enemy_area_size) as Score
+        }
+        Gamemode::WrappedSpiral | Gamemode::WrappedWithHazard => {
+            let me = board.snakes[0];
+            let ((my_area, enemy_area), (my_close_area, enemy_close_area), closest_food_distance) = area_control(board, 5);
+            score!(
+                turn_progression(board.turn, 83, 250),
+                3,3,me.health as Score,
+                -1,-1,lowest_enemy_health(board),
+                7,0,being_longer(board),
+                7,5,controlled_food_diff(board, &my_area, &enemy_area),
+                4,7,non_hazard_area_diff(board, &my_area, &enemy_area),
+                10,6,(W as Score - closest_food_distance),
+                0,16,controlled_tail_diff(board, &my_area, &enemy_area),
+            )
         }
         _ => {
             let me = board.snakes[0];
