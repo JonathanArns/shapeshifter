@@ -99,18 +99,18 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut moves = allowed_moves(board, snake_index);
     moves.sort_by_key(|mv| {
         let dest = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[snake_index].head as usize][mv.to_int() as usize].unwrap();
-        let mut score = !board.hazard_mask.get(dest as usize) as u64;
+        let mut options = 1;
         for i in 0..4 {
             if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[dest as usize][i] {
-                score += (!board.bodies[0].get(pos as usize) && !board.hazard_mask.get(pos as usize)) as u64
+                options += (!board.bodies[0].get(pos as usize) && (board.hazard_dmg < 90 || !board.hazard_mask.get(pos as usize))) as u64;
             }
         }
         for snake in board.snakes {
             if snake.is_alive() && snake.tail == dest {
-                score += 1;
+                options += 1;
             }
         }
-        u64::MAX - 10000 - history[board.snakes[snake_index].head as usize][mv.to_int() as usize] - score
+        u64::MAX - 10000 - history[board.snakes[snake_index].head as usize][mv.to_int() as usize] - options
     });
     moves
 }
