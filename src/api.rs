@@ -63,8 +63,8 @@ pub struct StartTimeHeader(u64);
 
 impl Header for StartTimeHeader {
     fn name() -> &'static HeaderName {
-        static DEADLINE_HEADER: HeaderName = HeaderName::from_static("x-received-at");
-        &DEADLINE_HEADER
+        static START_TIME_HEADER: HeaderName = HeaderName::from_static("x-received-at");
+        &START_TIME_HEADER
     }
 
     fn decode<'i, I>(values: &mut I) -> Result<Self, axum::headers::Error>

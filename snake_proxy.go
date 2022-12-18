@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -40,16 +37,7 @@ func max(x, y int) int {
 
 func modifyRequest(req *http.Request) {
 	if req.Method == "POST" && req.URL.Path == "/move" {
-		buf := &bytes.Buffer{}
-		teeReader := io.TeeReader(req.Body, buf)
-		decoder := json.NewDecoder(teeReader)
-		var state map[string]interface{}
-		decoder.Decode(&state)
-		req.Body = io.NopCloser(buf)
-		timeout := int(state["game"].(map[string]interface{})["timeout"].(float64))
-		duration, _ := time.ParseDuration(fmt.Sprint(max(timeout/2, timeout-100), "ms"))
-		deadline := time.Now().Add(duration)
-		req.Header.Set("x-deadline-unix-millis", fmt.Sprint("", deadline.UnixMilli()))
+		req.Header.Set("x-deadline-unix-millis", fmt.Sprint("", time.Now().UnixMilli()))
 	}
 }
 
