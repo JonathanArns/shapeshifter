@@ -403,80 +403,11 @@ where [(); (W*H+63)/64]: Sized {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api;
     use test::Bencher;
-    use serde_json;
-
-    fn c(x: usize, y: usize) -> api::Coord {
-        api::Coord{x, y}
-    }
 
     fn create_board() -> Bitboard<4, 11, 11, true, false> {
-        let mut ruleset = std::collections::HashMap::new();
-        ruleset.insert("name".to_string(), serde_json::Value::String("wrapped".to_string()));
-        let state = api::GameState{
-            game: api::Game{ id: "".to_string(), timeout: 100, ruleset, map: "standard".to_string(), source: "".to_string() },
-            turn: 157,
-            you: api::Battlesnake{
-                id: "a".to_string(),
-                name: "a".to_string(),
-                shout: None,
-                squad: None,
-                health: 100,
-                length: 11,
-                head: c(5,2),
-                body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
-            },
-            board: api::Board{
-                height: 11,
-                width: 11,
-                food: vec![c(3,10), c(6,0), c(10,1), c(0,10), c(3,0), c(9,5), c(10,3), c(9,4), c(8,4), c(8,10), c(0,6)],
-                hazards: vec![],
-                snakes: vec![
-                    api::Battlesnake{
-                        id: "a".to_string(),
-                        name: "a".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 100,
-                        length: 11,
-                        head: c(5,2),
-                        body: vec![c(5,2), c(5,1), c(6, 1), c(7,1), c(7,2), c(8,2), c(8,3), c(7,3), c(7,4), c(6,4), c(6,4)],
-                    },  
-                    api::Battlesnake{
-                        id: "b".to_string(),
-                        name: "b".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 12,
-                        head: c(3,4),
-                        body: vec![c(3,4), c(2,4), c(2,5), c(3, 5), c(3,6), c(3,7), c(3,8), c(4,8), c(4,7), c(4,6), c(4,5), c(4,4)],
-                    },  
-                    api::Battlesnake{
-                        id: "c".to_string(),
-                        name: "c".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 3,
-                        head: c(6,7),
-                        body: vec![c(6,7), c(7,7), c(8,7)],
-                    },  
-                    api::Battlesnake{
-                        id: "d".to_string(),
-                        name: "d".to_string(),
-                        shout: None,
-                        squad: None,
-                        health: 95,
-                        length: 3,
-                        head: c(9,9),
-                        body: vec![c(9,9), c(9,8), c(8,8)],
-                    },  
-                ],
-            },
-        };
-        Bitboard::<4, 11, 11, true, false>::from_gamestate(state)
+        let val = r###"{"game":{"id":"7ddd5c60-e27a-42ae-985e-f056e5695836","ruleset":{"name":"wrapped","version":"?","settings":{"foodSpawnChance":15,"minimumFood":1,"hazardDamagePerTurn":100,"royale":{},"squad":{"allowBodyCollisions":false,"sharedElimination":false,"sharedHealth":false,"sharedLength":false}}},"map":"hz_islands_bridges","timeout":500,"source":"league"},"turn":445,"board":{"width":11,"height":11,"food":[{"x":1,"y":9},{"x":1,"y":8},{"x":9,"y":1},{"x":6,"y":3},{"x":7,"y":3},{"x":7,"y":4},{"x":8,"y":3},{"x":4,"y":9},{"x":10,"y":8},{"x":6,"y":6}],"hazards":[{"x":5,"y":10},{"x":5,"y":9},{"x":5,"y":7},{"x":5,"y":6},{"x":5,"y":5},{"x":5,"y":4},{"x":5,"y":3},{"x":5,"y":0},{"x":5,"y":1},{"x":6,"y":5},{"x":7,"y":5},{"x":9,"y":5},{"x":10,"y":5},{"x":4,"y":5},{"x":3,"y":5},{"x":1,"y":5},{"x":0,"y":5},{"x":1,"y":10},{"x":9,"y":10},{"x":1,"y":0},{"x":9,"y":0},{"x":10,"y":1},{"x":10,"y":0},{"x":10,"y":10},{"x":10,"y":9},{"x":0,"y":10},{"x":0,"y":9},{"x":0,"y":1},{"x":0,"y":0},{"x":0,"y":6},{"x":0,"y":4},{"x":10,"y":6},{"x":10,"y":4},{"x":6,"y":10},{"x":4,"y":10},{"x":6,"y":0},{"x":4,"y":0}],"snakes":[{"id":"gs_P3P9rW63VPgMcYFFJ9R6McrM","name":"Shapeshifter","health":91,"body":[{"x":6,"y":2},{"x":6,"y":1},{"x":7,"y":1},{"x":7,"y":0},{"x":7,"y":10},{"x":8,"y":10},{"x":8,"y":0},{"x":8,"y":1},{"x":8,"y":2},{"x":9,"y":2},{"x":9,"y":3},{"x":10,"y":3},{"x":10,"y":2},{"x":0,"y":2},{"x":0,"y":3},{"x":1,"y":3},{"x":1,"y":4},{"x":2,"y":4},{"x":3,"y":4},{"x":3,"y":3},{"x":2,"y":3},{"x":2,"y":2},{"x":1,"y":2},{"x":1,"y":1},{"x":2,"y":1},{"x":2,"y":0},{"x":3,"y":0},{"x":3,"y":1},{"x":4,"y":1},{"x":4,"y":2}],"latency":11,"head":{"x":6,"y":2},"length":30,"shout":"","squad":"","customizations":{"color":"#900050","head":"cosmic-horror-special","tail":"cosmic-horror"}},{"id":"gs_YMFKJHvJwS9VV7SgtTMVmKVQ","name":"🇺🇦 Jagwire 🇺🇦","health":76,"body":[{"x":9,"y":9},{"x":8,"y":9},{"x":7,"y":9},{"x":6,"y":9},{"x":6,"y":8},{"x":5,"y":8},{"x":4,"y":8},{"x":3,"y":8},{"x":3,"y":9},{"x":3,"y":10},{"x":2,"y":10},{"x":2,"y":9},{"x":2,"y":8},{"x":2,"y":7},{"x":3,"y":7},{"x":4,"y":7},{"x":4,"y":6},{"x":3,"y":6},{"x":2,"y":6},{"x":1,"y":6},{"x":1,"y":7},{"x":0,"y":7},{"x":10,"y":7},{"x":9,"y":7},{"x":9,"y":6},{"x":8,"y":6},{"x":7,"y":6},{"x":7,"y":7},{"x":7,"y":8},{"x":8,"y":8},{"x":9,"y":8}],"latency":23,"head":{"x":9,"y":9},"length":31,"shout":"","squad":"","customizations":{"color":"#ffd900","head":"smile","tail":"wave"}}]},"you":{"id":"gs_P3P9rW63VPgMcYFFJ9R6McrM","name":"Shapeshifter","health":91,"body":[{"x":6,"y":2},{"x":6,"y":1},{"x":7,"y":1},{"x":7,"y":0},{"x":7,"y":10},{"x":8,"y":10},{"x":8,"y":0},{"x":8,"y":1},{"x":8,"y":2},{"x":9,"y":2},{"x":9,"y":3},{"x":10,"y":3},{"x":10,"y":2},{"x":0,"y":2},{"x":0,"y":3},{"x":1,"y":3},{"x":1,"y":4},{"x":2,"y":4},{"x":3,"y":4},{"x":3,"y":3},{"x":2,"y":3},{"x":2,"y":2},{"x":1,"y":2},{"x":1,"y":1},{"x":2,"y":1},{"x":2,"y":0},{"x":3,"y":0},{"x":3,"y":1},{"x":4,"y":1},{"x":4,"y":2}],"latency":11,"head":{"x":6,"y":2},"length":30,"shout":"","squad":"","customizations":{"color":"#900050","head":"cosmic-horror-special","tail":"cosmic-horror"}}}"###;
+        Bitboard::<4, 11, 11, true, false>::from_str(&val).unwrap()
     }
     
     #[bench]

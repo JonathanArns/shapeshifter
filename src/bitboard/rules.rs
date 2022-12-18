@@ -3,10 +3,11 @@ use std::sync::Arc;
 use super::*;
 use rand::Rng;
 use rand_pcg::Pcg64Mcg;
+use crate::wire_rep;
 
 pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
     board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
-    api_state: &GameState
+    api_state: &wire_rep::GameState
 )
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {

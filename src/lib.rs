@@ -5,7 +5,8 @@ extern crate lazy_static;
 extern crate test;
 
 
-mod bitboard;
+pub mod bitboard;
+pub mod wire_rep;
 
 #[cfg(not(feature = "mcts"))]
 mod minimax;
