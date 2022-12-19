@@ -10,8 +10,12 @@ name = "shapeshifter"
 path = "src/lib.rs"
 
 [[bin]]
+name = "shapeshifter"
+path = "src/bin/shapeshifter.rs"
+
+[[bin]]
 name = "trainer"
-path = "src/training/main.rs"
+path = "src/bin/trainer.rs"
 required-features = ["training"]
 
 [features]
