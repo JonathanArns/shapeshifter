@@ -4,22 +4,14 @@
 extern crate lazy_static;
 extern crate test;
 
-
 pub mod bitboard;
 pub mod wire_rep;
-
-#[cfg(not(feature = "mcts"))]
-mod minimax;
-
-// #[cfg(feature = "mcts")]
-mod uct;
-
-// Public stuff
-
 pub mod api;
+pub mod minimax;
+pub mod uct;
 
 pub fn init() {
-    #[cfg(all(feature = "tt", not(feature = "mcts")))]
+    #[cfg(feature = "tt")]
     minimax::init()
 }
 

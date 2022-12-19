@@ -8,9 +8,7 @@ use std::time;
 
 use crate::bitboard;
 use crate::wire_rep::GameState;
-#[cfg(not(feature = "mcts"))]
 use crate::minimax;
-// #[cfg(feature = "mcts")]
 use crate::uct;
 
 pub struct StartTimeHeader(u64);
@@ -118,8 +116,6 @@ fn is_hazard_stacking(state: &GameState) -> bool {
     }
 }
 
-
-#[cfg(feature = "mcts")]
 #[tracing::instrument(
     name = "handle_move",
     skip(state, start_time_header),
@@ -130,7 +126,7 @@ fn is_hazard_stacking(state: &GameState) -> bool {
         search.algo = "mcts"
     )
 )]
-pub async fn handle_move<const UNUSED: u8>(Json(state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
+pub async fn handle_move_mcts(Json(state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
     let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
         time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
     } else {
@@ -267,9 +263,6 @@ pub async fn handle_move<const UNUSED: u8>(Json(state): Json<GameState>, start_t
     Json(mv.to_json())
 }
 
-/// Use the type parameter TT to manually override the tt_id of the created Bitboard in training mode.
-/// This is used in training, since the tt_id is also used to choose eval weights there.
-#[cfg(not(feature = "mcts"))]
 #[tracing::instrument(
     name = "handle_move",
     skip(state, start_time_header),
@@ -280,19 +273,13 @@ pub async fn handle_move<const UNUSED: u8>(Json(state): Json<GameState>, start_t
         search.algo = "minimax"
     )
 )]
-pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
+pub async fn handle_move_minimax(Json(mut state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
     let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
         // we are playing behind a proxy with "accurate" timing information
         time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(60) - 60)).into())
     } else {
         time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
     };
-
-    #[cfg(feature = "training")]
-    {
-        state.game.id = "".to_string();
-        state.you.id = TT.to_string();
-    }
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
@@ -433,4 +420,13 @@ pub async fn handle_move<const TT: u8>(Json(mut state): Json<GameState>, start_t
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
     };
     Json(mv.to_json())
+}
+
+/// Use the type parameter TT to manually override the tt_id of the created Bitboard in training mode.
+/// This is used in training, since the tt_id is also used to choose eval weights there.
+#[cfg(feature = "training")]
+pub async fn training_handle_move_minimax<const TT: u8>(Json(mut state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
+    state.game.id = "".to_string();
+    state.you.id = TT.to_string();
+    handle_move_minimax(Json(state), start_time_header).await
 }

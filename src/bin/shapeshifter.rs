@@ -61,7 +61,12 @@ async fn main() {
         .route("/", get(api::handle_index))
         .route("/start", post(api::handle_start))
         .route("/end", post(api::handle_end))
-        .route("/move", post(api::handle_move::<0>))
+        .route("/move", post(api::handle_move_minimax))
+
+        .route("/mcts/", get(api::handle_index))
+        .route("/mcts/start", post(api::handle_start))
+        .route("/mcts/end", post(api::handle_end))
+        .route("/mcts/move", post(api::handle_move_mcts))
         .layer(TraceLayer::new_for_http());
 
     let env_port = env::var("PORT").ok();

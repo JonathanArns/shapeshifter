@@ -5,7 +5,10 @@ use std::sync::Mutex;
 use fxhash::FxHasher64;
 
 const TT_LENGTH: usize = 12582917; // prime
+#[cfg(not(feature = "training"))]
 const MAX_SIMUL_GAMES: usize = 1;
+#[cfg(feature = "training")]
+const MAX_SIMUL_GAMES: usize = 4; // training requires one TT per snake
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.

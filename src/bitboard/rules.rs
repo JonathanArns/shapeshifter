@@ -52,8 +52,6 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
                 finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
                 finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
-                #[cfg(feature = "mcts")]
-                spawn_food::<S, W, H, WRAP, HZSTACK>(board);
             }),
         },
     };

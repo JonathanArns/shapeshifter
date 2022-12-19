@@ -6,7 +6,6 @@ use colored::{Colorize, Color};
 use serde_json;
 use bitssset::Bitset;
 
-#[cfg(not(feature = "mcts"))]
 use crate::minimax;
 use crate::wire_rep;
 
@@ -268,10 +267,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 14
             };
         }
-        #[cfg(not(feature = "mcts"))]
-        {
-            board.tt_id = minimax::get_tt_id(state.game.id + &state.you.id);
-        }
+        board.tt_id = minimax::get_tt_id(state.game.id + &state.you.id);
         for food in state.board.food {
             board.food.set_bit(W*food.y + food.x);
         }

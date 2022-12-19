@@ -20,22 +20,22 @@ async fn main() {
         .route("/0/", get(api::handle_index))
         .route("/0/start", post(api::handle_start))
         .route("/0/end", post(api::handle_end))
-        .route("/0/move", post(api::handle_move::<0>))
+        .route("/0/move", post(api::training_handle_move_minimax::<0>))
 
         .route("/1/", get(api::handle_index))
         .route("/1/start", post(api::handle_start))
         .route("/1/end", post(api::handle_end))
-        .route("/1/move", post(api::handle_move::<1>))
+        .route("/1/move", post(api::training_handle_move_minimax::<1>))
 
         .route("/2/", get(api::handle_index))
         .route("/2/start", post(api::handle_start))
         .route("/2/end", post(api::handle_end))
-        .route("/2/move", post(api::handle_move::<2>))
+        .route("/2/move", post(api::training_handle_move_minimax::<2>))
 
         .route("/3/", get(api::handle_index))
         .route("/3/start", post(api::handle_start))
         .route("/3/end", post(api::handle_end))
-        .route("/3/move", post(api::handle_move::<3>));
+        .route("/3/move", post(api::training_handle_move_minimax::<3>));
 
     let env_port = env::var("PORT").ok();
     let addr = "0.0.0.0:".to_owned() + env_port.as_ref().map(String::as_str).unwrap_or("8080");
