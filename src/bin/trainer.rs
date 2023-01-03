@@ -1,4 +1,4 @@
-#![feature(test, generic_const_exprs, label_break_value, async_closure, let_chains)]
+#![feature(test, generic_const_exprs, async_closure, let_chains)]
 
 use axum::{Router, routing::get, routing::post};
 use tokio::task;

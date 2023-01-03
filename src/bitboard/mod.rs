@@ -4,13 +4,14 @@ use std::rc::Rc;
 use std::sync::Arc;
 use colored::{Colorize, Color};
 use serde_json;
+use std::fs::File;
+use std::io::prelude::*;
 use bitssset::Bitset;
 
 use crate::minimax;
 use crate::wire_rep;
 
 mod constants;
-#[macro_use]
 mod rules;
 pub mod moves;
 pub mod move_gen;
@@ -49,6 +50,21 @@ impl Gamemode {
                 _ if state.board.hazards.len() == 0 => Self::Standard,
                 _ => Self::StandardWithHazard,
             },
+        }
+    }
+
+    // Returns the gamemode's name as a string.
+    pub fn get_name(&self) -> String {
+        match *self {
+            Gamemode::Standard => "standard".to_string(),
+            Gamemode::Wrapped => "wrapped".to_string(),
+            Gamemode::Constrictor => "constrictor".to_string(),
+            Gamemode::WrappedSpiral => "wrapped-spiral".to_string(),
+            Gamemode::WrappedSinkholes => "wrapped-sinkholes".to_string(),
+            Gamemode::WrappedWithHazard => "wrapped-with-hazard".to_string(),
+            Gamemode::StandardWithHazard => "standard-with-hazard".to_string(),
+            Gamemode::WrappedArcadeMaze => "wrapped-arcade-maze".to_string(),
+            Gamemode::WrappedIslandsBridges => "wrapped-islands-bridges".to_string(),
         }
     }
 
@@ -175,9 +191,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 
     /// Serializes the Bitboard to a move request string.
     pub fn to_string(&self) -> Result<String, serde_json::Error> {
-        let x = serde_json::to_string(&self.to_gamestate());
-        println!("{:?}", x);
-        x
+        serde_json::to_string(&self.to_gamestate())
     }
 
     /// Transforms this bitboard into a gamestate.
@@ -414,6 +428,72 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         let x = idx % W as u16;
         let y = idx / W as u16;
         "(".to_string() + &x.to_string() + " " + &y.to_string() + ")"
+    }
+
+    /// Generates input features for neural networks
+    pub fn get_nn_input(&self) -> [u8; W*H*7] {
+        let MY_HEAD: usize = 0*W*H;
+        let MY_TAIL: usize = 1*W*H;
+        let ENEMY_HEADS: usize = 2*W*H;
+        let ENEMY_TAILS: usize = 3*W*H;
+        let BODIES: usize = 4*W*H;
+        let FOOD: usize = 5*W*H;
+        let HAZARDS: usize = 6*W*H;
+        let MY_HEALTH: usize = 7*W*H;
+        let ENEMY_HEALTH: usize = 7*W*H+1;
+        let MY_LENGTH: usize = 7*W*H+2;
+        let ENEMY_LENGTH: usize = 7*W*H+3;
+
+        let mut features = [0; W*H*7];
+
+        let me = self.snakes[0];
+        features[MY_HEAD + me.head as usize] = 1;
+        features[MY_TAIL + me.tail as usize] = 1;
+        // features[MY_HEALTH] = me.health as u8;
+        // features[MY_LENGTH] = me.length as u8;
+
+        // features[ENEMY_HEALTH] = u8::MAX; 
+        for snake in self.snakes[1..].iter() {
+            if snake.is_dead() {
+                continue
+            }
+            features[ENEMY_HEADS + snake.head as usize] = 1;
+            features[ENEMY_TAILS + snake.tail as usize] = 1;
+            // if snake.length > features[ENEMY_LENGTH] {
+            //     features[ENEMY_LENGTH] = snake.length as u8;
+            // }
+            // if snake.health < features[ENEMY_HEALTH] as i8 {
+            //     features[ENEMY_HEALTH] = snake.health as u8; 
+            // }
+        }
+
+        for i in 0..(W*H) {
+            features[BODIES + i] = self.bodies[0].get(i) as u8;
+            features[FOOD + i] = self.food.get(i) as u8;
+            features[HAZARDS + i] = self.hazard_mask.get(i) as u8;
+        }
+        features
+    }
+    
+    /// Appends the board in json format and the score to file.
+    pub fn write_to_file_with_score(&self, score: minimax::Score, file_name_suffix: &str)
+    where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+        let path = format!(
+            "./data/{}_{}-{}x{}-{}-{}_boards_{}.csv",
+            self.gamemode.get_name(),
+            S, W, H,
+            if WRAP { "WRAP" } else { "NOWRAP" },
+            if HZSTACK { "STACK" } else { "NOSTACK" },
+            file_name_suffix
+        );
+        let mut file = File::options()
+            .create(true)
+            .append(true)
+            .open(path)
+            .expect("coudln't create file");
+        if let Err(e) = writeln!(file, "{};{}", score, self.to_string().unwrap()) {
+            eprintln!("Couldn't write to file: {}", e);
+        }
     }
 }
 

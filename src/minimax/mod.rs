@@ -28,6 +28,11 @@ lazy_static! {
     } else {
         0
     };
+    static ref DATA_NAME_SUFFIX: Option<String> = if let Ok(var) = env::var("DATA_SUFFIX") {
+        Some(var.to_string())
+    } else {
+        None
+    };
 }
 
 pub type Score = i16;
@@ -83,6 +88,9 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             best_score = guess;
             best_move = *mv;
         }
+    }
+    if let Some(suffix) = &*DATA_NAME_SUFFIX && best_score > -30000 && best_score < 30000 {
+        board.write_to_file_with_score(best_score, suffix);
     }
     info!(
         game.turn = board.turn,

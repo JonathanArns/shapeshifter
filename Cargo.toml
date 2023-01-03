@@ -18,15 +18,24 @@ name = "trainer"
 path = "src/bin/trainer.rs"
 required-features = ["training"]
 
+[[bin]]
+name = "data_transform"
+path = "src/bin/data_transform.rs"
+
+[[bin]]
+name = "nn"
+path = "src/bin/nn.rs"
+required-features = ["nn"]
+
 [features]
 default = []
 prod = ["spl", "mcts_fallback", "tt", "parallel_search"]
 spl = []
-mcts = []
 tt = []
 training = []
 mcts_fallback = []
 parallel_search = []
+nn = []
 
 [dependencies]
 bitssset = "0.1"
@@ -50,6 +59,8 @@ arrayvec = "0.7"
 lazy_static = "1.4"
 fxhash = "0.2.1"
 colored = "2"
+dfdx = "0.10"
+indicatif = "0.17"
 
 [build]
 rustflags = "-C target-cpu=native"
