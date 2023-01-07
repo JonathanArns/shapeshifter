@@ -162,7 +162,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         // draw value is different depending on gamemode
         return match board.gamemode {
             Gamemode::Constrictor => 0,
-            _ => -5000 + board.turn as Score,
+            _ => -10000 + board.turn as Score,
         }
     } else {
         return Score::MAX - board.turn as Score

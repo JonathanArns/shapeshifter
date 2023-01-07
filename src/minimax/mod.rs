@@ -89,7 +89,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             best_move = *mv;
         }
     }
-    if let Some(suffix) = &*DATA_NAME_SUFFIX && best_score > -30000 && best_score < 30000 {
+    if let Some(suffix) = &*DATA_NAME_SUFFIX && best_score > -8000 && best_score < 8000 {
         board.write_to_file_with_score(best_score, suffix);
     }
     info!(

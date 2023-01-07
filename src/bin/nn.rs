@@ -16,7 +16,7 @@ use serde_json;
 
 const BATCH: usize = 64;
 const INPUT: usize = 11*11*7;
-const EPOCHS: usize = 90;
+const EPOCHS: usize = 30;
 
 type EvalNetwork = (
     (Linear<INPUT, 16>, ReLU),
@@ -30,6 +30,16 @@ struct EvalDataset {
 }
 
 impl EvalDataset {
+    fn train_test_split(self) -> (Self, Self) {
+        let mut train = self;
+        let mut test = Self{x: vec![], y: vec![]};
+        for i in 0..(train.y.len()/10) {
+            test.x.push(train.x.pop().unwrap());
+            test.y.push(train.y.pop().unwrap());
+        }
+        (train, test)
+    }
+
     fn load(path: &str) -> Self {
         let mut dataset = Self{x: Vec::with_capacity(10000), y: Vec::with_capacity(10000)};
         let file = File::open(path).expect("coudln't open file");
@@ -85,23 +95,23 @@ fn main() {
 
     // init optimizer
     let mut opt:  Adam<EvalNetwork> = Default::default();
+    opt.cfg.weight_decay = Some(WeightDecay::Decoupled(0.0001));
 
     // load dataset
-    let dataset = EvalDataset::load("./data/standard_2-11x11-NOWRAP-NOSTACK_features_train.csv");
-    let test_dataset = EvalDataset::load("./data/standard_2-11x11-NOWRAP-NOSTACK_features_test.csv");
+    let (training_dataset, test_dataset) = EvalDataset::load("./data/standard_2-11x11-NOWRAP-NOSTACK_features_train.csv").train_test_split();
 
     // training loop
     for i_epoch in 0..EPOCHS {
         // learning rate decay
-        if i_epoch == 30 {
+        if i_epoch == 15 {
             opt.cfg.lr *= 0.1;
         }
         let mut total_epoch_loss = 0.0;
         let mut num_batches = 0;
         let start = Instant::now();
-        let bar = ProgressBar::new(dataset.len() as u64);
-        for (x, y_true) in SubsetIterator::<BATCH>::shuffled(dataset.len(), &mut rng)
-            .map(|i| dataset.get_batch(i))
+        let bar = ProgressBar::new(training_dataset.len() as u64);
+        for (x, y_true) in SubsetIterator::<BATCH>::shuffled(training_dataset.len(), &mut rng)
+            .map(|i| training_dataset.get_batch(i))
         {
             let y = model.forward_mut(x.traced());
             let loss = mse_loss(y, y_true);
