@@ -213,24 +213,26 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
         loop {
             let test = next_bns_guess(last_test, alpha, beta);
             let mut better_moves = ArrayVec::<Move, 4>::new();
-            if depth > 3 {
-                let mut join_handles: ArrayVec<(moves::Move, JoinHandle<(Option<i16>, [[u64; 4]; W*H])>), 4> = ArrayVec::new();
+            if depth > 3 && my_moves.len() > 1 {
+                let mut join_handles: ArrayVec<(moves::Move, JoinHandle<(Option<i16>, [[u64; 4]; W*H], u64)>), 4> = ArrayVec::new();
                 for mv in &my_moves {
                     let b = board.clone();
-                    let mut nc = node_counter;
+                    let mut node_counter = 0;
                     let m = mv.clone();
                     let mut em = enemy_moves.clone();
                     let mut hist = history.clone();
                     join_handles.push((*mv, spawn(move || {
-                        let score = alphabeta(&b, &mut nc, deadline, m, &mut em, &mut hist, depth, test-1, test);
-                        (score, hist)
+                        let score = alphabeta(&b, &mut node_counter, deadline, m, &mut em, &mut hist, depth, test-1, test);
+                        (score, hist, node_counter)
                     })));
                 }
+                let old_hist = history.clone();
                 for (mv, handle) in join_handles {
-                    if let Ok((Some(score), hist)) = handle.join() {
+                    if let Ok((Some(score), hist, nc)) = handle.join() {
+                        node_counter += nc;
                         for i in 0..(W*H) {
                             for j in 0..4 {
-                                history[i][j] += hist[i][j];
+                                history[i][j] += hist[i][j] - old_hist[i][j];
                             }
                         }
                         if score >= test {
