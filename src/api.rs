@@ -126,7 +126,7 @@ fn is_hazard_stacking(state: &GameState) -> bool {
         search.algo = "mcts"
     )
 )]
-pub async fn handle_move_mcts(Json(state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
+pub async fn handle_move_mcts(start_time_header: Option<TypedHeader<StartTimeHeader>>, Json(state): Json<GameState>) -> Json<Value> {
     let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
         time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
     } else {
@@ -273,7 +273,7 @@ pub async fn handle_move_mcts(Json(state): Json<GameState>, start_time_header: O
         search.algo = "minimax"
     )
 )]
-pub async fn handle_move_minimax(Json(mut state): Json<GameState>, start_time_header: Option<TypedHeader<StartTimeHeader>>) -> Json<Value> {
+pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTimeHeader>>, Json(mut state): Json<GameState>) -> Json<Value> {
     let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
         // we are playing behind a proxy with "accurate" timing information
         time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(60) - 60)).into())

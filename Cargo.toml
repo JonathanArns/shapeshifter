@@ -39,7 +39,7 @@ nn = []
 
 [dependencies]
 bitssset = "0.1"
-axum = { version = "0.5.6", features = ["headers"] }
+axum = { version = "0.6", features = ["headers"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"
 tower-http = { version = "0.3", features = ["trace"] }
@@ -53,11 +53,11 @@ opentelemetry-otlp = { version = "0.9", features = ["tls-roots"] }
 tonic = "0.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rand = "0.8.4"
+rand = "0.8"
 rand_pcg = "0.3"
 arrayvec = "0.7"
 lazy_static = "1.4"
-fxhash = "0.2.1"
+fxhash = "0.2"
 colored = "2"
 dfdx = "0.10"
 indicatif = "0.17"
