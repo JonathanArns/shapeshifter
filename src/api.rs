@@ -148,7 +148,7 @@ pub async fn handle_move_mcts(Json(state): Json<GameState>, start_time_header: O
     };
 
     #[cfg(feature = "spl")]
-    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
+    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
         (1, 7, 7, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, 7, 7, true, false>::from_gamestate(state), deadline)).await.unwrap(),
         (2, 7, 7, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, 7, 7, true, false>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 7, 7, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, 7, 7, true, false>::from_gamestate(state), deadline)).await.unwrap(),
