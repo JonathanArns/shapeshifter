@@ -26,10 +26,10 @@ impl<const S: usize> Moves<S> {
     }
 }
 
-struct Node<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>
+struct Node<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     max: bool,
-    board: Bitboard<S, W, H, WRAP, HZSTACK>,
+    board: Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     idx: usize,
     parent: Option<usize>,
     moves_idx: usize,
@@ -39,9 +39,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     wins: u32,
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Node<S, W, H, WRAP, HZSTACK> 
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> Node<S, W, H, WRAP, HZSTACK, SILLY>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-    fn new(board: Bitboard<S, W, H, WRAP, HZSTACK>, idx: usize, moves_idx: usize, parent: Option<usize>, max: bool) -> Self {
+    fn new(board: Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, idx: usize, moves_idx: usize, parent: Option<usize>, max: bool) -> Self {
         // this is effectively the move generation for the in memory tree
         let moves = if max {
             Moves::Me(allowed_moves(&board, 0))
@@ -49,7 +49,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             Moves::Enemies(move_combinations(&board, 1))
         };
 
-        Node::<S, W, H, WRAP, HZSTACK>{
+        Node::<S, W, H, WRAP, HZSTACK, SILLY>{
             max,
             board,
             idx,
@@ -63,7 +63,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-fn expand<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK>>, node_idx: usize, moves_idx: usize) -> usize
+fn expand<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK, SILLY>>, node_idx: usize, moves_idx: usize) -> usize
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut board = tree[node_idx].board.clone();
     if !tree[node_idx].max {
@@ -86,22 +86,22 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         (board.apply_moves.clone())(&mut board, &moves);
     }
     let idx = tree.len();
-    let new = Node::<S, W, H, WRAP, HZSTACK>::new(board, idx, moves_idx, Some(tree[node_idx].idx), !tree[node_idx].max);
+    let new = Node::<S, W, H, WRAP, HZSTACK, SILLY>::new(board, idx, moves_idx, Some(tree[node_idx].idx), !tree[node_idx].max);
     tree.push(new);
     tree[node_idx].children[moves_idx] = Some(idx);
     idx
 }
 
-pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, deadline: time::SystemTime) -> (Move, f64)
+pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, deadline: time::SystemTime) -> (Move, f64)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-    let mut tree = Vec::<Node<S, W, H, WRAP, HZSTACK>>::with_capacity(100000);
+    let mut tree = Vec::<Node<S, W, H, WRAP, HZSTACK, SILLY>>::with_capacity(100000);
     let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
     let mut node_counter = 0;
     let mut iteration_counter = 0;
     let start_time = time::Instant::now();
 
     // create root
-    tree.push(Node::<S, W, H, WRAP, HZSTACK>::new(board.clone(), 0, 0, None, true));
+    tree.push(Node::<S, W, H, WRAP, HZSTACK, SILLY>::new(board.clone(), 0, 0, None, true));
 
     // compute
     while time::SystemTime::now() < deadline {
@@ -132,7 +132,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     (best_move, best_winrate)
 }
 
-fn once<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK>>, rng: &mut impl Rng, node_counter: &mut u64)
+fn once<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK, SILLY>>, rng: &mut impl Rng, node_counter: &mut u64)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // select
     let mut node_idx = 0;
@@ -157,7 +157,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     propagate(tree, node_idx, result);
 }
 
-fn propagate<const S: usize, const W: usize, const H:usize, const WRAP: bool, const HZSTACK: bool>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK>>, mut node_idx: usize, result: i8)
+fn propagate<const S: usize, const W: usize, const H:usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK, SILLY>>, mut node_idx: usize, result: i8)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // propagate
     loop {
@@ -174,7 +174,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 // returns the winner's snake index
-fn playout<const S: usize, const W: usize, const H:usize, const WRAP: bool, const HZSTACK: bool>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK>>, node_idx: usize, moves_idx: usize, rng: &mut impl Rng, node_counter: &mut u64) -> i8
+fn playout<const S: usize, const W: usize, const H:usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(tree: &mut Vec<Node<S, W, H, WRAP, HZSTACK, SILLY>>, node_idx: usize, moves_idx: usize, rng: &mut impl Rng, node_counter: &mut u64) -> i8
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut board = tree[node_idx].board.clone();
     let mut moves = match &tree[node_idx].moves {
@@ -209,7 +209,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     return 0
 }
 
-fn select_child<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(tree: &Vec<Node<S, W, H, WRAP, HZSTACK>>, node: usize) -> usize
+fn select_child<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(tree: &Vec<Node<S, W, H, WRAP, HZSTACK, SILLY>>, node: usize) -> usize
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let parent_visits = tree[node].visits;
     let parent_max = tree[node].max;

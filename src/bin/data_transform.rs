@@ -39,21 +39,21 @@ pub fn main() {
     }
 
     match (in_type_params, in_boards_or_features, out_boards_or_features) {
-        ("2-11x11-NOWRAP-NOSTACK", "boards", "boards") => evaluate_stored_boards::<2, 11, 11, false, false>(&input_path, &output_path, 5),
-        ("2-11x11-NOWRAP-NOSTACK", "boards", "features") => transform_stored_board_to_features::<2, 11, 11, false, false>(&input_path, &output_path),
+        ("2-11x11-NOWRAP-NOSTACK", "boards", "boards") => evaluate_stored_boards::<2, 11, 11, false, false, 0>(&input_path, &output_path, 5),
+        ("2-11x11-NOWRAP-NOSTACK", "boards", "features") => transform_stored_board_to_features::<2, 11, 11, false, false, 0>(&input_path, &output_path),
 
-        ("4-11x11-NOWRAP-NOSTACK", "boards", "boards") => evaluate_stored_boards::<4, 11, 11, false, false>(&input_path, &output_path, 5),
-        ("4-11x11-NOWRAP-NOSTACK", "boards", "features") => transform_stored_board_to_features::<4, 11, 11, false, false>(&input_path, &output_path),
+        ("4-11x11-NOWRAP-NOSTACK", "boards", "boards") => evaluate_stored_boards::<4, 11, 11, false, false, 0>(&input_path, &output_path, 5),
+        ("4-11x11-NOWRAP-NOSTACK", "boards", "features") => transform_stored_board_to_features::<4, 11, 11, false, false, 0>(&input_path, &output_path),
 
-        ("4-11x11-WRAP-NOSTACK", "boards", "boards") => evaluate_stored_boards::<4, 11, 11, true, false>(&input_path, &output_path, 5),
-        ("4-11x11-WRAP-NOSTACK", "boards", "features") => transform_stored_board_to_features::<4, 11, 11, true, false>(&input_path, &output_path),
+        ("4-11x11-WRAP-NOSTACK", "boards", "boards") => evaluate_stored_boards::<4, 11, 11, true, false, 0>(&input_path, &output_path, 5),
+        ("4-11x11-WRAP-NOSTACK", "boards", "features") => transform_stored_board_to_features::<4, 11, 11, true, false, 0>(&input_path, &output_path),
 
         (_, _, _) => panic!("Board type parameters or operation not supported"),
     }
 }
 
 /// Reads in a file of json boards line by line and produces a new file with scores added.
-pub fn evaluate_stored_boards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(in_path: &str, out_path: &str, depth: u8)
+pub fn evaluate_stored_boards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(in_path: &str, out_path: &str, depth: u8)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let num_lines = BufReader::new(File::open(in_path).expect("coudln't open file")).lines().count();
     let bar = ProgressBar::new(num_lines as u64);
@@ -63,7 +63,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for line in BufReader::new(file).lines() {
         let line = line.unwrap();
         let (_, board) = line.split_once(";").unwrap();
-        let board = Bitboard::<S, W, H, WRAP, HZSTACK>::from_str(&board).unwrap();
+        let board = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::from_str(&board).unwrap();
         let (_, score, _) = fixed_depth_search(&board, depth);
         if let Err(e) = writeln!(writer, "{};{}", score, board.to_string().unwrap()) {
             eprintln!("Couldn't write to file: {}", e);
@@ -73,7 +73,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 /// Transforms the json boards in an evaluated boards file into neural net input features.
-pub fn transform_stored_board_to_features<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(in_path: &str, out_path: &str)
+pub fn transform_stored_board_to_features<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(in_path: &str, out_path: &str)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); W*H*7]: Sized {
     let num_lines = BufReader::new(File::open(in_path).expect("coudln't open file")).lines().count();
     let bar = ProgressBar::new(num_lines as u64);
@@ -83,7 +83,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(
     for line in BufReader::new(file).lines() {
         let line = line.unwrap();
         let (score, board) = line.split_once(";").unwrap();
-        let board = Bitboard::<S, W, H, WRAP, HZSTACK>::from_str(&board).unwrap();
+        let board = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::from_str(&board).unwrap();
         if let Err(e) = writeln!(writer, "{};{:?}", score, board.get_nn_input()) {
             eprintln!("Couldn't write to file: {}", e);
         }

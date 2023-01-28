@@ -126,7 +126,7 @@ pub const fn hz_stack_len<const STACK: bool, const W: usize, const H: usize>() -
 }
 
 #[derive(Clone)]
-pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> 
+pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub bodies: [Bitset<{W*H}>; 3],
     pub snakes: [Snake; S],
@@ -140,7 +140,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub apply_moves: Arc<dyn Fn(&mut Self, &[Move; S]) + Send + Sync>,
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Hash for Bitboard<S, W, H, WRAP, HZSTACK>
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> Hash for Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     fn hash<T: Hasher>(&self, state: &mut T) {
         self.bodies.hash(state);
@@ -156,7 +156,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> Bitboard<S, W, H, WRAP, HZSTACK>
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
     pub const CHECKER_BOARD_MASK: Bitset<{W*H}> = constants::checker_board_mask::<W, H>();
@@ -320,6 +320,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 if  prev_pos == pos + 1 || prev_pos + 1 == pos || WRAP && prev_pos == pos + W as u16 - 1 || WRAP && prev_pos + W as u16 - 1 == pos {
                     board.bodies[2].set_bit(pos as usize);
                 }
+                // at the beginning of the loop, set head direction (used for silly move gen)
+                if prev_pos == board.snakes[n].head {
+                    board.bodies[1].set(board.snakes[n].head as usize, board.bodies[1].get(pos as usize));
+                    board.bodies[2].set(board.snakes[n].head as usize, board.bodies[2].get(pos as usize));
+                }
                 prev_pos = pos;
             }
             if board.snakes[n].curled_bodyparts == 0 && board.gamemode != Gamemode::Constrictor {
@@ -378,7 +383,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 
     pub fn is_legal_move(&self, from: u16, mv: Move) -> bool {
-        WRAP || None != Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[from as usize][mv.to_int() as usize]
+        WRAP || None != Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[from as usize][mv.to_int() as usize]
     }
 
     pub fn is_legal_enemy_moves(&self, mvs: [Move; S]) -> bool {
@@ -497,7 +502,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> std::fmt::Debug for Bitboard<S, W, H, WRAP, HZSTACK>
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> std::fmt::Debug for Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // draw the board
@@ -537,7 +542,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool> std::fmt::Display for Bitboard<S, W, H, WRAP, HZSTACK>
+impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> std::fmt::Display for Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // decide on colors for the individual snakes
@@ -610,15 +615,15 @@ mod tests {
     use crate::wire_rep;
     use test::Bencher;
 
-    fn create_board() -> Bitboard<4, 11, 11, true, false> {
+    fn create_board() -> Bitboard<4, 11, 11, true, false, 0> {
         let val = r###"{"game":{"id":"7ddd5c60-e27a-42ae-985e-f056e5695836","ruleset":{"name":"wrapped","version":"?","settings":{"foodSpawnChance":15,"minimumFood":1,"hazardDamagePerTurn":100,"royale":{},"squad":{"allowBodyCollisions":false,"sharedElimination":false,"sharedHealth":false,"sharedLength":false}}},"map":"hz_islands_bridges","timeout":500,"source":"league"},"turn":445,"board":{"width":11,"height":11,"food":[{"x":1,"y":9},{"x":1,"y":8},{"x":9,"y":1},{"x":6,"y":3},{"x":7,"y":3},{"x":7,"y":4},{"x":8,"y":3},{"x":4,"y":9},{"x":10,"y":8},{"x":6,"y":6}],"hazards":[{"x":5,"y":10},{"x":5,"y":9},{"x":5,"y":7},{"x":5,"y":6},{"x":5,"y":5},{"x":5,"y":4},{"x":5,"y":3},{"x":5,"y":0},{"x":5,"y":1},{"x":6,"y":5},{"x":7,"y":5},{"x":9,"y":5},{"x":10,"y":5},{"x":4,"y":5},{"x":3,"y":5},{"x":1,"y":5},{"x":0,"y":5},{"x":1,"y":10},{"x":9,"y":10},{"x":1,"y":0},{"x":9,"y":0},{"x":10,"y":1},{"x":10,"y":0},{"x":10,"y":10},{"x":10,"y":9},{"x":0,"y":10},{"x":0,"y":9},{"x":0,"y":1},{"x":0,"y":0},{"x":0,"y":6},{"x":0,"y":4},{"x":10,"y":6},{"x":10,"y":4},{"x":6,"y":10},{"x":4,"y":10},{"x":6,"y":0},{"x":4,"y":0}],"snakes":[{"id":"gs_P3P9rW63VPgMcYFFJ9R6McrM","name":"Shapeshifter","health":91,"body":[{"x":6,"y":2},{"x":6,"y":1},{"x":7,"y":1},{"x":7,"y":0},{"x":7,"y":10},{"x":8,"y":10},{"x":8,"y":0},{"x":8,"y":1},{"x":8,"y":2},{"x":9,"y":2},{"x":9,"y":3},{"x":10,"y":3},{"x":10,"y":2},{"x":0,"y":2},{"x":0,"y":3},{"x":1,"y":3},{"x":1,"y":4},{"x":2,"y":4},{"x":3,"y":4},{"x":3,"y":3},{"x":2,"y":3},{"x":2,"y":2},{"x":1,"y":2},{"x":1,"y":1},{"x":2,"y":1},{"x":2,"y":0},{"x":3,"y":0},{"x":3,"y":1},{"x":4,"y":1},{"x":4,"y":2}],"latency":11,"head":{"x":6,"y":2},"length":30,"shout":"","squad":"","customizations":{"color":"#900050","head":"cosmic-horror-special","tail":"cosmic-horror"}},{"id":"gs_YMFKJHvJwS9VV7SgtTMVmKVQ","name":"🇺🇦 Jagwire 🇺🇦","health":76,"body":[{"x":9,"y":9},{"x":8,"y":9},{"x":7,"y":9},{"x":6,"y":9},{"x":6,"y":8},{"x":5,"y":8},{"x":4,"y":8},{"x":3,"y":8},{"x":3,"y":9},{"x":3,"y":10},{"x":2,"y":10},{"x":2,"y":9},{"x":2,"y":8},{"x":2,"y":7},{"x":3,"y":7},{"x":4,"y":7},{"x":4,"y":6},{"x":3,"y":6},{"x":2,"y":6},{"x":1,"y":6},{"x":1,"y":7},{"x":0,"y":7},{"x":10,"y":7},{"x":9,"y":7},{"x":9,"y":6},{"x":8,"y":6},{"x":7,"y":6},{"x":7,"y":7},{"x":7,"y":8},{"x":8,"y":8},{"x":9,"y":8}],"latency":23,"head":{"x":9,"y":9},"length":31,"shout":"","squad":"","customizations":{"color":"#ffd900","head":"smile","tail":"wave"}}]},"you":{"id":"gs_P3P9rW63VPgMcYFFJ9R6McrM","name":"Shapeshifter","health":91,"body":[{"x":6,"y":2},{"x":6,"y":1},{"x":7,"y":1},{"x":7,"y":0},{"x":7,"y":10},{"x":8,"y":10},{"x":8,"y":0},{"x":8,"y":1},{"x":8,"y":2},{"x":9,"y":2},{"x":9,"y":3},{"x":10,"y":3},{"x":10,"y":2},{"x":0,"y":2},{"x":0,"y":3},{"x":1,"y":3},{"x":1,"y":4},{"x":2,"y":4},{"x":3,"y":4},{"x":3,"y":3},{"x":2,"y":3},{"x":2,"y":2},{"x":1,"y":2},{"x":1,"y":1},{"x":2,"y":1},{"x":2,"y":0},{"x":3,"y":0},{"x":3,"y":1},{"x":4,"y":1},{"x":4,"y":2}],"latency":11,"head":{"x":6,"y":2},"length":30,"shout":"","squad":"","customizations":{"color":"#900050","head":"cosmic-horror-special","tail":"cosmic-horror"}}}"###;
-        Bitboard::<4, 11, 11, true, false>::from_str(&val).unwrap()
+        Bitboard::<4, 11, 11, true, false, 0>::from_str(&val).unwrap()
     }
 
     #[test]
     fn test_bitboard_serde() {
         let board = create_board();
-        let copy = Bitboard::<4, 11, 11, true, false>::from_str(&board.to_string().unwrap()).unwrap();
+        let copy = Bitboard::<4, 11, 11, true, false, 0>::from_str(&board.to_string().unwrap()).unwrap();
         assert_eq!(board.food, copy.food);
         assert_eq!(board.hazards, copy.hazards);
         assert_eq!(board.hazard_mask, copy.hazard_mask);

@@ -4,7 +4,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use fxhash::FxHasher64;
 
-const TT_LENGTH: usize = 12582917; // prime
+// const TT_LENGTH: usize = 12582917; // prime
+const TT_LENGTH: usize = 201326611; // prime
 #[cfg(not(feature = "training"))]
 const MAX_SIMUL_GAMES: usize = 1;
 #[cfg(feature = "training")]

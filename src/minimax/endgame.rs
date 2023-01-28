@@ -7,8 +7,9 @@ pub fn solver<
     const H: usize,
     const WRAP: bool,
     const HZSTACK: bool,
+    const SILLY: u8,
 >(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     my_area: &Bitset<{ W * H }>,
     enemy_area: &Bitset<{ W * H }>,
     my_area_size: i16,
@@ -36,8 +37,9 @@ fn _solver<
     const H: usize,
     const WRAP: bool,
     const HZSTACK: bool,
+    const SILLY: u8,
 >(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     my_area: &Bitset<{ W * H }>,
     enemy_area: &Bitset<{ W * H }>,
     my_area_size: i16,
@@ -55,17 +57,17 @@ where
     // make fill one bigger
     let my_area = my_area.clone();
     let enemy_area = enemy_area.clone();
-    let mut em_fill = my_area | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_LEFT_EDGE_MASK & my_area)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_RIGHT_EDGE_MASK & my_area)>>1 | my_area<<W | my_area>>W;
-    let mut ee_fill = enemy_area | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_LEFT_EDGE_MASK & enemy_area)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK>::ALL_BUT_RIGHT_EDGE_MASK & enemy_area)>>1 | enemy_area<<W | enemy_area>>W;
+    let mut em_fill = my_area | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_LEFT_EDGE_MASK & my_area)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_RIGHT_EDGE_MASK & my_area)>>1 | my_area<<W | my_area>>W;
+    let mut ee_fill = enemy_area | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_LEFT_EDGE_MASK & enemy_area)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_RIGHT_EDGE_MASK & enemy_area)>>1 | enemy_area<<W | enemy_area>>W;
     if WRAP {
-        em_fill |= (Bitboard::<S, W, H, WRAP, HZSTACK>::LEFT_EDGE_MASK & my_area) >> (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK>::RIGHT_EDGE_MASK & my_area) << (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & my_area) << ((H-1)*W)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & my_area) >> ((H-1)*W);
-        ee_fill |= (Bitboard::<S, W, H, WRAP, HZSTACK>::LEFT_EDGE_MASK & enemy_area) >> (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK>::RIGHT_EDGE_MASK & enemy_area) << (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK>::BOTTOM_EDGE_MASK & enemy_area) << ((H-1)*W)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK>::TOP_EDGE_MASK & enemy_area) >> ((H-1)*W);
+        em_fill |= (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::LEFT_EDGE_MASK & my_area) >> (W-1)
+            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::RIGHT_EDGE_MASK & my_area) << (W-1)
+            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::BOTTOM_EDGE_MASK & my_area) << ((H-1)*W)
+            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::TOP_EDGE_MASK & my_area) >> ((H-1)*W);
+        ee_fill |= (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::LEFT_EDGE_MASK & enemy_area) >> (W-1)
+            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::RIGHT_EDGE_MASK & enemy_area) << (W-1)
+            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::BOTTOM_EDGE_MASK & enemy_area) << ((H-1)*W)
+            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::TOP_EDGE_MASK & enemy_area) >> ((H-1)*W);
     }
     
     // determine, when a tail comes by to chase

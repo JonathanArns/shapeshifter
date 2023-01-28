@@ -5,59 +5,59 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use crate::wire_rep;
 
-pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
-    board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
+pub fn attach_rules<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
+    board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     api_state: &wire_rep::GameState
 )
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     board.apply_moves = match api_state.game.ruleset["name"].as_str() {
         Some("constrictor") | Some("wrapped-constrictor") => Arc::new(|board, moves| {
             board.turn += 1;
-            move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
-            update_health::<S, W, H, WRAP, HZSTACK>(board);
-            perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
-            finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
+            move_heads::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+            update_health::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+            perform_collisions::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+            finish_head_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
         }),
         _ => match api_state.game.map.as_str() {
             "sinkholes" if api_state.board.hazards.len() > 0 => {
                 Arc::new(move |board, moves| {
                     board.turn += 1;
-                    move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
-                    move_tails::<S, W, H, WRAP, HZSTACK>(board);
-                    update_health::<S, W, H, WRAP, HZSTACK>(board);
-                    perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
-                    finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
-                    finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
-                    inc_sinkholes_hazards::<S, W, H, WRAP, HZSTACK>(board, 20);
+                    move_heads::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                    move_tails::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    update_health::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    perform_collisions::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    finish_head_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                    finish_tail_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    inc_sinkholes_hazards::<S, W, H, WRAP, HZSTACK, SILLY>(board, 20);
                 })
             },
             "hz_spiral" if api_state.board.hazards.len() > 0 => {
                 let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
                 Arc::new(move |board, moves| {
                     board.turn += 1;
-                    move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
-                    move_tails::<S, W, H, WRAP, HZSTACK>(board);
-                    update_health::<S, W, H, WRAP, HZSTACK>(board);
-                    perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
-                    finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
-                    finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
-                    inc_spiral_hazards::<S, W, H, WRAP, HZSTACK>(board, center);
+                    move_heads::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                    move_tails::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    update_health::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    perform_collisions::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    finish_head_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                    finish_tail_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    inc_spiral_hazards::<S, W, H, WRAP, HZSTACK, SILLY>(board, center);
                 })
             },
             _ => Arc::new(|board, moves| {
                 board.turn += 1;
-                move_heads::<S, W, H, WRAP, HZSTACK>(board, moves);
-                move_tails::<S, W, H, WRAP, HZSTACK>(board);
-                update_health::<S, W, H, WRAP, HZSTACK>(board);
-                perform_collisions::<S, W, H, WRAP, HZSTACK>(board);
-                finish_head_movement::<S, W, H, WRAP, HZSTACK>(board);
-                finish_tail_movement::<S, W, H, WRAP, HZSTACK>(board);
+                move_heads::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                move_tails::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                update_health::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                perform_collisions::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                finish_head_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                finish_tail_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board);
             }),
         },
     };
 }
 
-fn move_heads<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>, moves: &[Move; S])
+fn move_heads<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, moves: &[Move; S])
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_dead() {
@@ -69,7 +69,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         board.bodies[1].set(board.snakes[i].head as usize, (mv_int&1) != 0);
         board.bodies[2].set(board.snakes[i].head as usize, (mv_int>>1) != 0);
         // set new head
-        board.snakes[i].head = if let Some(new_head) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[i].head as usize][mv.to_int() as usize] {
+        board.snakes[i].head = if let Some(new_head) = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[board.snakes[i].head as usize][mv.to_int() as usize] {
             new_head as u16
         } else { // this snake has moved out of bounds
             board.kill_snake(i);
@@ -78,7 +78,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-fn move_tails<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+fn move_tails<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         let snake = &mut board.snakes[i];
@@ -101,7 +101,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-fn update_health<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+fn update_health<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut eaten = ArrayVec::<u16, S>::new();
     for i in 0..S {
@@ -136,7 +136,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-pub fn perform_collisions<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+pub fn perform_collisions<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_dead() {
@@ -171,10 +171,19 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-pub fn finish_head_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+pub fn finish_head_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, moves: &[Move; S])
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_alive() {
+            if board.snakes[i].is_dead() {
+                continue
+            }
+            let mv = moves[i];
+            let mv_int = mv.to_int();
+            // set new head position as move direction (used for silly move gen)
+            board.bodies[1].set(board.snakes[i].head as usize, (mv_int&1) != 0);
+            board.bodies[2].set(board.snakes[i].head as usize, (mv_int>>1) != 0);
+
             // set snake heads in bodies
             // we do this last, since it would break collision checks earlier, but we want this info
             // for move gen on the new board, since moving into the current space of a head is illegal
@@ -183,7 +192,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-pub fn finish_tail_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+pub fn finish_tail_movement<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     for i in 0..S {
         if board.snakes[i].is_alive() && board.snakes[i].curled_bodyparts == 0 {
@@ -196,7 +205,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-pub fn spawn_food<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>)
+pub fn spawn_food<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut rng = Pcg64Mcg::new(91825765198273048172569872943871926276_u128);
     if rng.gen_ratio(15, 100) {
@@ -213,7 +222,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 
 const HAZARD_SPIRAL_SHIFTS: [(i8, i8); 144] = constants::precompute_hazard_spiral();
 
-pub fn inc_spiral_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK>, center: u16)
+pub fn inc_spiral_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, center: u16)
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     if board.turn % 3 != 0 || board.turn / 3 > 142 || board.turn == 0 {
         return
@@ -226,8 +235,8 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-pub fn inc_sinkholes_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
-    board: &mut Bitboard<S, W, H, WRAP, HZSTACK>,
+pub fn inc_sinkholes_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
+    board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     expand_every_n_turns: u16,
 )
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {

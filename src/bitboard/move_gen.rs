@@ -2,7 +2,7 @@ use super::*;
 use arrayvec::ArrayVec;
 use rand::Rng;
 
-pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, snake_index: usize) -> ArrayVec<Move, 4>
+pub fn allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, snake_index: usize) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut moves = ArrayVec::<Move, 4>::new();
     let mut some_legal_move = Move::Up;
@@ -10,7 +10,21 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let pos = board.snakes[snake_index].head;
     let survives_hazard = board.snakes[snake_index].health > board.hazard_dmg;
 
-    for (mv_int, optional_dest) in Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[pos as usize].iter().enumerate() {
+    for (mv_int, optional_dest) in Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[pos as usize].iter().enumerate() {
+        // In silly mode 1, never turn myself left
+        if SILLY == 1 && snake_index == 0 {
+            let facing_int = (board.bodies[1].get(pos as usize) as u8) | (board.bodies[2].get(pos as usize) as u8) << 1;
+            let facing_direction = Move::from_int(facing_int);
+            let mv = Move::from_int(mv_int as u8);
+            match (facing_direction, mv) {
+                (Move::Up, Move::Left) => continue,
+                (Move::Left, Move::Down) => continue,
+                (Move::Down, Move::Right) => continue,
+                (Move::Right, Move::Up) => continue,
+                _ => (),
+            }
+        }
+
         if let Some(dest) = *optional_dest {
             some_legal_move = Move::from_int(mv_int as u8);
             if survives_hazard || !board.hazard_mask.get(dest as usize) || board.food.get(dest as usize) {
@@ -33,7 +47,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 /// Can never return a move that moves out of bounds on the board on unrwapped boards,
 /// because that would cause a panic elsewhere.
 #[allow(unused)]
-pub fn old_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, snake_index: usize) -> ArrayVec<Move, 4>
+pub fn old_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, snake_index: usize) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let pos = board.snakes[snake_index].head;
     let mut moves = ArrayVec::<Move, 4>::new();
@@ -88,18 +102,18 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     moves
 }
 
-pub fn ordered_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+pub fn ordered_allowed_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     snake_index: usize,
     history: &[[u64; 4]; W*H]
 ) -> ArrayVec<Move, 4>
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let mut moves = allowed_moves(board, snake_index);
     moves.sort_by_key(|mv| {
-        let dest = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[snake_index].head as usize][mv.to_int() as usize].unwrap();
+        let dest = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[board.snakes[snake_index].head as usize][mv.to_int() as usize].unwrap();
         let mut options = 1;
         for i in 0..4 {
-            if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[dest as usize][i] {
+            if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[dest as usize][i] {
                 options += (!board.bodies[0].get(pos as usize) && (board.hazard_dmg < 90 || !board.hazard_mask.get(pos as usize))) as u64;
             }
         }
@@ -117,7 +131,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 /// been covered at least once.
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
-pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, skip: usize) -> ArrayVec<[Move; S], 4>
+pub fn limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, skip: usize) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // only generate enough move combinations so that every enemy move appears at least once
     let mut moves = ArrayVec::<[Move; S], 4>::new();
@@ -129,7 +143,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         let mut x = 0;
         let mut some_legal_move = Move::Up;
         for j in 0..4 {
-            if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK>::MOVES_FROM_POSITION[board.snakes[i].head as usize][j] {
+            if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[board.snakes[i].head as usize][j] {
                 some_legal_move = Move::from_int(j as u8);
                 if !board.bodies[0].get(pos as usize) {
                     if moves.len() == x {
@@ -152,7 +166,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 /// Can skip the first n snakes, their moves will always be Up in the result.
 /// Applies move ordering to the individual moves of each enemy.
 #[allow(unused)]
-pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, skip: usize, history: &[[u64; 4]; W*H]) -> ArrayVec<[Move; S], 4>
+pub fn ordered_limited_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, skip: usize, history: &[[u64; 4]; W*H]) -> ArrayVec<[Move; S], 4>
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
@@ -186,8 +200,8 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 /// Generates enemy moves for best reply search (BRS+)
 /// This function does not eliminate duplicates in the returned list
 #[allow(unused)]
-pub fn brs_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK>,
+pub fn brs_move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
+    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
     history: &[[u64; 4]; W*H]
 ) -> ArrayVec<[Move; S], {(S-1)*4}>
 where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized, [(); (S-1)*4]: Sized {
@@ -228,7 +242,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 /// Generates all possible move combinations from a position.
 /// Can skip the first n snakes, their moves will always be Up in the result.
 #[allow(unused)]
-pub fn move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, skip: usize) -> Vec<[Move; S]>
+pub fn move_combinations<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, skip: usize) -> Vec<[Move; S]>
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // get moves for each enemy
     let mut moves_per_snake = ArrayVec::<ArrayVec<Move, 4>, S>::new();
@@ -262,7 +276,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     moves
 }
 
-pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool>(board: &Bitboard<S, W, H, WRAP, HZSTACK>, rng: &mut impl Rng) -> [Move; S]
+pub fn random_move_combination<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, rng: &mut impl Rng) -> [Move; S]
 where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     let moves = limited_move_combinations(board, 0);
     moves[rng.gen_range(0..moves.len())]
