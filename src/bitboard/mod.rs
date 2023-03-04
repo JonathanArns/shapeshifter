@@ -290,9 +290,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             board.food.set_bit(W*food.y + food.x);
         }
         for hazard in state.board.hazards {
-            board.hazard_mask.set_bit(W*hazard.y + hazard.x);
-            if HZSTACK {
-                board.hazards[W*hazard.y + hazard.x] += 1;
+            if hazard.y < H && hazard.x < W {
+                board.hazard_mask.set_bit(W*hazard.y + hazard.x);
+                if HZSTACK {
+                    board.hazards[W*hazard.y + hazard.x] += 1;
+                }
             }
         }
         let mut m = 0;
