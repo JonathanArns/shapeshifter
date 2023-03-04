@@ -1,7 +1,7 @@
 # Shapeshifter
 Shapeshifter is a multiplayer snake AI that can play on the battlesnake platform.
 
-With two 1st place finishes and one Top 8 at the four major tournaments, Shapeshifter was the most successful battlesnake in the world in 2022.
+With two 1st place finishes and one Top 8 at the four elite tournaments of the year, Shapeshifter was the most successful battlesnake in the world in 2022.
 
 ### How to run
 
