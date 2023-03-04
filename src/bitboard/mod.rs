@@ -22,6 +22,7 @@ pub use moves::Move;
 pub enum Gamemode {
     Standard,
     StandardWithHazard,
+    StandardSnailMode,
 
     Wrapped,
     WrappedWithHazard,
@@ -47,6 +48,7 @@ impl Gamemode {
                 _ => Self::WrappedWithHazard,
             },
             _ => match state.game.map.as_str() {
+                "snail_mode" => Self::StandardSnailMode,
                 _ if state.board.hazards.len() == 0 => Self::Standard,
                 _ => Self::StandardWithHazard,
             },
@@ -63,6 +65,7 @@ impl Gamemode {
             Gamemode::WrappedSinkholes => "wrapped-sinkholes".to_string(),
             Gamemode::WrappedWithHazard => "wrapped-with-hazard".to_string(),
             Gamemode::StandardWithHazard => "standard-with-hazard".to_string(),
+            Gamemode::StandardSnailMode => "standard-snail-mode".to_string(),
             Gamemode::WrappedArcadeMaze => "wrapped-arcade-maze".to_string(),
             Gamemode::WrappedIslandsBridges => "wrapped-islands-bridges".to_string(),
         }
@@ -77,13 +80,14 @@ impl Gamemode {
             Gamemode::WrappedWithHazard | Gamemode::StandardWithHazard => "royale".to_string(),
             Gamemode::WrappedArcadeMaze => "arcade_maze".to_string(),
             Gamemode::WrappedIslandsBridges => "hz_islands_bridges".to_string(),
+            Gamemode::StandardSnailMode => "snail_mode".to_string(),
         }
     }
 
     /// Returns the ruleset name associated with this gamemode.
     pub fn get_ruleset_name(&self) -> String {
         match *self {
-            Gamemode::Standard | Gamemode::StandardWithHazard => "standard".to_string(),
+            Gamemode::Standard | Gamemode::StandardWithHazard | Gamemode::StandardSnailMode => "standard".to_string(),
             Gamemode::Constrictor => "constrictor".to_string(),
             Gamemode::Wrapped 
             | Gamemode::WrappedSpiral 

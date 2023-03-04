@@ -44,6 +44,21 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                     inc_spiral_hazards::<S, W, H, WRAP, HZSTACK, SILLY>(board, center);
                 })
             },
+            "snail_mode" if api_state.board.hazards.len() > 0 => {
+                let center = (api_state.board.width*api_state.board.hazards[0].y + api_state.board.hazards[0].x) as u16;
+                Arc::new(move |board, moves| {
+                    // println!("====\n{}", board);
+                    board.turn += 1;
+                    move_heads::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                    update_health::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    inc_snail_mode_hazards::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    move_tails::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    perform_collisions::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    finish_head_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
+                    finish_tail_movement::<S, W, H, WRAP, HZSTACK, SILLY>(board);
+                    // println!("{}", board);
+                })
+            },
             _ => Arc::new(|board, moves| {
                 board.turn += 1;
                 move_heads::<S, W, H, WRAP, HZSTACK, SILLY>(board, moves);
@@ -283,5 +298,32 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 				}
             }
         }
+    }
+}
+
+pub fn inc_snail_mode_hazards<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &mut Bitboard<S, W, H, WRAP, HZSTACK, SILLY>)
+where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+    if !HZSTACK {
+        return
+    }
+    for i in 0..board.hazards.len() {
+        if board.hazards[i] > 0 {
+            board.hazards[i] -= 1;
+            if board.hazards[i] == 0 {
+                board.hazard_mask.unset_bit(i);
+            }
+        }
+    }
+    'OUTER: for snake in board.snakes {
+        if snake.is_dead() || snake.curled_bodyparts > 1 {
+            continue
+        }
+        for snake2 in board.snakes {
+            if snake2.is_dead() || snake.tail == snake2.head {
+                continue 'OUTER
+            }
+        }
+        board.hazards[snake.tail as usize] = snake.length;
+        board.hazard_mask.set_bit(snake.tail as usize);
     }
 }

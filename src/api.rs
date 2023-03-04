@@ -114,14 +114,19 @@ fn is_hazard_stacking(state: &GameState) -> bool {
     match state.game.ruleset["name"].as_str() {
         Some("sinkholes") => true,
         _ => {
-            let mut hazards = vec![false; state.board.width*state.board.height];
-            for hz in &state.board.hazards {
-                if hazards[hz.x+state.board.width*hz.y] {
-                    return true
-                }
-                hazards[hz.x+state.board.width*hz.y] = true;
+            match state.game.map.as_str() {
+                "snail_mode" => true,
+                x => {
+                    let mut hazards = vec![false; state.board.width*state.board.height];
+                    for hz in &state.board.hazards {
+                        if hazards[hz.x+state.board.width*hz.y] {
+                            return true
+                        }
+                        hazards[hz.x+state.board.width*hz.y] = true;
+                    }
+                    false
+                },
             }
-            false
         },
     }
 }
@@ -302,6 +307,11 @@ pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTime
         (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
         (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
         (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
+
+        (1, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
     };
 
