@@ -401,8 +401,9 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         true
     }
 
-    pub fn remove_snake_body(&mut self, snake_index: usize) {
-        if S <= 2 || snake_index == 0 {
+    /// Should be called after the snake's health has been set to 0
+    fn remove_snake_body(&mut self, snake_index: usize) {
+        if S <= 2 || self.snakes[0].is_dead() {
             return  // this is a terminal state, so we can ignore the dead body
         }
         let snake = &self.snakes[snake_index];
