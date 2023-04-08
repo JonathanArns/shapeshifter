@@ -37,7 +37,7 @@ func max(x, y int) int {
 
 func modifyRequest(req *http.Request) {
 	if req.Method == "POST" && req.URL.Path == "/move" {
-		req.Header.Set("x-deadline-unix-millis", fmt.Sprint("", time.Now().UnixMilli()))
+		req.Header.Set("x-received-at", fmt.Sprint("", time.Now().UnixMilli()))
 	}
 }
 
