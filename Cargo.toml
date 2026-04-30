@@ -1,7 +1,7 @@
 [package]
 name = "shapeshifter"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 default-run = "shapeshifter"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -18,15 +18,6 @@ name = "trainer"
 path = "src/bin/trainer.rs"
 required-features = ["training"]
 
-[[bin]]
-name = "data_transform"
-path = "src/bin/data_transform.rs"
-
-[[bin]]
-name = "nn"
-path = "src/bin/nn.rs"
-required-features = ["nn"]
-
 [features]
 default = []
 prod = ["spl", "mcts_fallback", "tt", "parallel_search"]
@@ -35,10 +26,8 @@ tt = []
 training = []
 mcts_fallback = []
 parallel_search = []
-nn = []
 
 [dependencies]
-bitssset = "0.1"
 axum = { version = "0.6", features = ["headers"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.4"
@@ -59,8 +48,6 @@ arrayvec = "0.7"
 lazy_static = "1.4"
 fxhash = "0.2"
 colored = "2"
-dfdx = "0.10"
-indicatif = "0.17"
 
 [build]
 rustflags = "-C target-cpu=native"

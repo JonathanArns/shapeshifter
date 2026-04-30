@@ -1,75 +1,35 @@
 use super::Score;
 use super::Move;
 use std::hash::{Hash, Hasher};
-use std::sync::Mutex;
+use std::ptr;
 use fxhash::FxHasher64;
 
 // const TT_LENGTH: usize = 12582917; // prime
 const TT_LENGTH: usize = 201326611; // prime
-#[cfg(not(feature = "training"))]
-const MAX_SIMUL_GAMES: usize = 1;
-#[cfg(feature = "training")]
-const MAX_SIMUL_GAMES: usize = 4; // training requires one TT per snake
 
 /// The transposition table of this battlesnake.
 /// Is encapsulated in this module and only accessible via the get and insert functions.
-// static mut TABLES: Option<Vec<Vec<Entry>>> = None;
 static mut TABLE: Option<Vec<Entry>> = None;
-
-/// The Pair holds the next tt_id to give out and a list of game IDs.
-/// The index of a game ID is the tt_id of that game.
-static mut GAME_IDS: Option<Mutex<(u8, Vec<String>)>> = None;
 
 /// Initializes an empty transposition table.
 pub fn init() {
     unsafe {
         if let None = TABLE {
-            TABLE = Some(vec![Entry{data: 0, key: 0}; TT_LENGTH*MAX_SIMUL_GAMES]);
-        }
-        if let None = GAME_IDS {
-            GAME_IDS = Some(Mutex::new((0, vec!["".to_string(); MAX_SIMUL_GAMES])));
+            TABLE = Some(vec![Entry{data: 0, key: 0}; TT_LENGTH]);
         }
     }
     println!("TTables initialized")
 }
 
-pub fn get_tt_id(game_id: String) -> u8 {
-    unsafe {
-        #[cfg(feature = "training")]
-        {
-            if game_id.len() == 1 {
-                if let Ok(x) = game_id.parse() {
-                    return x
-                }
-            }
-        }
-        if let Some(tmp) = &mut GAME_IDS {
-            let mut game_ids = tmp.lock().unwrap();
-            for (i, id) in &mut game_ids.1.iter().enumerate() {
-                if *id == game_id {
-                    return i as u8;
-                }
-            }
-            let tt_id = game_ids.0;
-            game_ids.1[tt_id as usize] = game_id;
-            game_ids.0 += 1;
-            game_ids.0 %= MAX_SIMUL_GAMES as u8;
-            tt_id
-        } else {
-            0
-        }
-    }
-}
-
-fn index(tt_id: u8, key: u64) -> usize {
-    tt_id as usize * TT_LENGTH + (key % TT_LENGTH as u64) as usize
+fn index(key: u64) -> usize {
+    (key % TT_LENGTH as u64) as usize
 }
 
 /// Get an entry from the transposition table
-pub fn get(key: u64, tt_id: u8) -> Option<Entry> {
+pub fn get(key: u64) -> Option<Entry> {
     unsafe {
-        if let Some(table) = &TABLE {
-            let entry = table[index(tt_id, key)];
+        if let Some(table) = ptr::read(&raw const TABLE) {
+            let entry = table[index(key)];
             if entry.matches_key(key) {
                 return Some(entry)
             }
@@ -81,7 +41,6 @@ pub fn get(key: u64, tt_id: u8) -> Option<Entry> {
 /// Insert an entry into the transposition table
 pub fn insert<const S: usize>(
     key: u64,
-    tt_id: u8,
     score: Score,
     is_lower_bound: bool,
     is_upper_bound: bool,
@@ -89,8 +48,8 @@ pub fn insert<const S: usize>(
     best_moves: [Move; S]
 ) {
     unsafe {
-        if let Some(table) = &mut TABLE {
-            let index = index(tt_id, key);
+        if let Some(ref mut table) = ptr::read(&raw mut TABLE) {
+            let index = index(key);
             let entry = table[index];
             if entry.matches_key(key) && entry.get_depth() > depth {
                 return
@@ -145,8 +104,10 @@ impl Entry {
 
         // pack moves in data
         if S <= 8 {
-            for i in 0..S {
+            let mut i = 0;
+            while i < S {
                 data |= (0b_11 & best_moves[i].to_int() as u64) << (Self::BEST_MOVES_SHIFT + i as u32 * Self::MOVE_WIDTH);
+                i += 1;
             }
         }
 
@@ -178,8 +139,10 @@ impl Entry {
             return None
         }
         let mut moves = [Move::Up; S];
-        for i in 0..S {
+        let mut i = 0;
+        while i < S {
             moves[i] = Move::from_int(0b_11 & (self.data >> Self::BEST_MOVES_SHIFT + i as u32 * Self::MOVE_WIDTH) as u8);
+            i += 1;
         }
         Some(moves)
     }

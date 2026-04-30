@@ -1,8 +1,5 @@
-#![feature(test, generic_const_exprs, let_chains)]
-
 #[macro_use]
 extern crate lazy_static;
-extern crate test;
 
 pub mod bitboard;
 pub mod wire_rep;

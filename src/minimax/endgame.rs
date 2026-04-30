@@ -1,25 +1,13 @@
-use crate::bitboard::*;
-use bitssset::Bitset;
+use crate::bitboard::{mode::Mode, *};
 
-pub fn solver<
-    const S: usize,
-    const W: usize,
-    const H: usize,
-    const WRAP: bool,
-    const HZSTACK: bool,
-    const SILLY: u8,
->(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
-    my_area: &Bitset<{ W * H }>,
-    enemy_area: &Bitset<{ W * H }>,
+pub fn solver<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
+    my_area: &MODE::Bitset,
+    enemy_area: &MODE::Bitset,
     my_area_size: i16,
     enemy_area_size: i16,
     my_food_distance: i16,
-) -> Option<i16>
-where
-    [(); (W * H + 63) / 64]: Sized,
-    [(); hz_stack_len::<HZSTACK, W, H>()]: Sized,
-{
+) -> Option<i16> {
     if let Some(i) = _solver(board, my_area, enemy_area, my_area_size, enemy_area_size, my_food_distance) {
         if i != 0 {
             return Some(i16::MAX - board.turn as i16 - enemy_area_size)
@@ -31,25 +19,14 @@ where
 }
 
 // Returns the snake_index of the loser, if one can be determined
-fn _solver<
-    const S: usize,
-    const W: usize,
-    const H: usize,
-    const WRAP: bool,
-    const HZSTACK: bool,
-    const SILLY: u8,
->(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
-    my_area: &Bitset<{ W * H }>,
-    enemy_area: &Bitset<{ W * H }>,
+fn _solver<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
+    my_area: &MODE::Bitset,
+    enemy_area: &MODE::Bitset,
     my_area_size: i16,
     enemy_area_size: i16,
     my_food_distance: i16,
-) -> Option<usize>
-where
-    [(); (W * H + 63) / 64]: Sized,
-    [(); hz_stack_len::<HZSTACK, W, H>()]: Sized,
-{
+) -> Option<usize> {
     if S != 2 || board.turn < 50 {
         return None
     }
@@ -57,17 +34,17 @@ where
     // make fill one bigger
     let my_area = my_area.clone();
     let enemy_area = enemy_area.clone();
-    let mut em_fill = my_area | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_LEFT_EDGE_MASK & my_area)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_RIGHT_EDGE_MASK & my_area)>>1 | my_area<<W | my_area>>W;
-    let mut ee_fill = enemy_area | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_LEFT_EDGE_MASK & enemy_area)<<1 | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::ALL_BUT_RIGHT_EDGE_MASK & enemy_area)>>1 | enemy_area<<W | enemy_area>>W;
-    if WRAP {
-        em_fill |= (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::LEFT_EDGE_MASK & my_area) >> (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::RIGHT_EDGE_MASK & my_area) << (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::BOTTOM_EDGE_MASK & my_area) << ((H-1)*W)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::TOP_EDGE_MASK & my_area) >> ((H-1)*W);
-        ee_fill |= (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::LEFT_EDGE_MASK & enemy_area) >> (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::RIGHT_EDGE_MASK & enemy_area) << (W-1)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::BOTTOM_EDGE_MASK & enemy_area) << ((H-1)*W)
-            | (Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::TOP_EDGE_MASK & enemy_area) >> ((H-1)*W);
+    let mut em_fill = my_area | (MODE::ALL_BUT_LEFT_EDGE_MASK & my_area)<<1 | (MODE::ALL_BUT_RIGHT_EDGE_MASK & my_area)>>1 | my_area<<MODE::W | my_area>>MODE::W;
+    let mut ee_fill = enemy_area | (MODE::ALL_BUT_LEFT_EDGE_MASK & enemy_area)<<1 | (MODE::ALL_BUT_RIGHT_EDGE_MASK & enemy_area)>>1 | enemy_area<<MODE::W | enemy_area>>MODE::W;
+    if MODE::WRAP {
+        em_fill |= (MODE::LEFT_EDGE_MASK & my_area) >> (MODE::W-1)
+            | (MODE::RIGHT_EDGE_MASK & my_area) << (MODE::W-1)
+            | (MODE::BOTTOM_EDGE_MASK & my_area) << ((MODE::H-1)*MODE::W)
+            | (MODE::TOP_EDGE_MASK & my_area) >> ((MODE::H-1)*MODE::W);
+        ee_fill |= (MODE::LEFT_EDGE_MASK & enemy_area) >> (MODE::W-1)
+            | (MODE::RIGHT_EDGE_MASK & enemy_area) << (MODE::W-1)
+            | (MODE::BOTTOM_EDGE_MASK & enemy_area) << ((MODE::H-1)*MODE::W)
+            | (MODE::TOP_EDGE_MASK & enemy_area) >> ((MODE::H-1)*MODE::W);
     }
     
     // determine, when a tail comes by to chase

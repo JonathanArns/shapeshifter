@@ -6,7 +6,9 @@ use tracing::info;
 use std::collections::HashMap;
 use std::time;
 
-use crate::bitboard;
+#[cfg(not(feature = "spl"))]
+use crate::bitboard::mode::{Standard, StandardWrapped};
+use crate::bitboard::{self, mode};
 use crate::wire_rep::GameState;
 use crate::minimax;
 use crate::uct;
@@ -59,16 +61,6 @@ pub async fn handle_index() -> Json<Value> {
     }))
 }
 
-pub async fn handle_index_silly() -> Json<Value> {
-    Json(json!({
-        "apiversion": "1",
-        "author": "JonathanArns",
-        "color": "#ccffcc",
-        "head": "silly",
-        "tail": "cosmic-horror",
-    }))
-}
-
 pub async fn handle_start(Json(_req): Json<GameState>) {}
 
 #[tracing::instrument(
@@ -80,7 +72,6 @@ pub async fn handle_start(Json(_req): Json<GameState>) {}
     )
 )]
 pub async fn handle_end(Json(state): Json<GameState>) {
-    let mut win = false;
     for snake in state.board.snakes {
         if snake.health > 0 {
             info!(game.winner.name = snake.name.as_str(), game.winner.id = snake.id.as_str(), game.source = state.game.source.as_str(), game.id = state.game.id.as_str(), "game_winner");
@@ -103,8 +94,8 @@ where
 }
 
 fn is_wrapped(state: &GameState) -> bool {
-    if let Some(name) = state.game.ruleset["name"].as_str() && name.contains("wrapped") {
-        true
+    if let Some(name) = state.game.ruleset["name"].as_str() {
+        name.contains("wrapped")
     } else {
         false
     }
@@ -150,15 +141,15 @@ pub async fn handle_move_mcts(start_time_header: Option<TypedHeader<StartTimeHea
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
-        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
 
-        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, Standard>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height),
     };
 
@@ -298,20 +289,15 @@ pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTime
 
     #[cfg(not(feature = "spl"))]
     let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
-        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, true, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
 
-        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, true, 0>::from_gamestate(state), deadline)).await.unwrap(),
+        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, Standard>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
     };
 
@@ -437,165 +423,6 @@ pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTime
         (14, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<14, 25, 25, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
         (15, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<15, 25, 25, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
         (16, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<16, 25, 25, false, false, 0>::from_gamestate(state), deadline)).await.unwrap(),
-        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
-    };
-    Json(mv.to_json())
-}
-
-#[tracing::instrument(
-    name = "handle_move",
-    skip(state, start_time_header),
-    fields(
-        game.source = state.game.source.as_str(),
-        game.id = state.game.id.as_str(),
-        game.turn = state.turn,
-        search.algo = "silly"
-    )
-)]
-pub async fn handle_move_silly(start_time_header: Option<TypedHeader<StartTimeHeader>>, Json(mut state): Json<GameState>) -> Json<Value> {
-    let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
-        // we are playing behind a proxy with "accurate" timing information
-        time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(60) - 60)).into())
-    } else {
-        time::SystemTime::now() + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(100) - 100)).into())
-    };
-
-    #[cfg(not(feature = "spl"))]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
-        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
-    };
-
-    #[cfg(feature = "spl")]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
-        (1, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 7, 7, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 7, 7, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 7, 7, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 7, 7, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        // stacking hazards
-        (1, 11, 11, true, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, true, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, true, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, true, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, true, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, true, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 11, 11, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 11, 11, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (9, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<9, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (10, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<10, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (11, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<11, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (12, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<12, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (13, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<13, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (14, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<14, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (15, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<15, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (16, 19, 19, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<16, 19, 19, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (9, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<9, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (10, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<10, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (11, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<11, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (12, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<12, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (13, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<13, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (14, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<14, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (15, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<15, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (16, 19, 19, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<16, 19, 19, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        // maze_arcade
-        (1, 19, 21, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 19, 21, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 19, 21, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 19, 21, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 19, 21, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 19, 21, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 19, 21, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 19, 21, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (9, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<9, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (10, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<10, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (11, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<11, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (12, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<12, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (13, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<13, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (14, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<14, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (15, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<15, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (16, 25, 25, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<16, 25, 25, true, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-
-        (1, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (5, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<5, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (6, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<6, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (7, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<7, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (8, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<8, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (9, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<9, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (10, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<10, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (11, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<11, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (12, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<12, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (13, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<13, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (14, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<14, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (15, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<15, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
-        (16, 25, 25, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<16, 25, 25, false, false, 1>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
     };
     Json(mv.to_json())

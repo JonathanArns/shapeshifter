@@ -6,17 +6,20 @@ use colored::{Colorize, Color};
 use serde_json;
 use std::fs::File;
 use std::io::prelude::*;
-use bitssset::Bitset;
 
 use crate::minimax;
 use crate::wire_rep;
 
 mod constants;
 mod rules;
+mod bitset;
+pub mod mode;
 pub mod moves;
 pub mod move_gen;
 
+pub use mode::Mode;
 pub use moves::Move;
+pub use bitset::{Bitset, BitsetTrait};
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub enum Gamemode {
@@ -121,35 +124,22 @@ impl Snake {
     }
 }
 
-pub const fn hz_stack_len<const STACK: bool, const W: usize, const H: usize>() -> usize {
-    if STACK {
-        W*H
-    } else {
-        0
-    }
-}
-
 #[derive(Clone)]
-pub struct Bitboard<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-    pub bodies: [Bitset<{W*H}>; 3],
+pub struct Bitboard<const S: usize, MODE: mode::Mode> {
+    pub bodies: [MODE::Bitset; 3],
     pub snakes: [Snake; S],
-    pub food: Bitset<{W*H}>,
-    pub hazards: [u8; hz_stack_len::<HZSTACK, W, H>()],
-    pub hazard_mask: Bitset<{W*H}>,
+    pub food: MODE::Bitset,
+    pub hazard_mask: MODE::Bitset,
     pub hazard_dmg: i8,
-    pub tt_id: u8,
     pub turn: u16,
     pub gamemode: Gamemode,
     pub apply_moves: Arc<dyn Fn(&mut Self, &[Move; S]) + Send + Sync>,
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> Hash for Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+impl<const S: usize, MODE: Mode> Hash for Bitboard<S, MODE> {
     fn hash<T: Hasher>(&self, state: &mut T) {
         self.bodies.hash(state);
         self.food.hash(state);
-        self.hazards.hash(state);
         self.gamemode.hash(state);
         self.hazard_dmg.hash(state);
         for snake in self.snakes {
@@ -160,30 +150,17 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-    pub const FULL_BOARD_MASK: Bitset<{W*H}> = Bitset::<{W*H}>::with_all_bits_set();
-    pub const CHECKER_BOARD_MASK: Bitset<{W*H}> = constants::checker_board_mask::<W, H>();
-    pub const ALL_BUT_LEFT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(true);
-    pub const ALL_BUT_RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::border_mask::<W, H>(false);
-    pub const TOP_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(true);
-    pub const BOTTOM_EDGE_MASK: Bitset<{W*H}> = constants::horizontal_edge_mask::<W, H>(false);
-    pub const LEFT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(true);
-    pub const RIGHT_EDGE_MASK: Bitset<{W*H}> = constants::vertical_edge_mask::<W, H>(false);
-    pub const MOVES_FROM_POSITION: [[Option<u16>; 4]; W*H] = constants::precompute_moves::<S, W, H, WRAP>();
-
+impl<const S: usize, MODE: mode::Mode> Bitboard<S, MODE> {
     pub fn new() -> Self {
         Bitboard{
-            bodies: [Bitset::new(); 3],
+            bodies: [MODE::Bitset::new(); 3],
             snakes: [Snake{head: 0, tail: 0, length: 0, health: 0, curled_bodyparts: 0}; S],
-            food: Bitset::new(),
-            hazards: [0; hz_stack_len::<HZSTACK, W, H>()],
-            hazard_mask: Bitset::new(),
+            food: MODE::Bitset::new(),
+            hazard_mask: MODE::Bitset::new(),
             hazard_dmg: 14,
             gamemode: Gamemode::Standard,
-            tt_id: 0,
             turn: 0,
-            apply_moves: Arc::new(|board, mvs| {}),
+            apply_moves: Arc::new(|_board, _mvs| {}),
         }
     }
 
@@ -204,18 +181,13 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
         // food and hazards
         let mut wire_food = vec![];
         let mut wire_hazards = vec![];
-        for x in 0..W {
-            for y in 0..H {
-                if self.food.get(x+(y*W)) {
+        for x in 0..MODE::W {
+            for y in 0..MODE::H {
+                if self.food.get(x+(y*MODE::W)) {
                     wire_food.push(wire_rep::Coord{x: x.into(), y: y.into()});
                 }
-                if self.hazard_mask.get(x+(y*W)) {
+                if self.hazard_mask.get(x+(y*MODE::W)) {
                     wire_hazards.push(wire_rep::Coord{x: x.into(), y: y.into()});
-                    if HZSTACK {
-                        for _ in 0..(self.hazards[x+(y*W)]-1) {
-                            wire_hazards.push(wire_rep::Coord{x: x.into(), y: y.into()});
-                        }
-                    }
                 }
             }
         }
@@ -231,7 +203,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 name: "".to_string(),
                 health: snake.health.into(),
                 length: snake.length.into(),
-                head: wire_rep::Coord{ x: (snake.head as usize%W).into(), y: (snake.head as usize/W).into() },
+                head: wire_rep::Coord{ x: (snake.head as usize % MODE::W).into(), y: (snake.head as usize / MODE::W).into() },
                 shout: None,
                 squad: None,
                 body: vec![],
@@ -239,10 +211,10 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             let mut tail_pos = snake.tail;
             while snake.head != tail_pos {
                 let next_pos = self.next_body_segment(tail_pos);
-                wire_snake.body.insert(0, wire_rep::Coord{x: (tail_pos as usize%W).into(), y: (tail_pos as usize/W).into()});
+                wire_snake.body.insert(0, wire_rep::Coord{x: (tail_pos as usize % MODE::W).into(), y: (tail_pos as usize / MODE::W).into()});
                 tail_pos = next_pos;
             }
-            wire_snake.body.insert(0, wire_rep::Coord{x: (tail_pos as usize%W).into(), y: (tail_pos as usize/W).into()});
+            wire_snake.body.insert(0, wire_rep::Coord{x: (tail_pos as usize % MODE::W).into(), y: (tail_pos as usize / MODE::W).into()});
             wire_snakes.push(wire_snake);
         }
 
@@ -264,8 +236,8 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             },
             you: wire_snakes[0].clone(),
             board: wire_rep::Board{
-                height: H,
-                width: W,
+                height: MODE::H,
+                width: MODE::W,
                 snakes: wire_snakes,
                 food: wire_food,
                 hazards: wire_hazards,
@@ -285,16 +257,12 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                 14
             };
         }
-        board.tt_id = minimax::get_tt_id(state.game.id + &state.you.id);
         for food in state.board.food {
-            board.food.set_bit(W*food.y + food.x);
+            board.food.set_bit(MODE::W*food.y + food.x);
         }
         for hazard in state.board.hazards {
-            if hazard.y < H && hazard.x < W {
-                board.hazard_mask.set_bit(W*hazard.y + hazard.x);
-                if HZSTACK {
-                    board.hazards[W*hazard.y + hazard.x] += 1;
-                }
+            if hazard.y < MODE::H && hazard.x < MODE::W {
+                board.hazard_mask.set_bit(MODE::W*hazard.y + hazard.x);
             }
         }
         let mut m = 0;
@@ -308,28 +276,23 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             }
             board.snakes[n].health = snake.health as i8;
             board.snakes[n].length = snake.length as u8;
-            board.snakes[n].head = (W*snake.head.y) as u16 + snake.head.x as u16;
-            board.snakes[n].tail = (W*snake.body[snake.body.len()-1].y) as u16 + snake.body[snake.body.len()-1].x as u16;
+            board.snakes[n].head = (MODE::W*snake.head.y) as u16 + snake.head.x as u16;
+            board.snakes[n].tail = (MODE::W*snake.body[snake.body.len()-1].y) as u16 + snake.body[snake.body.len()-1].x as u16;
             let mut prev_pos = board.snakes[n].head;
             let mut pos;
-            board.bodies[0].set_bit(W*snake.head.y + snake.head.x);
+            board.bodies[0].set_bit(MODE::W*snake.head.y + snake.head.x);
             for bod in snake.body[1..].iter() {
-                pos = (W*bod.y + bod.x) as u16;
+                pos = (MODE::W*bod.y + bod.x) as u16;
                 if pos == prev_pos {
                     board.snakes[n].curled_bodyparts += 1;
                     continue
                 }    
                 board.bodies[0].set_bit(pos as usize);
-                if pos == prev_pos + 1 || pos == prev_pos + W as u16 || WRAP && prev_pos == pos + W as u16 - 1 || WRAP && prev_pos == pos + (H as u16 - 1) * W as u16 {
+                if pos == prev_pos + 1 || pos == prev_pos + MODE::W as u16 || MODE::WRAP && prev_pos == pos + MODE::W as u16 - 1 || MODE::WRAP && prev_pos == pos + (MODE::H as u16 - 1) * MODE::W as u16 {
                     board.bodies[1].set_bit(pos as usize);
                 }
-                if  prev_pos == pos + 1 || prev_pos + 1 == pos || WRAP && prev_pos == pos + W as u16 - 1 || WRAP && prev_pos + W as u16 - 1 == pos {
+                if  prev_pos == pos + 1 || prev_pos + 1 == pos || MODE::WRAP && prev_pos == pos + MODE::W as u16 - 1 || MODE::WRAP && prev_pos + MODE::W as u16 - 1 == pos {
                     board.bodies[2].set_bit(pos as usize);
-                }
-                // at the beginning of the loop, set head direction (used for silly move gen)
-                if prev_pos == board.snakes[n].head {
-                    board.bodies[1].set(board.snakes[n].head as usize, board.bodies[1].get(pos as usize));
-                    board.bodies[2].set(board.snakes[n].head as usize, board.bodies[2].get(pos as usize));
                 }
                 prev_pos = pos;
             }
@@ -378,18 +341,18 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 
     pub fn distance(&self, from: u16, to: u16) -> u16 {
-        let w = W as u16;
+        let w = MODE::W as u16;
         let dist_x = (from%w).max(to%w) - (from%w).min(to%w);
         let dist_y = (from/w).max(to/w) - (from/w).min(to/w);
-        if WRAP {
-            dist_x.min(w - dist_x) + dist_y.min(H as u16 - dist_y)
+        if MODE::WRAP {
+            dist_x.min(w - dist_x) + dist_y.min(MODE::H as u16 - dist_y)
         } else {
             dist_x + dist_y
         }
     }
 
     pub fn is_legal_move(&self, from: u16, mv: Move) -> bool {
-        WRAP || None != Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[from as usize][mv.to_int() as usize]
+        MODE::WRAP || None != MODE::moves_from_position(from)[mv.to_int() as usize]
     }
 
     pub fn is_legal_enemy_moves(&self, mvs: [Move; S]) -> bool {
@@ -424,10 +387,10 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     // Does not check if pos is actually on a snake.
     pub fn next_body_segment(&self, pos: u16) -> u16 {
         let move_int = self.bodies[1].get(pos as usize) as u8 | (self.bodies[2].get(pos as usize) as u8) << 1;
-        if WRAP {
-            (pos as i16 + Move::int_to_index_wrapping(move_int, W, H, pos)) as u16
+        if MODE::WRAP {
+            (pos as i16 + Move::int_to_index_wrapping(move_int, MODE::W, MODE::H, pos)) as u16
         } else {
-            (pos as i16 + Move::int_to_index(move_int, W)) as u16
+            (pos as i16 + Move::int_to_index(move_int, MODE::W)) as u16
         }
     }
 
@@ -437,81 +400,17 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 
     fn coord_string_from_index(&self, idx: u16) -> String {
-        let x = idx % W as u16;
-        let y = idx / W as u16;
+        let x = idx % MODE::W as u16;
+        let y = idx / MODE::W as u16;
         "(".to_string() + &x.to_string() + " " + &y.to_string() + ")"
-    }
-
-    /// Generates input features for neural networks
-    pub fn get_nn_input(&self) -> [u8; W*H*7] {
-        let MY_HEAD: usize = 0*W*H;
-        let MY_TAIL: usize = 1*W*H;
-        let ENEMY_HEADS: usize = 2*W*H;
-        let ENEMY_TAILS: usize = 3*W*H;
-        let BODIES: usize = 4*W*H;
-        let FOOD: usize = 5*W*H;
-        let HAZARDS: usize = 6*W*H;
-        let MY_HEALTH: usize = 7*W*H;
-        let ENEMY_HEALTH: usize = 7*W*H+1;
-        let MY_LENGTH: usize = 7*W*H+2;
-        let ENEMY_LENGTH: usize = 7*W*H+3;
-
-        let mut features = [0; W*H*7];
-
-        let me = self.snakes[0];
-        features[MY_HEAD + me.head as usize] = 1;
-        features[MY_TAIL + me.tail as usize] = 1;
-        // features[MY_HEALTH] = me.health as u8;
-        // features[MY_LENGTH] = me.length as u8;
-
-        // features[ENEMY_HEALTH] = u8::MAX; 
-        for snake in self.snakes[1..].iter() {
-            if snake.is_dead() {
-                continue
-            }
-            features[ENEMY_HEADS + snake.head as usize] = 1;
-            features[ENEMY_TAILS + snake.tail as usize] = 1;
-            // if snake.length > features[ENEMY_LENGTH] {
-            //     features[ENEMY_LENGTH] = snake.length as u8;
-            // }
-            // if snake.health < features[ENEMY_HEALTH] as i8 {
-            //     features[ENEMY_HEALTH] = snake.health as u8; 
-            // }
-        }
-
-        for i in 0..(W*H) {
-            features[BODIES + i] = self.bodies[0].get(i) as u8;
-            features[FOOD + i] = self.food.get(i) as u8;
-            features[HAZARDS + i] = self.hazard_mask.get(i) as u8;
-        }
-        features
-    }
-    
-    /// Appends the board in json format and the score to file.
-    pub fn write_to_file_with_score(&self, score: minimax::Score, file_name_suffix: &str)
-    where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
-        let path = format!(
-            "./data/{}_{}-{}x{}-{}-{}_boards_{}.csv",
-            self.gamemode.get_name(),
-            S, W, H,
-            if WRAP { "WRAP" } else { "NOWRAP" },
-            if HZSTACK { "STACK" } else { "NOSTACK" },
-            file_name_suffix
-        );
-        let mut file = File::options()
-            .create(true)
-            .append(true)
-            .open(path)
-            .expect("coudln't create file");
-        if let Err(e) = writeln!(file, "{};{}", score, self.to_string().unwrap()) {
-            eprintln!("Couldn't write to file: {}", e);
-        }
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> std::fmt::Debug for Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+impl<const S: usize, MODE: Mode> std::fmt::Debug for Bitboard<S, MODE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let W: usize = MODE::W;
+        let H: usize = MODE::H;
+
         // draw the board
         for i in 0..H {
             for j in 0..W {
@@ -549,9 +448,11 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
     }
 }
 
-impl<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8> std::fmt::Display for Bitboard<S, W, H, WRAP, HZSTACK, SILLY>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+impl<const S: usize, MODE: Mode> std::fmt::Display for Bitboard<S, MODE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let W: usize = MODE::W;
+        let H: usize = MODE::H;
+
         // decide on colors for the individual snakes
         let colors = [Color::Red, Color::Green, Color::Cyan, Color::Yellow, Color::Blue, Color::Magenta];
         let mut snake_colors: HashMap<usize, Color> = HashMap::default();
@@ -560,7 +461,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
             while snake.head != tail_pos {
                 snake_colors.insert(tail_pos as usize, colors[i % colors.len()]);
                 let move_int = self.bodies[1].get(tail_pos as usize) as u8 | (self.bodies[2].get(tail_pos as usize) as u8) << 1;
-                tail_pos = if WRAP {
+                tail_pos = if MODE::WRAP {
                     tail_pos as i16 + Move::int_to_index_wrapping(move_int, W, H, tail_pos)
                 } else {
                     tail_pos as i16 + Move::int_to_index(move_int, W)
@@ -622,17 +523,16 @@ mod tests {
     use crate::wire_rep;
     use test::Bencher;
 
-    fn create_board() -> Bitboard<4, 11, 11, true, false, 0> {
+    fn create_board() -> Bitboard<4, mode::StandardWrapped> {
         let val = r###"{"game":{"id":"7ddd5c60-e27a-42ae-985e-f056e5695836","ruleset":{"name":"wrapped","version":"?","settings":{"foodSpawnChance":15,"minimumFood":1,"hazardDamagePerTurn":100,"royale":{},"squad":{"allowBodyCollisions":false,"sharedElimination":false,"sharedHealth":false,"sharedLength":false}}},"map":"hz_islands_bridges","timeout":500,"source":"league"},"turn":445,"board":{"width":11,"height":11,"food":[{"x":1,"y":9},{"x":1,"y":8},{"x":9,"y":1},{"x":6,"y":3},{"x":7,"y":3},{"x":7,"y":4},{"x":8,"y":3},{"x":4,"y":9},{"x":10,"y":8},{"x":6,"y":6}],"hazards":[{"x":5,"y":10},{"x":5,"y":9},{"x":5,"y":7},{"x":5,"y":6},{"x":5,"y":5},{"x":5,"y":4},{"x":5,"y":3},{"x":5,"y":0},{"x":5,"y":1},{"x":6,"y":5},{"x":7,"y":5},{"x":9,"y":5},{"x":10,"y":5},{"x":4,"y":5},{"x":3,"y":5},{"x":1,"y":5},{"x":0,"y":5},{"x":1,"y":10},{"x":9,"y":10},{"x":1,"y":0},{"x":9,"y":0},{"x":10,"y":1},{"x":10,"y":0},{"x":10,"y":10},{"x":10,"y":9},{"x":0,"y":10},{"x":0,"y":9},{"x":0,"y":1},{"x":0,"y":0},{"x":0,"y":6},{"x":0,"y":4},{"x":10,"y":6},{"x":10,"y":4},{"x":6,"y":10},{"x":4,"y":10},{"x":6,"y":0},{"x":4,"y":0}],"snakes":[{"id":"gs_P3P9rW63VPgMcYFFJ9R6McrM","name":"Shapeshifter","health":91,"body":[{"x":6,"y":2},{"x":6,"y":1},{"x":7,"y":1},{"x":7,"y":0},{"x":7,"y":10},{"x":8,"y":10},{"x":8,"y":0},{"x":8,"y":1},{"x":8,"y":2},{"x":9,"y":2},{"x":9,"y":3},{"x":10,"y":3},{"x":10,"y":2},{"x":0,"y":2},{"x":0,"y":3},{"x":1,"y":3},{"x":1,"y":4},{"x":2,"y":4},{"x":3,"y":4},{"x":3,"y":3},{"x":2,"y":3},{"x":2,"y":2},{"x":1,"y":2},{"x":1,"y":1},{"x":2,"y":1},{"x":2,"y":0},{"x":3,"y":0},{"x":3,"y":1},{"x":4,"y":1},{"x":4,"y":2}],"latency":11,"head":{"x":6,"y":2},"length":30,"shout":"","squad":"","customizations":{"color":"#900050","head":"cosmic-horror-special","tail":"cosmic-horror"}},{"id":"gs_YMFKJHvJwS9VV7SgtTMVmKVQ","name":"🇺🇦 Jagwire 🇺🇦","health":76,"body":[{"x":9,"y":9},{"x":8,"y":9},{"x":7,"y":9},{"x":6,"y":9},{"x":6,"y":8},{"x":5,"y":8},{"x":4,"y":8},{"x":3,"y":8},{"x":3,"y":9},{"x":3,"y":10},{"x":2,"y":10},{"x":2,"y":9},{"x":2,"y":8},{"x":2,"y":7},{"x":3,"y":7},{"x":4,"y":7},{"x":4,"y":6},{"x":3,"y":6},{"x":2,"y":6},{"x":1,"y":6},{"x":1,"y":7},{"x":0,"y":7},{"x":10,"y":7},{"x":9,"y":7},{"x":9,"y":6},{"x":8,"y":6},{"x":7,"y":6},{"x":7,"y":7},{"x":7,"y":8},{"x":8,"y":8},{"x":9,"y":8}],"latency":23,"head":{"x":9,"y":9},"length":31,"shout":"","squad":"","customizations":{"color":"#ffd900","head":"smile","tail":"wave"}}]},"you":{"id":"gs_P3P9rW63VPgMcYFFJ9R6McrM","name":"Shapeshifter","health":91,"body":[{"x":6,"y":2},{"x":6,"y":1},{"x":7,"y":1},{"x":7,"y":0},{"x":7,"y":10},{"x":8,"y":10},{"x":8,"y":0},{"x":8,"y":1},{"x":8,"y":2},{"x":9,"y":2},{"x":9,"y":3},{"x":10,"y":3},{"x":10,"y":2},{"x":0,"y":2},{"x":0,"y":3},{"x":1,"y":3},{"x":1,"y":4},{"x":2,"y":4},{"x":3,"y":4},{"x":3,"y":3},{"x":2,"y":3},{"x":2,"y":2},{"x":1,"y":2},{"x":1,"y":1},{"x":2,"y":1},{"x":2,"y":0},{"x":3,"y":0},{"x":3,"y":1},{"x":4,"y":1},{"x":4,"y":2}],"latency":11,"head":{"x":6,"y":2},"length":30,"shout":"","squad":"","customizations":{"color":"#900050","head":"cosmic-horror-special","tail":"cosmic-horror"}}}"###;
-        Bitboard::<4, 11, 11, true, false, 0>::from_str(&val).unwrap()
+        Bitboard::<4, mode::StandardWrapped>::from_str(&val).unwrap()
     }
 
     #[test]
     fn test_bitboard_serde() {
         let board = create_board();
-        let copy = Bitboard::<4, 11, 11, true, false, 0>::from_str(&board.to_string().unwrap()).unwrap();
+        let copy = Bitboard::<4, mode::StandardWrapped>::from_str(&board.to_string().unwrap()).unwrap();
         assert_eq!(board.food, copy.food);
-        assert_eq!(board.hazards, copy.hazards);
         assert_eq!(board.hazard_mask, copy.hazard_mask);
         assert_eq!(board.snakes, copy.snakes);
         assert_eq!(board.bodies, copy.bodies);

@@ -1,13 +1,13 @@
-use bitssset::Bitset;
+use crate::bitboard::Bitset;
 
 /// Computes ALL_BUT_LEFT_EDGE_MASK and ALL_BUT_RIGHT_EDGE_MASK
-pub const fn border_mask<const W: usize, const H: usize>(left: bool) -> Bitset<{W*H}>
-where [(); (W*H+63)/64]: Sized {
-    let mut arr = [0_u64; (W*H+63)/64];
+pub const fn border_mask<const N: usize, const L: usize>(w: usize, h: usize, left: bool) -> Bitset<N, L>
+where [(); L]: Sized {
+    let mut arr = [0_u64; L];
     let mut i = 0;
     let mut j;
     loop {
-        if i == H {
+        if i == h {
             break
         }
         if left {
@@ -16,129 +16,128 @@ where [(); (W*H+63)/64]: Sized {
             j = 1;
         }
         loop {
-            if left && j == W-1 {
+            if left && j == w-1 {
                 break
-            } else if !left && j == W {
+            } else if !left && j == w {
                 break
             }
-            let idx = (i*W+j)>>6;
-            let offset = (i*W+j) % 64;
+            let idx = (i*w+j)>>6;
+            let offset = (i*w+j) % 64;
             arr[idx] |= 1_u64<<offset;
 
             j += 1;
         }
         i += 1;
     }
-    Bitset::<{W*H}>::from_array(arr)
+    Bitset::<N, L>::from_array(arr)
 }
 
 /// Computes ALL_BUT_LEFT_EDGE_MASK and ALL_BUT_RIGHT_EDGE_MASK
-pub const fn checker_board_mask<const W: usize, const H: usize>() -> Bitset<{W*H}>
-where [(); (W*H+63)/64]: Sized {
-    let mut arr = [0_u64; (W*H+63)/64];
+pub const fn checker_board_mask<const N: usize, const L: usize>(w: usize, h: usize) -> Bitset<N, L>
+where [(); L]: Sized {
+    let mut arr = [0_u64; L];
     let mut i = 0;
     let mut j;
     loop {
-        if i == H {
+        if i == h {
             break
         }
         j = 0;
         loop {
-            if j == W {
+            if j == w {
                 break
             }
-            if (i*W+j) % 2 == 0 {
-                let idx = (i*W+j)>>6;
-                let offset = (i*W+j) % 64;
+            if (i*w+j) % 2 == 0 {
+                let idx = (i*w+j)>>6;
+                let offset = (i*w+j) % 64;
                 arr[idx] |= 1_u64<<offset;
             }
             j += 1;
         }
         i += 1;
     }
-    Bitset::<{W*H}>::from_array(arr)
+    Bitset::<N, L>::from_array(arr)
 }
 
 /// Computes LEFT_EDGE_MASK and RIGHT_EDGE_MASK
-pub const fn vertical_edge_mask<const W: usize, const H: usize>(right: bool) -> Bitset<{W*H}>
-where [(); (W*H+63)/64]: Sized {
-    let mut arr = [0_u64; (W*H+63)/64];
+pub const fn vertical_edge_mask<const N: usize, const L: usize>(w: usize, h: usize, right: bool) -> Bitset<N, L>
+where [(); L]: Sized {
+    let mut arr = [0_u64; L];
     let mut i = 0;
-    let j = if right { W-1 } else { 0 };
+    let j = if right { w-1 } else { 0 };
     loop {
-        if i == H {
+        if i == h {
             break
         }
-        let idx = (i*W+j)>>6;
-        let offset = (i*W+j) % 64;
+        let idx = (i*w+j)>>6;
+        let offset = (i*w+j) % 64;
         arr[idx] |= 1_u64<<offset;
         i += 1;
     }
-    Bitset::<{W*H}>::from_array(arr)
+    Bitset::<N, L>::from_array(arr)
 }
 
 /// Computes TOP_EDGE_MASK and BOTTOM_EDGE_MASK
-pub const fn horizontal_edge_mask<const W: usize, const H: usize>(top: bool) -> Bitset<{W*H}>
-where [(); (W*H+63)/64]: Sized {
-    let mut arr = [0_u64; (W*H+63)/64];
-    let i = if top { H-1 } else { 0 };
+pub const fn horizontal_edge_mask<const N: usize, const L: usize>(w: usize, h: usize, top: bool) -> Bitset<N, L>
+where [(); L]: Sized {
+    let mut arr = [0_u64; L];
+    let i = if top { h-1 } else { 0 };
     let mut j = 0;
     loop {
-        if j == W {
+        if j == w {
             break
         }
-        let idx = (i*W+j)>>6;
-        let offset = (i*W+j) % 64;
+        let idx = (i*w+j)>>6;
+        let offset = (i*w+j) % 64;
         arr[idx] |= 1_u64<<offset;
         j += 1;
     }
-    Bitset::<{W*H}>::from_array(arr)
+    Bitset::<N, L>::from_array(arr)
 }
 
 /// Computes possible moves from every position at compile time
-pub const fn precompute_moves<const S: usize, const W: usize, const H: usize, const WRAP: bool>
-() -> [[Option<u16>; 4]; W*H]
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized {
-    let mut result = [[None; 4]; {W*H}];
+pub const fn precompute_moves<const N: usize, const L: usize> (w: usize, h: usize, wrap: bool) -> [[Option<u16>; 4]; N]
+where [(); L]: Sized, [(); N]: Sized {
+    let mut result = [[None; 4]; {N}];
     let mut pos = 0;
     loop {
-        if pos == W*H {
+        if pos == N {
             break
         }
-        if WRAP {
+        if wrap {
             // up
-            let move_to = (pos + W) % (W*H);
+            let move_to = (pos + w) % (w*h);
             result[pos][0] = Some(move_to as u16);
             
             // down
-            let move_to = if W > pos { W*(H-1) + pos } else { pos - W };
+            let move_to = if w > pos { w*(h-1) + pos } else { pos - w };
             result[pos][1] = Some(move_to as u16);
             
             // right
-            let move_to = if pos % W == W-1 { pos - (W-1) } else { pos + 1};
+            let move_to = if pos % w == w-1 { pos - (w-1) } else { pos + 1};
             result[pos][2] = Some(move_to as u16);
             
             // left
-            let move_to = if pos % W == 0 { pos + (W-1) } else { pos - 1 };
+            let move_to = if pos % w == 0 { pos + (w-1) } else { pos - 1 };
             result[pos][3] = Some(move_to as u16);
         } else {
             // up
-            if pos < W * (H-1) {
-                let move_to = pos + W;
+            if pos < w * (h-1) {
+                let move_to = pos + w;
                 result[pos][0] = Some(move_to as u16);
             }
             // down
-            if pos >= W {
-                let move_to = pos - W;
+            if pos >= w {
+                let move_to = pos - w;
                 result[pos][1] = Some(move_to as u16);
             }
             // right
-            if pos % W < W - 1 {
+            if pos % w < w - 1 {
                 let move_to = pos + 1;
                 result[pos][2] = Some(move_to as u16);
             }
             // left
-            if pos % W > 0 {
+            if pos % w > 0 {
                 let move_to = pos - 1;
                 result[pos][3] = Some(move_to as u16);
             }

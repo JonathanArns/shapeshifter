@@ -1,3 +1,4 @@
+use crate::bitboard::mode::Mode;
 use crate::bitboard::*;
 use crate::bitboard::move_gen::*;
 use crate::uct;
@@ -13,9 +14,7 @@ mod eval;
 mod endgame;
 mod ttable;
 
-pub use ttable::{init, get_tt_id};
-#[cfg(feature = "training")]
-pub use eval::set_training_weights;
+pub use ttable::init;
 
 lazy_static! {
     static ref FIXED_DEPTH: i8 = if let Ok(var) = env::var("FIXED_DEPTH") {
@@ -28,17 +27,11 @@ lazy_static! {
     } else {
         0
     };
-    static ref DATA_NAME_SUFFIX: Option<String> = if let Ok(var) = env::var("DATA_SUFFIX") {
-        Some(var.to_string())
-    } else {
-        None
-    };
 }
 
 pub type Score = i16;
 
-pub fn search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>, mut deadline: time::SystemTime) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+pub fn search<const S: usize, MODE: Mode>(board: &Bitboard<S, MODE>, mut deadline: time::SystemTime) -> (Move, Score, u8) {
     if *FIXED_TIME > 0 {
         deadline = time::SystemTime::now() + time::Duration::from_millis(*FIXED_TIME)
     }
@@ -61,13 +54,12 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 /// An iterative deepening MTD(f)
-pub fn fixed_depth_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn fixed_depth_search<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     target_depth: u8
-) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+) -> (Move, Score, u8) {
     let mut node_counter = 0;
-    let mut history = [[0; 4]; W*H];
+    let mut history = vec![[0; 4]; MODE::N];
     let my_moves = ordered_allowed_moves(board, 0, &history);
     let mut enemy_moves = ordered_limited_move_combinations(board, 1, &history);
     let mut best_move = my_moves[0];
@@ -89,9 +81,6 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             best_move = *mv;
         }
     }
-    if let Some(suffix) = &*DATA_NAME_SUFFIX && best_score > -8000 && best_score < 8000 {
-        board.write_to_file_with_score(best_score, suffix);
-    }
     info!(
         game.turn = board.turn,
         game.mode = ?board.gamemode,
@@ -107,16 +96,15 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 }
 
 /// An iterative deepening MTD(f)
-pub fn mtdf<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn mtdf<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     deadline: time::SystemTime
-) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+) -> (Move, Score, u8) {
     let start_time = time::Instant::now(); // used to calculate nodes / second
     let mut node_counter = 0;
     let mut rng = rand::thread_rng();
     let mut depth = 1;
-    let mut history = [[0; 4]; W*H];
+    let mut history = vec![[0; 4]; MODE::N];
     let mut my_moves = allowed_moves(board, 0);
     my_moves.shuffle(&mut rng);
     let mut enemy_moves = ordered_limited_move_combinations(board, 1, &history);
@@ -177,15 +165,14 @@ fn next_bns_guess(prev_guess: Score, alpha: Score, beta: Score) -> Score {
     }
 }
 
-pub fn parallel_best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn parallel_best_node_search<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     deadline: time::SystemTime
-) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+) -> (Move, Score, u8) {
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
-    let mut history = [[0; 4]; W*H];
+    let mut history = vec![[0; 4]; MODE::N];
 
     let board = board.clone();
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
@@ -214,7 +201,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             let test = next_bns_guess(last_test, alpha, beta);
             let mut better_moves = ArrayVec::<Move, 4>::new();
             if depth > 3 && my_moves.len() > 1 {
-                let mut join_handles: ArrayVec<(moves::Move, JoinHandle<(Option<i16>, [[u64; 4]; W*H], u64)>), 4> = ArrayVec::new();
+                let mut join_handles: ArrayVec<(moves::Move, JoinHandle<(Option<i16>, Vec<[u64; 4]>, u64)>), 4> = ArrayVec::new();
                 for mv in &my_moves {
                     let b = board.clone();
                     let mut node_counter = 0;
@@ -230,7 +217,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
                 for (mv, handle) in join_handles {
                     if let Ok((Some(score), hist, nc)) = handle.join() {
                         node_counter += nc;
-                        for i in 0..(W*H) {
+                        for i in 0..(MODE::W*MODE::H) {
                             for j in 0..4 {
                                 history[i][j] += hist[i][j] - old_hist[i][j];
                             }
@@ -287,15 +274,14 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     (best_move, best_score, depth)
 }
 
-pub fn best_node_search<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn best_node_search<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     deadline: time::SystemTime
-) -> (Move, Score, u8)
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+) -> (Move, Score, u8) {
     let mut rng = rand::thread_rng();
     let start_time = time::Instant::now();
     let mut node_counter = 0;
-    let mut history = [[0; 4]; W*H];
+    let mut history = vec![[0; 4]; MODE::N];
 
     let board = board.clone();
     let mut enemy_moves = ordered_limited_move_combinations(&board, 1, &history);
@@ -365,41 +351,40 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     (best_move, best_score, depth)
 }
 
-pub fn alphabeta<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn alphabeta<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
-    history: &mut [[u64; 4]; W*H],
+    // TODO: maybe figure out how to make this history reference fixed size to allow for optimizations
+    history: &mut [[u64; 4]],
     depth: u8,
     alpha: Score,
     beta: Score
-) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+) -> Option<Score> {  // min call
     ab_min(board, node_counter, deadline, mv, enemy_moves, history, depth, 0, alpha, beta)
 }
 
-pub fn ab_min<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn ab_min<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
-    history: &mut [[u64; 4]; W*H],
+    history: &mut [[u64; 4]],
     depth: u8,
     ply: u8,
     mut alpha: Score,
     mut beta: Score
-) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+) -> Option<Score> {  // min call
     if time::SystemTime::now() > deadline {
         return None
     }
     let mut tt_move = None;
     let tt_key = ttable::hash(&(board, mv));
     if enemy_moves.len() > 1 {
-        let tt_entry = ttable::get(tt_key, board.tt_id);
+        let tt_entry = ttable::get(tt_key);
         if let Some(entry) = tt_entry {
             if entry.get_depth() >= depth {
                 let tt_score = entry.get_score();
@@ -448,7 +433,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
             }
         }
     }
-    ttable::insert(tt_key, board.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
+    ttable::insert(tt_key, best_score, best_score >= beta, best_score <= alpha, depth, best_moves);
     // update history heuristic
     for i in 1..S {
         if board.snakes[i].is_alive() {
@@ -458,18 +443,17 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     Some(best_score)
 }
 
-pub fn ab_max<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn ab_max<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
     moves: &[Move; S],
-    history: &mut [[u64; 4]; W*H],
+    history: &mut [[u64; 4]],
     mut depth: u8,
     ply: u8,
     mut alpha: Score,
     mut beta: Score
-) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+) -> Option<Score> {
     let mut child = board.clone();
     (child.apply_moves.clone())(&mut child, moves);
     *node_counter += 1;
@@ -485,7 +469,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
     let mut tt_move = None;
     let my_moves = ordered_allowed_moves(&child, 0, history);
     if my_moves.len() > 1 {
-        let tt_entry = ttable::get(tt_key, child.tt_id);
+        let tt_entry = ttable::get(tt_key);
         if let Some(entry) = tt_entry {
             if entry.get_depth() >= depth {
                 let tt_score = entry.get_score();
@@ -546,7 +530,7 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
         }
     }
     if best_score > Score::MIN { // sanity check
-        ttable::insert(tt_key, child.tt_id, best_score, best_score >= beta, best_score <= alpha, depth, [best_move; 1]);
+        ttable::insert(tt_key, best_score, best_score >= beta, best_score <= alpha, depth, [best_move; 1]);
         history[board.snakes[0].head as usize][best_move.to_int() as usize] += depth as u64;
     }
     Some(best_score)
@@ -554,10 +538,9 @@ where [(); (W*H+63)/64]: Sized, [(); W*H]: Sized, [(); hz_stack_len::<HZSTACK, W
 
 /// Used for quiescence search, to determine, if the position is stable and can be evaluated, or if
 /// search must continue.
-fn get_quiescence_params<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
+fn get_quiescence_params<const S: usize, MODE: Mode>(
     mode: Gamemode
-) -> (u8, fn(&Bitboard<S, W, H, WRAP, HZSTACK, SILLY>) -> bool)
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
+) -> (u8, fn(&Bitboard<S, MODE>) -> bool) {
     match mode {
         Gamemode::Standard | Gamemode::WrappedIslandsBridges => (5, |board| {
             for i in 1..S {
@@ -587,7 +570,7 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
                     return false
                 }
                 for i in 0..4 {
-                    if let Some(pos) = Bitboard::<S, W, H, WRAP, HZSTACK, SILLY>::MOVES_FROM_POSITION[snake.head as usize][i] {
+                    if let Some(pos) = MODE::moves_from_position(snake.head)[i] {
                         if board.food.get(pos as usize) {
                             return false
                         }
@@ -601,19 +584,18 @@ where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {
 }
 
 /// Returns None if it received a timeout from stop_receiver.
-pub fn quiescence<const S: usize, const W: usize, const H: usize, const WRAP: bool, const HZSTACK: bool, const SILLY: u8>(
-    board: &Bitboard<S, W, H, WRAP, HZSTACK, SILLY>,
+pub fn quiescence<const S: usize, MODE: Mode>(
+    board: &Bitboard<S, MODE>,
     node_counter: &mut u64,
     deadline: time::SystemTime,
-    is_stable: fn (&Bitboard<S, W, H, WRAP, HZSTACK, SILLY>) -> bool,
+    is_stable: fn (&Bitboard<S, MODE>) -> bool,
     mv: Move,
     enemy_moves: &mut ArrayVec<[Move; S], 4>,
-    history: &mut [[u64; 4]; W*H],
+    history: &mut [[u64; 4]],
     depth: u8,
     alpha: Score,
     mut beta: Score
-) -> Option<Score>
-where [(); (W*H+63)/64]: Sized, [(); hz_stack_len::<HZSTACK, W, H>()]: Sized {  // min call
+) -> Option<Score> {  // min call
     if time::SystemTime::now() > deadline {
         return None
     }
