@@ -206,6 +206,7 @@ impl<const S: usize, MODE: mode::Mode> Bitboard<S, MODE> {
                 head: wire_rep::Coord{ x: (snake.head as usize % MODE::W).into(), y: (snake.head as usize / MODE::W).into() },
                 shout: None,
                 squad: None,
+                next_move: None,
                 body: vec![],
             };
             let mut tail_pos = snake.tail;
@@ -291,7 +292,7 @@ impl<const S: usize, MODE: mode::Mode> Bitboard<S, MODE> {
                 if pos == prev_pos + 1 || pos == prev_pos + MODE::W as u16 || MODE::WRAP && prev_pos == pos + MODE::W as u16 - 1 || MODE::WRAP && prev_pos == pos + (MODE::H as u16 - 1) * MODE::W as u16 {
                     board.bodies[1].set_bit(pos as usize);
                 }
-                if  prev_pos == pos + 1 || prev_pos + 1 == pos || MODE::WRAP && prev_pos == pos + MODE::W as u16 - 1 || MODE::WRAP && prev_pos + MODE::W as u16 - 1 == pos {
+                if prev_pos == pos + 1 || prev_pos + 1 == pos || MODE::WRAP && prev_pos == pos + MODE::W as u16 - 1 || MODE::WRAP && prev_pos + MODE::W as u16 - 1 == pos {
                     board.bodies[2].set_bit(pos as usize);
                 }
                 prev_pos = pos;

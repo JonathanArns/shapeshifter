@@ -262,6 +262,25 @@ pub fn random_move_combination<const S: usize, MODE: Mode>(board: &Bitboard<S, M
     moves[rng.gen_range(0..moves.len())]
 }
 
+/// Used to generate a move simulation task for debugging
+pub fn moves_from_gamestate<const S: usize>(state: &wire_rep::GameState) -> [Move; S] {
+    let mut moves = [Move::Up; S];
+    let mut m = 0;
+    let mut n;
+    for snake in state.board.snakes.iter() {
+        if snake.head == state.you.head {
+            n = 0;
+        } else {
+            m += 1;
+            n = m;
+        }
+        if let Some(ref mv_str) = snake.next_move {
+            moves[n] = Move::from_str(mv_str);
+        }
+    }
+    moves
+}
+
 #[cfg(test)]
 mod tests {
     use crate::bitboard::mode::StandardWrapped;

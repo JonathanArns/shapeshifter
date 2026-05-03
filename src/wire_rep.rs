@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, Map};
 
@@ -31,6 +33,9 @@ pub struct Battlesnake {
     // Used in non-standard game modes
     pub shout: Option<String>,
     pub squad: Option<String>,
+
+    /// Only used as a simulation task for debugging
+    pub next_move: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq)]

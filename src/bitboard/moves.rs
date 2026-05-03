@@ -33,6 +33,16 @@ impl Move {
         }
     }
 
+    pub fn from_str(src: &str) -> Self {
+        match src {
+            "up" => Move::Up,
+            "down" => Move::Down,
+            "left" => Move::Left,
+            "right" => Move::Right,
+            _ => Move::Up,
+        }
+    }
+
     /// Does not do a safety check, so only call with 0, 1, 2, 3 !
     pub const fn from_int(x: u8) -> Self {
         unsafe { std::mem::transmute(x) }

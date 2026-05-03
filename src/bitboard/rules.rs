@@ -23,9 +23,9 @@ pub fn attach_rules<const S: usize, MODE: Mode>(
                 Arc::new(move |board, moves| {
                     board.turn += 1;
                     move_heads::<S, MODE>(board, moves);
-                    move_tails::<S, MODE>(board);
                     let starved = update_health::<S, MODE>(board);
                     starved.into_iter().for_each(|snake_idx| board.kill_snake(snake_idx));
+                    move_tails::<S, MODE>(board);
                     let collided = perform_collisions::<S, MODE>(board);
                     collided.into_iter().for_each(|snake_idx| board.kill_snake(snake_idx));
                     finish_head_movement::<S, MODE>(board);
@@ -36,9 +36,9 @@ pub fn attach_rules<const S: usize, MODE: Mode>(
             _ => Arc::new(|board, moves| {
                 board.turn += 1;
                 move_heads::<S, MODE>(board, moves);
-                move_tails::<S, MODE>(board);
                 let starved = update_health::<S, MODE>(board);
                 starved.into_iter().for_each(|snake_idx| board.kill_snake(snake_idx));
+                move_tails::<S, MODE>(board);
                 let collided = perform_collisions::<S, MODE>(board);
                 collided.into_iter().for_each(|snake_idx| board.kill_snake(snake_idx));
                 finish_head_movement::<S, MODE>(board);

@@ -66,6 +66,8 @@ async fn main() {
         .route("/mcts/end", post(api::handle_end))
         .route("/mcts/move", post(api::handle_move_mcts))
 
+        .route("/debug/simulate_turn", post(api::simulate_turn))
+
         .layer(TraceLayer::new_for_http());
 
     let env_port = env::var("PORT").ok();

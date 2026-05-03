@@ -3,15 +3,14 @@ use axum::extract::{Json, TypedHeader};
 use axum::headers::{Header, HeaderName, HeaderValue};
 use tokio::task;
 use tracing::info;
-use std::collections::HashMap;
 use std::time;
 
 #[cfg(not(feature = "spl"))]
 use crate::bitboard::mode::{Standard, StandardWrapped};
-use crate::bitboard::{self, mode};
-use crate::wire_rep::GameState;
+use crate::bitboard::{self, Bitboard, move_gen};
 use crate::minimax;
 use crate::uct;
+use crate::wire_rep::GameState;
 
 pub struct StartTimeHeader(u64);
 
@@ -101,27 +100,6 @@ fn is_wrapped(state: &GameState) -> bool {
     }
 }
 
-fn is_hazard_stacking(state: &GameState) -> bool {
-    match state.game.ruleset["name"].as_str() {
-        Some("sinkholes") => true,
-        _ => {
-            match state.game.map.as_str() {
-                "snail_mode" => true,
-                x => {
-                    let mut hazards = vec![false; state.board.width*state.board.height];
-                    for hz in &state.board.hazards {
-                        if hazards[hz.x+state.board.width*hz.y] {
-                            return true
-                        }
-                        hazards[hz.x+state.board.width*hz.y] = true;
-                    }
-                    false
-                },
-            }
-        },
-    }
-}
-
 #[tracing::instrument(
     name = "handle_move",
     skip(state, start_time_header),
@@ -140,16 +118,16 @@ pub async fn handle_move_mcts(start_time_header: Option<TypedHeader<StartTimeHea
     };
 
     #[cfg(not(feature = "spl"))]
-    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
-        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+    let (mv, _score) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
+        (1, 11, 11, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, true) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
 
-        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (1, 11, 11, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<1, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<2, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<3, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, false) => spawn_blocking_with_tracing(move || uct::search(&bitboard::Bitboard::<4, Standard>::from_gamestate(state), deadline)).await.unwrap(),
         _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height),
     };
 
@@ -279,7 +257,7 @@ pub async fn handle_move_mcts(start_time_header: Option<TypedHeader<StartTimeHea
         search.algo = "minimax"
     )
 )]
-pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTimeHeader>>, Json(mut state): Json<GameState>) -> Json<Value> {
+pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTimeHeader>>, Json(state): Json<GameState>) -> Json<Value> {
     let deadline = if let Some(TypedHeader(StartTimeHeader(value))) = start_time_header {
         // we are playing behind a proxy with "accurate" timing information
         time::UNIX_EPOCH + time::Duration::from_millis(value) + time::Duration::from_millis(((state.game.timeout / 2).max(state.game.timeout.max(60) - 60)).into())
@@ -288,17 +266,17 @@ pub async fn handle_move_minimax(start_time_header: Option<TypedHeader<StartTime
     };
 
     #[cfg(not(feature = "spl"))]
-    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)) {
-        (1, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, true, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+    let (mv, _score, _depth) = match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
+        (1, 11, 11, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, true) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, StandardWrapped>::from_gamestate(state), deadline)).await.unwrap(),
 
-        (1, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        (2, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        (3, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        (4, 11, 11, false, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, Standard>::from_gamestate(state), deadline)).await.unwrap(),
-        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}, HZSTACK: {:?}, please enable the 'spl' feature.", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state), is_hazard_stacking(&state)),
+        (1, 11, 11, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<1, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (2, 11, 11, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<2, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (3, 11, 11, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<3, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        (4, 11, 11, false) => spawn_blocking_with_tracing(move || minimax::search(&bitboard::Bitboard::<4, Standard>::from_gamestate(state), deadline)).await.unwrap(),
+        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)),
     };
 
     #[cfg(feature = "spl")]
@@ -435,4 +413,76 @@ pub async fn training_handle_move_minimax<const TT: u8>(Json(mut state): Json<Ga
     state.game.id = "".to_string();
     state.you.id = TT.to_string();
     handle_move_minimax(Json(state), start_time_header).await
+}
+
+pub async fn simulate_turn(Json(state): Json<GameState>) -> Json<GameState> {
+    match (state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)) {
+        (1, 11, 11, true) => {
+            let moves = move_gen::moves_from_gamestate::<1>(&state);
+            let mut board = Bitboard::<1, StandardWrapped>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+        (2, 11, 11, true) => {
+            let moves = move_gen::moves_from_gamestate::<2>(&state);
+            let mut board = Bitboard::<2, StandardWrapped>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+        (3, 11, 11, true) => {
+            let moves = move_gen::moves_from_gamestate::<3>(&state);
+            let mut board = Bitboard::<3, StandardWrapped>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+        (4, 11, 11, true) => {
+            let moves = move_gen::moves_from_gamestate::<4>(&state);
+            let mut board = Bitboard::<4, StandardWrapped>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+
+        (1, 11, 11, false) => {
+            let moves = move_gen::moves_from_gamestate::<1>(&state);
+            let mut board = Bitboard::<1, Standard>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+        (2, 11, 11, false) => {
+            let moves = move_gen::moves_from_gamestate::<2>(&state);
+            let mut board = Bitboard::<2, Standard>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+        (3, 11, 11, false) => {
+            let moves = move_gen::moves_from_gamestate::<3>(&state);
+            let mut board = Bitboard::<3, Standard>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+        (4, 11, 11, false) => {
+            let moves = move_gen::moves_from_gamestate::<4>(&state);
+            let mut board = Bitboard::<4, Standard>::from_gamestate(state);
+            println!("{:?}", board);
+            (board.apply_moves.clone())(&mut board, &moves);
+            println!("{:?}", board);
+            Json(board.to_gamestate())
+        },
+
+        _ => panic!("Snake count or board size not supported S: {}, W: {}, H: {}, WRAP: {:?}", state.board.snakes.len(), state.board.width, state.board.height, is_wrapped(&state)),
+    }
 }
