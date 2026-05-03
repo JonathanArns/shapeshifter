@@ -1,7 +1,6 @@
 use super::Score;
 use super::Move;
 use std::hash::{Hash, Hasher};
-use std::ptr;
 use fxhash::FxHasher64;
 
 // const TT_LENGTH: usize = 12582917; // prime
@@ -28,7 +27,7 @@ fn index(key: u64) -> usize {
 /// Get an entry from the transposition table
 pub fn get(key: u64) -> Option<Entry> {
     unsafe {
-        if let Some(table) = ptr::read(&raw const TABLE) {
+        if let Some(ref table) = *&raw const TABLE {
             let entry = table[index(key)];
             if entry.matches_key(key) {
                 return Some(entry)
@@ -48,7 +47,7 @@ pub fn insert<const S: usize>(
     best_moves: [Move; S]
 ) {
     unsafe {
-        if let Some(ref mut table) = ptr::read(&raw mut TABLE) {
+        if let Some(ref mut table) = *&raw mut TABLE {
             let index = index(key);
             let entry = table[index];
             if entry.matches_key(key) && entry.get_depth() > depth {
